@@ -1,8 +1,5 @@
-.idea
-node_modules
-.DS_Store
-dist
-dist-ssr
-*.local
-cache
-.temp
+# https://dart.dev/guides/libraries/private-files
+# Created by `dart pub`
+.dart_tool/
+
+codigo_mesclado.dart.txt

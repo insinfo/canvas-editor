@@ -1,0 +1,1 @@
+// TODO: Translate from C:\\MyTsProjects\\canvas-editor\\src\\editor\\core\\contextmenu\\menus\\tableMenus.ts
