@@ -3,9 +3,7 @@ import '../dataset/enum/editor.dart';
 import './element.dart';
 import './range.dart';
 import './row.dart';
-
-// Placeholders for missing imports
-class ITd {}
+import './table/td.dart';
 
 class ICurrentPosition {
   int index;
