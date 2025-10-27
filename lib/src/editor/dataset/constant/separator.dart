@@ -1,1 +1,6 @@
-// TODO: Translate from C:\\MyTsProjects\\canvas-editor\\src\\editor\\dataset\\constant\\Separator.ts
+import '../../interface/separator.dart';
+
+final ISeparatorOption defaultSeparatorOption = ISeparatorOption(
+	lineWidth: 1,
+	strokeStyle: '#000000',
+);

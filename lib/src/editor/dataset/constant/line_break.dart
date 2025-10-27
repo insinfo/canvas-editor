@@ -1,1 +1,7 @@
-// TODO: Translate from C:\\MyTsProjects\\canvas-editor\\src\\editor\\dataset\\constant\\LineBreak.ts
+import '../../interface/line_break.dart';
+
+final ILineBreakOption defaultLineBreak = ILineBreakOption(
+	disabled: true,
+	color: '#CCCCCC',
+	lineWidth: 1.5,
+);

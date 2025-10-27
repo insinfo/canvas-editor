@@ -1,1 +1,16 @@
-// TODO: Translate from C:\\MyTsProjects\\canvas-editor\\src\\editor\\dataset\\enum\\ElementStyle.ts
+enum ElementStyleKey {
+  font('font'),
+  size('size'),
+  width('width'),
+  height('height'),
+  bold('bold'),
+  color('color'),
+  highlight('highlight'),
+  italic('italic'),
+  underline('underline'),
+  strikeout('strikeout');
+
+  final String value;
+
+  const ElementStyleKey(this.value);
+}

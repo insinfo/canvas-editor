@@ -1,1 +1,8 @@
-// TODO: Translate from C:\\MyTsProjects\\canvas-editor\\src\\editor\\dataset\\enum\\LineNumber.ts
+enum LineNumberType {
+  page('page'),
+  continuity('continuity');
+
+  final String value;
+
+  const LineNumberType(this.value);
+}

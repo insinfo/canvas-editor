@@ -1,31 +1,24 @@
-import '../dataset/enum/Editor.dart';
-import '../dataset/enum/Common.dart';
-import './Element.dart';
-import './Range.dart';
-
-// Placeholders for missing imports
-class IBackgroundOption {}
-class ICheckboxOption {}
-class IRadioOption {}
-class IControlOption {}
-class ICursorOption {}
-class IFooter {}
-class IGroup {}
-class IHeader {}
-class ILineBreakOption {}
-class IMargin {}
-class IPageBreak {}
-class IPageNumber {}
-class IPlaceholder {}
-class ITitleOption {}
-class IWatermark {}
-class IZoneOption {}
-class ISeparatorOption {}
-class ITableOption {}
-class ILineNumberOption {}
-class IPageBorderOption {}
-class IBadgeOption {}
-class IRange {}
+import '../dataset/enum/editor.dart';
+import '../dataset/enum/common.dart';
+import './background.dart';
+import './badge.dart';
+import './cursor.dart';
+import './element.dart';
+import './footer.dart';
+import './group.dart';
+import './header.dart';
+import './line_break.dart';
+import './line_number.dart';
+import './margin.dart';
+import './page_border.dart';
+import './page_break.dart';
+import './page_number.dart';
+import './placeholder.dart';
+import './range.dart';
+import './separator.dart';
+import './table/table.dart';
+import './watermark.dart';
+import './zone.dart';
 
 class IEditorData {
   List<IElement>? header;

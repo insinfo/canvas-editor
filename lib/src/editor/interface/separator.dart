@@ -1,1 +1,6 @@
-// TODO: Translate from C:\\MyTsProjects\\canvas-editor\\src\\editor\\interface\\Separator.ts
+class ISeparatorOption {
+	String? strokeStyle;
+	double? lineWidth;
+
+	ISeparatorOption({this.strokeStyle, this.lineWidth});
+}

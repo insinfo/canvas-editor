@@ -1,1 +1,5 @@
-// TODO: Translate from C:\\MyTsProjects\\canvas-editor\\src\\editor\\interface\\Zone.ts
+class IZoneOption {
+	bool? tipDisabled;
+
+	IZoneOption({this.tipDisabled});
+}

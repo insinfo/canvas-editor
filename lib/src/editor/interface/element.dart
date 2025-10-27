@@ -1,38 +1,29 @@
-import '../dataset/enum/Common.dart';
-import '../dataset/enum/Control.dart';
-import '../dataset/enum/Element.dart';
-import '../dataset/enum/List.dart';
-import '../dataset/enum/Row.dart';
-import '../dataset/enum/Title.dart';
-import '../dataset/enum/table/Table.dart';
-import './Area.dart';
-import './Block.dart';
-import './Checkbox.dart';
-import './Control.dart';
-import './Radio.dart';
-import './Text.dart';
-import './Title.dart';
-import './table/Colgroup.dart';
-import './table/Tr.dart';
+import '../dataset/enum/common.dart';
+import '../dataset/enum/control.dart';
+import '../dataset/enum/element.dart';
+import '../dataset/enum/list.dart';
+import '../dataset/enum/row.dart';
+import '../dataset/enum/title.dart';
+import '../dataset/enum/table/table.dart';
+import './area.dart';
+import './block.dart';
+import './checkbox.dart';
+import './control.dart';
+import './radio.dart';
+import './text.dart';
+import './title.dart';
+import './table/colgroup.dart';
+import './table/tr.dart';
 
-// Placeholder for IArea
-class IArea {}
-// Placeholder for IBlock
-class IBlock {}
-// Placeholder for ICheckbox
-class ICheckbox {}
-// Placeholder for IControl
-class IControl {}
-// Placeholder for IRadio
-class IRadio {}
-// Placeholder for ITextDecoration
-class ITextDecoration {}
-// Placeholder for ITitle
-class ITitle {}
-// Placeholder for IColgroup
-class IColgroup {}
-// Placeholder for ITr
-class ITr {}
+export './area.dart';
+export './block.dart';
+export './checkbox.dart';
+export './control.dart';
+export './radio.dart';
+export './text.dart';
+export './title.dart';
+export './table/colgroup.dart';
+export './table/tr.dart';
 
 class IElementBasic {
   String? id;

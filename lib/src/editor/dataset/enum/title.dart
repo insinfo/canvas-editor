@@ -1,1 +1,12 @@
-// TODO: Translate from C:\\MyTsProjects\\canvas-editor\\src\\editor\\dataset\\enum\\Title.ts
+enum TitleLevel {
+	first('first'),
+	second('second'),
+	third('third'),
+	fourth('fourth'),
+	fifth('fifth'),
+	sixth('sixth');
+
+	final String value;
+
+	const TitleLevel(this.value);
+}

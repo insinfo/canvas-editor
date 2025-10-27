@@ -1,1 +1,8 @@
-// TODO: Translate from C:\\MyTsProjects\\canvas-editor\\src\\editor\\dataset\\enum\\Watermark.ts
+enum WatermarkType {
+	text('text'),
+	image('image');
+
+	final String value;
+
+	const WatermarkType(this.value);
+}

@@ -1,1 +1,17 @@
-// TODO: Translate from C:\\MyTsProjects\\canvas-editor\\src\\editor\\interface\\table\\Table.ts
+import '../common.dart';
+
+class ITableOption {
+	IPadding? tdPadding;
+	double? defaultTrMinHeight;
+	double? defaultColMinWidth;
+	String? defaultBorderColor;
+	bool? overflow;
+
+	ITableOption({
+		this.tdPadding,
+		this.defaultTrMinHeight,
+		this.defaultColMinWidth,
+		this.defaultBorderColor,
+		this.overflow,
+	});
+}

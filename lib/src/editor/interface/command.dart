@@ -1,1 +1,5 @@
-// TODO: Translate from C:\\MyTsProjects\\canvas-editor\\src\\editor\\interface\\Command.ts
+class IRichtextOption {
+  bool isIgnoreDisabledRule;
+
+  IRichtextOption({required this.isIgnoreDisabledRule});
+}

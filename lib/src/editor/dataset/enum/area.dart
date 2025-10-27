@@ -1,1 +1,9 @@
-// TODO: Translate from C:\\MyTsProjects\\canvas-editor\\src\\editor\\dataset\\enum\\Area.ts
+enum AreaMode {
+	edit('edit'),
+	readonly('readonly'),
+	form('form');
+
+	final String value;
+
+	const AreaMode(this.value);
+}

@@ -1,1 +1,9 @@
-// TODO: Translate from C:\\MyTsProjects\\canvas-editor\\src\\editor\\dataset\\enum\\Event.ts
+enum MouseEventButton {
+  left(0),
+  center(1),
+  right(2);
+
+  final int value;
+
+  const MouseEventButton(this.value);
+}

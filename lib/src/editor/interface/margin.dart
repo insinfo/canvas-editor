@@ -1,1 +1,1 @@
-// TODO: Translate from C:\\MyTsProjects\\canvas-editor\\src\\editor\\interface\\Margin.ts
+typedef IMargin = List<double>;

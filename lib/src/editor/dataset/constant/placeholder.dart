@@ -1,1 +1,9 @@
-// TODO: Translate from C:\\MyTsProjects\\canvas-editor\\src\\editor\\dataset\\constant\\Placeholder.ts
+import '../../interface/placeholder.dart';
+
+final IPlaceholder defaultPlaceholderOption = IPlaceholder(
+	data: '',
+	color: '#DCDFE6',
+	opacity: 1,
+	size: 16,
+	font: 'Microsoft YaHei',
+);

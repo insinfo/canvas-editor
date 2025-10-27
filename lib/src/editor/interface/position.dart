@@ -1,9 +1,8 @@
-import '../dataset/enum/Common.dart';
-import '../dataset/enum/Editor.dart';
-import './Element.dart';
-import './Range.dart';
-import './Row.dart';
-import './table/Td.dart';
+import '../dataset/enum/common.dart';
+import '../dataset/enum/editor.dart';
+import './element.dart';
+import './range.dart';
+import './row.dart';
 
 // Placeholders for missing imports
 class ITd {}

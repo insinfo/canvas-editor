@@ -1,1 +1,7 @@
-// TODO: Translate from C:\\MyTsProjects\\canvas-editor\\src\\editor\\interface\\LineBreak.ts
+class ILineBreakOption {
+  bool? disabled;
+  String? color;
+  double? lineWidth;
+
+  ILineBreakOption({this.disabled, this.color, this.lineWidth});
+}

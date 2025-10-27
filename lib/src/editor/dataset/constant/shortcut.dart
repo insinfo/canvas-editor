@@ -1,1 +1,3 @@
-// TODO: Translate from C:\\MyTsProjects\\canvas-editor\\src\\editor\\dataset\\constant\\Shortcut.ts
+const Map<String, String> internalShortcutKey = {
+  'PAGE_SCALE': 'pageScale',
+};

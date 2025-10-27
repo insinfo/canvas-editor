@@ -1,1 +1,10 @@
-// TODO: Translate from C:\\MyTsProjects\\canvas-editor\\src\\editor\\dataset\\constant\\Footer.ts
+import '../../dataset/enum/common.dart';
+import '../../interface/footer.dart';
+
+final IFooter defaultFooterOption = IFooter(
+	bottom: 30,
+	inactiveAlpha: 1,
+	maxHeightRadio: MaxHeightRatio.half,
+	disabled: false,
+	editable: true,
+);

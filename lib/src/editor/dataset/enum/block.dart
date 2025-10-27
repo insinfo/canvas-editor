@@ -1,1 +1,8 @@
-// TODO: Translate from C:\\MyTsProjects\\canvas-editor\\src\\editor\\dataset\\enum\\Block.ts
+enum BlockType {
+	iframe('iframe'),
+	video('video');
+
+	final String value;
+
+	const BlockType(this.value);
+}

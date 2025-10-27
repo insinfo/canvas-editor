@@ -1,9 +1,9 @@
 import 'dart:io';
 
 void main() {
-  final libDir = Directory(r'C:\MyDartProjects\canvas-editor-port\lib');
+  final libDir = Directory(r'C:\MyDartProjects\canvas-editor-port\typescript\src');
   //final libDir = Directory(r'C:\MyDartProjects\canvas-editor-port\lib\test');
-  final outputFile = File(r'C:\MyDartProjects\canvas-editor-port\lib\scripts\codigo_mesclado.dart.txt');
+  final outputFile = File(r'C:\MyDartProjects\canvas-editor-port\scripts\codigo_mesclado.ts.txt');
 
   if (outputFile.existsSync()) {
     outputFile.deleteSync();
@@ -13,7 +13,7 @@ void main() {
 
   final files = libDir.listSync(recursive: true);
   for (final file in files) {
-    if (file is File && file.path.endsWith('.dart')) {
+    if (file is File && file.path.endsWith('.ts')) {
       final content = file.readAsStringSync();
       outputSink.write('// Merged from ${file.path}\n');
       outputSink.write(content);

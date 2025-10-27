@@ -1,1 +1,8 @@
-// TODO: Translate from C:\\MyTsProjects\\canvas-editor\\src\\editor\\dataset\\enum\\table\\TableTool.ts
+enum TableOrder {
+  row('row'),
+  col('col');
+
+  final String value;
+
+  const TableOrder(this.value);
+}

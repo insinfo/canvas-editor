@@ -1,1 +1,7 @@
-// TODO: Translate from C:\\MyTsProjects\\canvas-editor\\src\\editor\\interface\\PageBreak.ts
+class IPageBreak {
+	String? font;
+	double? fontSize;
+	List<double>? lineDash;
+
+	IPageBreak({this.font, this.fontSize, this.lineDash});
+}

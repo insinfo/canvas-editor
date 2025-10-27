@@ -1,5 +1,11 @@
-import '../dataset/enum/Row.dart';
-import './Element.dart';
+import '../dataset/enum/common.dart';
+import '../dataset/enum/control.dart';
+import '../dataset/enum/element.dart';
+import '../dataset/enum/list.dart';
+import '../dataset/enum/row.dart';
+import '../dataset/enum/table/table.dart';
+import '../dataset/enum/title.dart';
+import './element.dart';
 
 class IRowElement extends IElement {
   IElementMetrics metrics;

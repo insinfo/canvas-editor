@@ -1,1 +1,10 @@
-// TODO: Translate from C:\\MyTsProjects\\canvas-editor\\src\\editor\\dataset\\enum\\Observer.ts
+enum MoveDirection {
+	up('top'),
+	down('down'),
+	left('left'),
+	right('right');
+
+	final String value;
+
+	const MoveDirection(this.value);
+}

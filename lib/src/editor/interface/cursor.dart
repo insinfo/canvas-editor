@@ -1,1 +1,15 @@
-// TODO: Translate from C:\\MyTsProjects\\canvas-editor\\src\\editor\\interface\\Cursor.ts
+class ICursorOption {
+  double? width;
+  String? color;
+  double? dragWidth;
+  String? dragColor;
+  bool? dragFloatImageDisabled;
+
+  ICursorOption({
+    this.width,
+    this.color,
+    this.dragWidth,
+    this.dragColor,
+    this.dragFloatImageDisabled,
+  });
+}

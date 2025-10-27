@@ -1,1 +1,3 @@
-// TODO: Translate from C:\\MyTsProjects\\canvas-editor\\src\\editor\\interface\\Plugin.ts
+typedef PluginFunction<T> = dynamic Function(dynamic editor, [T? options]);
+
+typedef UsePlugin = void Function<T>(PluginFunction<T> pluginFunction, [T? options]);
