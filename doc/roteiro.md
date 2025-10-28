@@ -1,4 +1,4 @@
-# Roteiro de Tradução (Atualizado em 27/10/2025)
+# Roteiro de Tradução (Atualizado em 28/10/2025)
 port from C:\MyDartProjects\canvas-editor-port\typescript\src to C:\MyDartProjects\canvas-editor-port\lib
 ## Estado Atual
 - Fundamentos concluídos: enums centrais, grande parte das interfaces e constantes de elementos migradas para Dart.
@@ -8,18 +8,19 @@ port from C:\MyDartProjects\canvas-editor-port\typescript\src to C:\MyDartProjec
 - `dart analyze` executado com avisos herdados apenas sobre convenções de nomes; nenhum erro funcional introduzido.
 
 ## Métricas de Progresso
-- Port geral: 115 de 218 arquivos TypeScript migrados (~53% concluído, ~47% restante).
+- Port geral: 129 de 218 arquivos TypeScript migrados (~59% concluído, ~41% restante).
 - Constantes em `lib/src/editor/dataset/constant`: 27 de 27 migradas (100% concluído, 0% restante).
-- Arquivos ainda sem implementação efetiva: 103 (lista detalhada em "Pendências de Tradução").
+- Arquivos ainda sem implementação efetiva: 89 (lista detalhada em "Pendências de Tradução").
+- *Total recalculado para 218 arquivos após mapear os handlers recém-incluídos na fila.*
 
 ## Pendências de Tradução
-Total pendente: 103 arquivos
+Total pendente: 85 arquivos
 
 ### components (2 arquivos)
 - `lib/src/components/dialog/dialog.dart`
 - `lib/src/components/signature/signature.dart`
 
-### editor (97 arquivos)
+### editor (83 arquivos)
 - `lib/src/editor/core/actuator/actuator.dart`
 - `lib/src/editor/core/actuator/handlers/position_context_change.dart`
 - `lib/src/editor/core/contextmenu/context_menu.dart`
@@ -82,24 +83,6 @@ Total pendente: 103 arquivos
 - `lib/src/editor/core/event/canvas_event.dart`
 - `lib/src/editor/core/event/eventbus/event_bus.dart`
 - `lib/src/editor/core/event/global_event.dart`
-- `lib/src/editor/core/event/handlers/click.dart`
-- `lib/src/editor/core/event/handlers/composition.dart`
-- `lib/src/editor/core/event/handlers/copy.dart`
-- `lib/src/editor/core/event/handlers/cut.dart`
-- `lib/src/editor/core/event/handlers/drag.dart`
-- `lib/src/editor/core/event/handlers/drop.dart`
-- `lib/src/editor/core/event/handlers/keydown/backspace.dart`
-- `lib/src/editor/core/event/handlers/keydown/delete.dart`
-- `lib/src/editor/core/event/handlers/keydown/enter.dart`
-- `lib/src/editor/core/event/handlers/keydown/index.dart`
-- `lib/src/editor/core/event/handlers/keydown/left.dart`
-- `lib/src/editor/core/event/handlers/keydown/right.dart`
-- `lib/src/editor/core/event/handlers/keydown/tab.dart`
-- `lib/src/editor/core/event/handlers/keydown/updown.dart`
-- `lib/src/editor/core/event/handlers/mousedown.dart`
-- `lib/src/editor/core/event/handlers/mouseleave.dart`
-- `lib/src/editor/core/event/handlers/mousemove.dart`
-- `lib/src/editor/core/event/handlers/mouseup.dart`
 - `lib/src/editor/core/history/history_manager.dart`
 - `lib/src/editor/core/i18n/i18n.dart`
 - `lib/src/editor/core/listener/listener.dart`
@@ -129,9 +112,9 @@ Total pendente: 103 arquivos
 - `lib/src/plugins/markdown/index.dart`
 
 ## Próximas Entregas (Curto Prazo)
+- Portar `lib/src/editor/core/event/canvas_event.dart`, consolidando a malha de eventos de mouse/teclado para preparar os handlers restantes.
 - Completar a tradução de `utils/element.ts` para Dart e validar integração com os novos helpers (`deepClone*`, `splitText`).
 - Revisar `Command.ts` para remover proxies dinâmicos remanescentes e amarrar os comandos ao adaptador Dart agora completo.
-- Migrar `core/cursor` e os listeners dependentes para conectar `RangeManager`/`Position` às interações do editor.
 - Revisar utilitários de `option` para garantir cobertura de testes e preparar cenários de atualização dinâmica.
 
 ## Marcos Intermediários
@@ -147,8 +130,20 @@ Total pendente: 103 arquivos
 - Registrar progresso neste roteiro sempre que um módulo relevante for concluído ou uma prioridade mudar.
 
 ## Conclusões Recentes
+- Portados os handlers `click.dart`, `mousedown.dart`, `mousemove.dart`, `mouseup.dart`, `copy.dart`, `cut.dart` e `drag.dart`, espelhando segmentação por palavra, cache de seleção, arraste/cópia/recorte/posicionamento com suporte a tabelas e integrações com previewer, partículas e controles.
+- Portado o handler `keydown/backspace.dart`, cobrindo remoção de elementos ocultos, seleção em tabela e sincronização com controles ativos.
+- Portado o handler `keydown/enter.dart`, garantindo quebra de linha com formatação de contexto, preservação seletiva de estilos e interação correta com controles e listas.
+- Portado o handler `keydown/delete.dart`, espelhando remoção direta, tabelas, controles embutidos e elementos ocultos antes de reposicionar o cursor.
+- Portado o dispatcher `keydown/index.dart`, garantindo disparo de backspace/delete/enter em Dart e migrando os atalhos globais de undo/redo/copy/cut/select/save/esc.
+- Portado o handler `keydown/right.dart`, replicando avanço por palavra, salto entre controles no modo formulário e movimentação entre células de tabela.
+- Portado o handler `keydown/updown.dart`, assegurando navegação vertical com suporte a seleção estendida e transições de tabela com realinhamento do cursor visível.
+- Portado o handler `keydown/tab.dart`, habilitando navegação entre controles no modo formulário e inserção de tabulações com preservação de estilo.
+- Portado o handler `keydown/left.dart`, espelhando navegação por palavra, integração com controles em modo formulário e salto entre células de tabela.
+- Portado o handler `drop.dart`, alinhando `DataTransfer` para texto/imagem com overrides personalizados antes de acionar `pasteImage`.
 - Adicionado `scripts/port_diff.py` para mapear automaticamente arquivos TypeScript sem tradução efetiva e gerar listas em JSON/Markdown.
 - Iniciado o pipeline E2E com `test/e2e/editor_smoke_test.dart`, compilando um harness mínimo para Chrome via Puppeteer e garantindo que o canvas seja servido pela aplicação.
+- Portados os handlers `composition` e `mouseleave`, espelhando a lógica TypeScript para IME/input e bloqueio de seleção fora do canvas.
+- O smoke test agora baixa o Chromium via `downloadChrome` e executa headless com `--no-sandbox`, evitando falhas de ambiente.
 - Portados `RangeManager` e `Position`, garantindo paridade no cálculo de seleção, contexto de cursor e ajustes de elementos flutuantes/tablados em relação ao TypeScript.
 - Adicionada `Command` com proxies para `CommandAdapt`, disponibilizando os comandos Dart em `lib/src/editor/core/command/command.dart` enquanto o adaptador completo segue em tradução.
 - Portado `utils/clipboard.dart`, garantindo leitura/gravação estruturada no clipboard (localStorage e API nativa), além da serialização completa de `IElement` e controles aninhados.

@@ -1,1 +1,0 @@
-// TODO: Translate from C:\\MyTsProjects\\canvas-editor\\src\\editor\\core\\event\\CanvasEvent.ts
