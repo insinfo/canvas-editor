@@ -98,8 +98,17 @@ class ContextmenuHyperlinkLang {
 class ContextmenuImageTextWrapTypeLang {
   String embed;
   String upDown;
+  String surround;
+  String floatTop;
+  String floatBottom;
 
-  ContextmenuImageTextWrapTypeLang({required this.embed, required this.upDown});
+  ContextmenuImageTextWrapTypeLang({
+    required this.embed,
+    required this.upDown,
+    required this.surround,
+    required this.floatTop,
+    required this.floatBottom,
+  });
 }
 
 class ContextmenuImageLang {
@@ -128,6 +137,23 @@ class ContextmenuTableLang {
   String deleteTable;
   String mergeCell;
   String mergeCancelCell;
+  String verticalAlign;
+  String verticalAlignTop;
+  String verticalAlignMiddle;
+  String verticalAlignBottom;
+  String border;
+  String borderAll;
+  String borderEmpty;
+  String borderDash;
+  String borderExternal;
+  String borderInternal;
+  String borderTd;
+  String borderTdTop;
+  String borderTdRight;
+  String borderTdBottom;
+  String borderTdLeft;
+  String borderTdForward;
+  String borderTdBack;
 
   ContextmenuTableLang({
     required this.insertRowCol,
@@ -141,6 +167,23 @@ class ContextmenuTableLang {
     required this.deleteTable,
     required this.mergeCell,
     required this.mergeCancelCell,
+    required this.verticalAlign,
+    required this.verticalAlignTop,
+    required this.verticalAlignMiddle,
+    required this.verticalAlignBottom,
+    required this.border,
+    required this.borderAll,
+    required this.borderEmpty,
+    required this.borderDash,
+    required this.borderExternal,
+    required this.borderInternal,
+    required this.borderTd,
+    required this.borderTdTop,
+    required this.borderTdRight,
+    required this.borderTdBottom,
+    required this.borderTdLeft,
+    required this.borderTdForward,
+    required this.borderTdBack,
   });
 }
 
