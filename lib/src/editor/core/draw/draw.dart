@@ -39,7 +39,8 @@ class Draw {
 			_pagePixelRatio = window.devicePixelRatio.toDouble(),
 				_visiblePageNoList = <int>[],
 				_intersectionPageNo = 0,
-				_i18n = I18n(options.locale ?? 'en');
+				_i18n = I18n(options.locale ?? 'en'),
+				_letterReg = _buildLetterReg(options.letterClass);
         
 	final HtmlElement _rootContainer;
 	final dynamic _listener;
@@ -66,6 +67,7 @@ class Draw {
 	double? _pagePixelRatio;
 
 	final I18n _i18n;
+	final RegExp? _letterReg;
 
 	IElementStyle? _painterStyle;
 	IPainterOption? _painterOptions;
@@ -83,7 +85,13 @@ class Draw {
 	dynamic _hyperlinkParticle;
 	dynamic _control;
 	dynamic _dateParticle;
+	dynamic _imageObserver;
 	dynamic _imageParticle;
+	dynamic _checkboxParticle;
+	dynamic _listParticle;
+	dynamic _radioParticle;
+	dynamic _separatorParticle;
+	dynamic _pageBreakParticle;
 
 	// ---------------------------------------------------------------------------
 	// Lifecycle & container helpers
@@ -137,6 +145,26 @@ class Draw {
 	List<Element> getPageList() {
 		ensureContainerMounted();
 		return List<Element>.from(_pageList);
+	}
+
+	int getPageCount() {
+		ensureContainerMounted();
+		return _pageList.length;
+	}
+
+	double getPageNumberBottom() {
+		final double bottom =
+			(_options.pageNumber?.bottom ?? _defaultPageNumberBottom).toDouble();
+		return bottom * _resolveScale();
+	}
+
+	CanvasRenderingContext2D? getCtx() {
+		ensureContainerMounted();
+		if (_ctxList.isEmpty) {
+			return null;
+		}
+		final int index = (_pageNo >= 0 && _pageNo < _ctxList.length) ? _pageNo : 0;
+		return _ctxList[index];
 	}
 
 	List<CanvasRenderingContext2D> getCtxList() => List<CanvasRenderingContext2D>.from(_ctxList);
@@ -210,6 +238,8 @@ class Draw {
 
 	IPainterOption? getPainterOptions() => _painterOptions;
 
+	RegExp? getLetterReg() => _letterReg;
+
 	// ---------------------------------------------------------------------------
 	// Element list accessors (simplified)
 	// ---------------------------------------------------------------------------
@@ -237,6 +267,48 @@ class Draw {
 	}
 
 	// ---------------------------------------------------------------------------
+	// Element list mutations (helpers mirroring JS Array#splice behaviour)
+	// ---------------------------------------------------------------------------
+
+	void spliceElementList(
+		List<IElement> elementList,
+		int start, [
+		int? deleteCount,
+		List<IElement>? insertList,
+	]) {
+		if (elementList.isEmpty) {
+			start = 0;
+		}
+		final int length = elementList.length;
+		int normalizedStart = start;
+		if (normalizedStart < 0) {
+			normalizedStart = length + normalizedStart;
+			if (normalizedStart < 0) {
+				normalizedStart = 0;
+			}
+		} else if (normalizedStart > length) {
+			normalizedStart = length;
+		}
+		int normalizedDeleteCount = deleteCount ?? (length - normalizedStart);
+		if (normalizedDeleteCount < 0) {
+			normalizedDeleteCount = 0;
+		}
+		final int maxRemovable = length - normalizedStart;
+		if (normalizedDeleteCount > maxRemovable) {
+			normalizedDeleteCount = maxRemovable;
+		}
+		if (normalizedDeleteCount > 0) {
+			elementList.removeRange(
+				normalizedStart,
+				normalizedStart + normalizedDeleteCount,
+			);
+		}
+		if (insertList != null && insertList.isNotEmpty) {
+			elementList.insertAll(normalizedStart, insertList);
+		}
+	}
+
+	// ---------------------------------------------------------------------------
 	// Geometry helpers (scaled sizing derived from options)
 	// ---------------------------------------------------------------------------
 
@@ -260,7 +332,59 @@ class Draw {
 
 	double getPageGap() => (_options.pageGap ?? _defaultPageGap).toDouble() * _resolveScale();
 
+	double getCanvasWidth(int pageNo) {
+		ensureContainerMounted();
+		if (_pageList.isEmpty) {
+			return getWidth();
+		}
+		int index = pageNo;
+		if (index < 0) {
+			index = 0;
+		} else if (index >= _pageList.length) {
+			index = _pageList.length - 1;
+		}
+		final CanvasElement page = _pageList[index];
+		final double ratio = getPagePixelRatio();
+		final int rawWidth = page.width ?? 0;
+		if (ratio <= 0) {
+			return rawWidth.toDouble();
+		}
+		return rawWidth.toDouble() / ratio;
+	}
+
+	double getCanvasHeight(int pageNo) {
+		ensureContainerMounted();
+		if (_pageList.isEmpty) {
+			return getHeight();
+		}
+		int index = pageNo;
+		if (index < 0) {
+			index = 0;
+		} else if (index >= _pageList.length) {
+			index = _pageList.length - 1;
+		}
+		final CanvasElement page = _pageList[index];
+		final double ratio = getPagePixelRatio();
+		final int rawHeight = page.height ?? 0;
+		if (ratio <= 0) {
+			return rawHeight.toDouble();
+		}
+		return rawHeight.toDouble() / ratio;
+	}
+
 	double getOriginalPageGap() => (_options.pageGap ?? _defaultPageGap).toDouble();
+
+	double getDefaultBasicRowMarginHeight() {
+		final double base =
+			(_options.defaultBasicRowMarginHeight ?? 0).toDouble();
+		return base * _resolveScale();
+	}
+
+	double getMarginIndicatorSize() {
+		final double base =
+			(_options.marginIndicatorSize ?? _defaultMarginIndicatorSize).toDouble();
+		return base * _resolveScale();
+	}
 
 	List<double> getMargins() {
 		final List<double> margins = getOriginalMargins();
@@ -274,6 +398,29 @@ class Draw {
 			return <double>[defaultMargins[1], defaultMargins[2], defaultMargins[3], defaultMargins[0]];
 		}
 		return defaultMargins;
+	}
+
+	String getElementFont(IElement element, [double scale = 1]) {
+		final bool isItalic = element.italic == true;
+		final bool isBold = element.bold == true;
+		final String fontFamily = element.font ?? _options.defaultFont ?? 'sans-serif';
+		final num baseSize = element.actualSize ?? element.size ?? _options.defaultSize ?? 16;
+		final double scaledSize = baseSize.toDouble() * scale;
+		final String sizeStr = scaledSize == scaledSize.roundToDouble()
+			? scaledSize.toInt().toString()
+			: scaledSize.toString();
+		final StringBuffer buffer = StringBuffer();
+		if (isItalic) {
+			buffer.write('italic ');
+		}
+		if (isBold) {
+			buffer.write('bold ');
+		}
+		buffer
+			..write(sizeStr)
+			..write('px ')
+			..write(fontFamily);
+		return buffer.toString();
 	}
 
 	double getInnerWidth() {
@@ -369,7 +516,21 @@ class Draw {
 
 	void attachDateParticle(dynamic dateParticle) => _dateParticle = dateParticle;
 
+	void attachImageObserver(dynamic imageObserver) => _imageObserver = imageObserver;
+
 	void attachImageParticle(dynamic imageParticle) => _imageParticle = imageParticle;
+
+	void attachCheckboxParticle(dynamic checkboxParticle) => _checkboxParticle = checkboxParticle;
+
+	void attachListParticle(dynamic listParticle) => _listParticle = listParticle;
+
+	void attachRadioParticle(dynamic radioParticle) => _radioParticle = radioParticle;
+
+	void attachSeparatorParticle(dynamic separatorParticle) =>
+		_separatorParticle = separatorParticle;
+
+	void attachPageBreakParticle(dynamic pageBreakParticle) =>
+		_pageBreakParticle = pageBreakParticle;
 
 	dynamic getHistoryManager() => _historyManager;
 	dynamic getRange() => _rangeManager;
@@ -384,7 +545,13 @@ class Draw {
 	dynamic getHyperlinkParticle() => _hyperlinkParticle;
 	dynamic getControl() => _control;
 	dynamic getDateParticle() => _dateParticle;
+	dynamic getImageObserver() => _imageObserver;
 	dynamic getImageParticle() => _imageParticle;
+	dynamic getCheckboxParticle() => _checkboxParticle;
+	dynamic getListParticle() => _listParticle;
+	dynamic getRadioParticle() => _radioParticle;
+	dynamic getSeparatorParticle() => _separatorParticle;
+	dynamic getPageBreakParticle() => _pageBreakParticle;
 
 	void clearSideEffect() {
 		_cursor?.recoveryCursor();
@@ -419,8 +586,18 @@ class Draw {
 		_ctxList.add(ctx);
 	}
 
+		static RegExp? _buildLetterReg(List<String>? letterClass) {
+			if (letterClass == null || letterClass.isEmpty) {
+				return null;
+			}
+			final String joined = letterClass.join();
+			return RegExp('[${joined}]');
+		}
+
 	static const double _defaultOriginalWidth = 794; // px ~ A4 portrait (210mm)
 	static const double _defaultOriginalHeight = 1123; // px ~ A4 portrait (297mm)
 	static const double _defaultPageGap = 20;
 	static const List<double> _defaultMargins = <double>[96, 96, 96, 96];
+	static const double _defaultMarginIndicatorSize = 35;
+	static const double _defaultPageNumberBottom = 60;
 }

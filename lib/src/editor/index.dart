@@ -1,9 +1,5 @@
 import 'dart:html';
 
-import 'dataset/constant/common.dart';
-import 'dataset/constant/editor.dart';
-import 'dataset/enum/common.dart';
-import 'dataset/enum/editor.dart';
 import 'interface/editor.dart';
 import 'interface/element.dart';
 import 'interface/event_bus.dart';
@@ -14,6 +10,12 @@ import 'core/command/command.dart';
 import 'core/command/command_adapt.dart';
 import 'core/contextmenu/context_menu.dart';
 import 'core/draw/draw.dart';
+import 'core/draw/particle/checkbox_particle.dart';
+import 'core/draw/particle/hyperlink_particle.dart';
+import 'core/draw/particle/list_particle.dart';
+import 'core/draw/particle/page_break_particle.dart';
+import 'core/draw/particle/radio_particle.dart';
+import 'core/draw/particle/separator_particle.dart';
 import 'core/event/eventbus/event_bus.dart';
 import 'core/listener/listener.dart';
 import 'core/override/override.dart';
@@ -110,6 +112,20 @@ class Editor {
       eventBus,
       override,
     );
+
+    final listParticle = ListParticle(draw);
+    final checkboxParticle = CheckboxParticle(draw);
+    final radioParticle = RadioParticle(draw);
+    final separatorParticle = SeparatorParticle(draw);
+    final hyperlinkParticle = HyperlinkParticle(draw);
+    final pageBreakParticle = PageBreakParticle(draw);
+    draw
+      ..attachListParticle(listParticle)
+      ..attachCheckboxParticle(checkboxParticle)
+      ..attachRadioParticle(radioParticle)
+      ..attachSeparatorParticle(separatorParticle)
+      ..attachHyperlinkParticle(hyperlinkParticle)
+      ..attachPageBreakParticle(pageBreakParticle);
 
     command = Command(CommandAdapt(draw));
     final contextMenu = ContextMenu(draw, command);

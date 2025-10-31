@@ -31,13 +31,31 @@ class Command {
   Command(this._adapt);
 
   final CommandAdapt _adapt;
+    Future<void> Function([ICopyOption? payload])? _copyOverride;
+      void Function(String markdown)? _insertMarkdownHandler;
 
   // Global commands -------------------------------------------------------
   void executeMode(EditorMode payload) => _adapt.mode(payload);
 
   Future<void> executeCut() => _adapt.cut();
 
-  Future<void> executeCopy([ICopyOption? payload]) => _adapt.copy(payload);
+    Future<void> executeCopy([ICopyOption? payload]) {
+        final override = _copyOverride;
+        if (override != null) {
+            return override(payload);
+        }
+        return _invokeCopy(payload);
+    }
+
+    Future<void> Function([ICopyOption? payload]) get copyInvoker => _invokeCopy;
+
+    void setCopyOverride(
+        Future<void> Function([ICopyOption? payload])? override,
+    ) {
+        _copyOverride = override;
+    }
+
+    Future<void> _invokeCopy([ICopyOption? payload]) => _adapt.copy(payload);
 
   void executePaste([IPasteOption? payload]) => _adapt.paste(payload);
 
@@ -414,4 +432,13 @@ class Command {
     IPositionContextByEventOption? options,
   ]) =>
       _adapt.getPositionContextByEvent(evt, options);
+
+    void executeInsertMarkdown(String markdown) {
+        final handler = _insertMarkdownHandler;
+        handler?.call(markdown);
+    }
+
+    void setInsertMarkdownHandler(void Function(String markdown)? handler) {
+        _insertMarkdownHandler = handler;
+    }
 }
