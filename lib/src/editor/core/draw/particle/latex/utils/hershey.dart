@@ -1,4 +1,4 @@
-// ignore_for_file: lines_longer_than_80_chars
+// ignore_for_file: lines_longer_than_80_chars, non_constant_identifier_names
 
 class HersheyEntry {
   const HersheyEntry({
@@ -49,10 +49,10 @@ HersheyEntry? _compile(int index) {
 
   final List<List<List<int>>> polylines = <List<List<int>>>[];
   polylines.add(<List<int>>[]);
-  int? ymin;
-  int? ymax;
-  int? zmin;
-  int? zmax;
+        int? ymin;
+        int? ymax;
+        int? zmin;
+        int? zmax;
 
   for (var j = 0; j + 1 < content.length; j += 2) {
     final digit = content.substring(j, j + 2);

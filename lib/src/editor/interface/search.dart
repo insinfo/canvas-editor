@@ -2,10 +2,7 @@ import '../dataset/enum/editor.dart';
 import './element.dart';
 import './range.dart';
 
-class ISearchResult {
-	EditorContext type;
-	int index;
-	String groupId;
+class ISearchResultRestArgs {
 	String? tableId;
 	int? tableIndex;
 	int? trIndex;
@@ -13,10 +10,7 @@ class ISearchResult {
 	String? tdId;
 	int? startIndex;
 
-	ISearchResult({
-		required this.type,
-		required this.index,
-		required this.groupId,
+	ISearchResultRestArgs({
 		this.tableId,
 		this.tableIndex,
 		this.trIndex,
@@ -24,6 +18,31 @@ class ISearchResult {
 		this.tdId,
 		this.startIndex,
 	});
+}
+
+class ISearchResult extends ISearchResultRestArgs {
+	EditorContext type;
+	int index;
+	String groupId;
+
+	ISearchResult({
+		required this.type,
+		required this.index,
+		required this.groupId,
+		String? tableId,
+		int? tableIndex,
+		int? trIndex,
+		int? tdIndex,
+		String? tdId,
+		int? startIndex,
+	}) : super(
+			tableId: tableId,
+			tableIndex: tableIndex,
+			trIndex: trIndex,
+			tdIndex: tdIndex,
+			tdId: tdId,
+			startIndex: startIndex,
+		);
 }
 
 class ISearchResultContext {

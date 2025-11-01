@@ -34,14 +34,16 @@ port from C:\MyDartProjects\canvas-editor-port\typescript\src to C:\MyDartProjec
 - Porta `core/draw/particle/latex/utils/la_tex_utils.dart`, espelhando tokenização, parser, planejamento geométrico e exportação em polilinhas/SVG/PDF.
 - Porta `core/draw/particle/latex/la_tex_particle.dart`, carregando SVG gerado e cacheando imagens para renderizar fórmulas com o mesmo fluxo de imagens.
 - Porta `core/draw/particle/date/date_picker.dart`, replicando o popup DOM, alternância data/hora e callbacks de envio com formatação localizável.
+- Porta `core/draw/particle/date/date_particle.dart`, sincronizando `DatePicker` com o documento ao inserir formatos localizados e reposicionar o range.
+- Porta `core/draw/particle/latex/utils/hershey.dart`, compilando fontes vetoriais Hershey em cache para cálculo rápido de bounding boxes na renderização LaTeX.
 
 ## Indicadores de Qualidade
 - `dart analyze` (2024-xx-xx) → 58 avisos: imports redundantes em `main.dart`/`mock.dart`, preferências de estilo (`prefer_final_fields`, `prefer_is_empty`) e interpolações supérfluas — sem erros.
 - Nenhum teste E2E executado após as alterações recentes; rodar `dart test` continua recomendado depois das próximas portas críticas.
 
-## Inventário "TODO: Translate" (45 arquivos)
+## Inventário "TODO: Translate" (43 arquivos)
 - Desafios maiores concentram-se no subsistema `draw` (frames, partículas, controles e interações), seguidos por workers/observers/actuator.
-- Agrupamento por área: Draw-Frame (8), Draw-Particle (17), Draw-Control (9), Draw-Interactive (3), Draw-RichText (0), ContextMenu (3), Actuator (2), Event (3), Worker (5), Observer (2), Zone (2), Utils (1), Plugins (0), History (1), I18n (1).
+- Agrupamento por área: Draw-Frame (8), Draw-Particle (16), Draw-Control (9), Draw-Interactive (3), Draw-RichText (0), ContextMenu (3), Actuator (2), Event (3), Worker (5), Observer (2), Zone (2), Utils (1), Plugins (0), History (1), I18n (1).
 
 ```text
 lib/src/editor/core/actuator/actuator.dart
@@ -71,8 +73,6 @@ lib/src/editor/core/draw/particle/block/block_particle.dart
 lib/src/editor/core/draw/particle/block/modules/base_block.dart
 lib/src/editor/core/draw/particle/block/modules/i_frame_block.dart
 lib/src/editor/core/draw/particle/block/modules/video_block.dart
-lib/src/editor/core/draw/particle/date/date_particle.dart
-lib/src/editor/core/draw/particle/latex/utils/hershey.dart
 lib/src/editor/core/draw/particle/latex/utils/symbols.dart
 lib/src/editor/core/event/handlers/input.dart
 lib/src/editor/core/event/handlers/keydown/enter.dart

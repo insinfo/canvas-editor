@@ -83,6 +83,7 @@ class Draw {
 	dynamic _tableParticle;
 	dynamic _tableOperate;
 	dynamic _hyperlinkParticle;
+	dynamic _search;
 	dynamic _control;
 	dynamic _dateParticle;
 	dynamic _imageObserver;
@@ -308,6 +309,18 @@ class Draw {
 		}
 	}
 
+	void submitHistory([dynamic payload]) {
+		final dynamic history = _historyManager;
+		final dynamic submit = history?.submitHistory;
+		if (submit is Function) {
+			if (payload == null) {
+				submit();
+			} else {
+				submit(payload);
+			}
+		}
+	}
+
 	// ---------------------------------------------------------------------------
 	// Geometry helpers (scaled sizing derived from options)
 	// ---------------------------------------------------------------------------
@@ -512,6 +525,8 @@ class Draw {
 
 	void attachHyperlinkParticle(dynamic hyperlinkParticle) => _hyperlinkParticle = hyperlinkParticle;
 
+	void attachSearch(dynamic search) => _search = search;
+
 	void attachControl(dynamic control) => _control = control;
 
 	void attachDateParticle(dynamic dateParticle) => _dateParticle = dateParticle;
@@ -543,6 +558,7 @@ class Draw {
 	dynamic getTableParticle() => _tableParticle;
 	dynamic getTableOperate() => _tableOperate;
 	dynamic getHyperlinkParticle() => _hyperlinkParticle;
+	dynamic getSearch() => _search;
 	dynamic getControl() => _control;
 	dynamic getDateParticle() => _dateParticle;
 	dynamic getImageObserver() => _imageObserver;
