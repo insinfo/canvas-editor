@@ -1,9 +1,10 @@
-// TODO: Translate from C:\\MyTsProjects\\canvas-editor\\src\\editor\\core\\history\\HistoryManager.ts
+import '../draw/draw.dart';
+
 typedef HistoryCallback = void Function();
 
 class HistoryManager {
-	HistoryManager(dynamic draw)
-			: _maxRecordCount = (draw.getOptions()?.historyMaxRecordCount as int? ?? 0) + 1;
+	HistoryManager(Draw draw)
+			: _maxRecordCount = ((draw.getOptions().historyMaxRecordCount ?? 0) + 1);
 
 	final int _maxRecordCount;
 	final List<HistoryCallback> _undoStack = <HistoryCallback>[];

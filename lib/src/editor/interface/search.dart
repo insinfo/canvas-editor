@@ -62,3 +62,10 @@ class IReplaceOption {
 
 	IReplaceOption({this.index});
 }
+
+class INavigateInfo {
+	int index;
+	int count;
+
+	INavigateInfo({required this.index, required this.count});
+}

@@ -334,6 +334,13 @@ class IControlInitResult {
   IControlInitResult({required this.newIndex});
 }
 
+class IMoveCursorResult {
+  int newIndex;
+  IElement newElement;
+
+  IMoveCursorResult({required this.newIndex, required this.newElement});
+}
+
 abstract class IControlInstance {
   void setElement(IElement element);
   IElement getElement();

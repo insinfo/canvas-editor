@@ -1,4 +1,3 @@
-// TODO: Translate from C:\\MyTsProjects\\canvas-editor\\src\\editor\\core\\contextmenu\\ContextMenu.ts
 import 'dart:async';
 import 'dart:html';
 
@@ -8,43 +7,63 @@ import '../../dataset/enum/editor.dart';
 import '../../interface/contextmenu/context_menu.dart';
 import '../../interface/editor.dart';
 import '../../interface/element.dart';
+import '../../interface/position.dart';
+import '../../interface/range.dart';
 import '../../utils/element.dart' as element_utils;
 import '../../utils/index.dart' show findParent;
 import '../command/command.dart';
+import '../draw/draw.dart';
+import '../i18n/i18n.dart';
+import '../position/position.dart';
+import '../range/range_manager.dart';
 import 'menus/control_menus.dart';
 import 'menus/global_menus.dart';
 import 'menus/hyperlink_menus.dart';
 import 'menus/image_menus.dart';
 import 'menus/table_menus.dart';
 
+class _RenderPayload {
+	const _RenderPayload({
+		required this.contextMenuList,
+		required this.left,
+		required this.top,
+		this.parentMenuContainer,
+	});
+
+	final List<IRegisterContextMenu> contextMenuList;
+	final double left;
+	final double top;
+	final DivElement? parentMenuContainer;
+}
+
 class ContextMenu {
-	ContextMenu(dynamic draw, Command command)
-			: _draw = draw,
-				_command = command,
-				_options = (draw.getOptions() as IEditorOption?) ?? IEditorOption(),
-				_range = draw.getRange(),
-				_position = draw.getPosition(),
-				_i18n = draw.getI18n(),
-				_container = draw.getContainer() as DivElement,
-				_contextMenuList = <IRegisterContextMenu>[
-					...globalMenus,
-					...tableMenus,
-					...imageMenus,
-					...controlMenus,
-					...hyperlinkMenus,
-				],
-				_contextMenuContainerList = <DivElement>[],
-				_contextMenuRelationShip = <DivElement, DivElement>{},
-				_context = null {
+	ContextMenu(Draw draw, Command command)
+		: _draw = draw,
+			_command = command,
+			_options = (draw.getOptions() as IEditorOption?) ?? IEditorOption(),
+			_range = draw.getRange() as RangeManager,
+			_position = draw.getPosition() as Position,
+			_i18n = draw.getI18n(),
+			_container = draw.getContainer(),
+			_contextMenuList = <IRegisterContextMenu>[
+				...globalMenus,
+				...tableMenus,
+				...imageMenus,
+				...controlMenus,
+				...hyperlinkMenus,
+			],
+			_contextMenuContainerList = <DivElement>[],
+			_contextMenuRelationShip = <DivElement, DivElement>{},
+			_context = null {
 		_addEvent();
 	}
 
-	final dynamic _draw;
+	final Draw _draw;
 	final Command _command;
 	final IEditorOption _options;
-	final dynamic _range;
-	final dynamic _position;
-	final dynamic _i18n;
+	final RangeManager _range;
+	final Position _position;
+	final I18n _i18n;
 	final DivElement _container;
 	final List<IRegisterContextMenu> _contextMenuList;
 	final List<DivElement> _contextMenuContainerList;
@@ -68,17 +87,59 @@ class ContextMenu {
 	}
 
 	void dispose() {
-		for (final container in _contextMenuContainerList) {
+		for (final DivElement container in _contextMenuContainerList) {
 			container.remove();
 		}
 		_contextMenuContainerList.clear();
 		_contextMenuRelationShip.clear();
 	}
 
+	void _addEvent() {
+		_contextMenuSubscription = _container.onContextMenu.listen(_proxyContextMenuEvent);
+		_sideEffectSubscription = document.onMouseDown.listen(_handleSideEffect);
+	}
+
+	void _proxyContextMenuEvent(MouseEvent evt) {
+		_context = _getContext();
+		final List<IRegisterContextMenu> renderList = _filterMenuList(_contextMenuList);
+		final bool hasRenderableMenu = renderList.any((IRegisterContextMenu menu) => menu.isDivider != true);
+		if (hasRenderableMenu) {
+			dispose();
+			_render(
+				_RenderPayload(
+					contextMenuList: renderList,
+					left: evt.client.x.toDouble(),
+					top: evt.client.y.toDouble(),
+				),
+			);
+		}
+		evt.preventDefault();
+	}
+
+	void _handleSideEffect(MouseEvent evt) {
+		if (_contextMenuContainerList.isEmpty) {
+			return;
+		}
+		final List<EventTarget> path = evt.composedPath();
+		final EventTarget? target = path.isNotEmpty ? path.first : evt.target;
+		if (target is! Element) {
+			dispose();
+			return;
+		}
+		final Element? contextMenuDom = findParent(
+			target,
+			(Element element) => element.getAttribute(editorComponent) == EditorComponent.contextmenu.name,
+			true,
+		);
+		if (contextMenuDom == null) {
+			dispose();
+		}
+	}
+
 	List<IRegisterContextMenu> _filterMenuList(List<IRegisterContextMenu> menuList) {
-		final disableKeys = _options.contextMenuDisableKeys ?? const <String>[];
-		final filtered = <IRegisterContextMenu>[];
-		for (final menu in menuList) {
+		final List<String> disableKeys = _options.contextMenuDisableKeys ?? const <String>[];
+		final List<IRegisterContextMenu> filtered = <IRegisterContextMenu>[];
+		for (final IRegisterContextMenu menu in menuList) {
 			if (menu.disable == true) {
 				continue;
 			}
@@ -89,7 +150,7 @@ class ContextMenu {
 				filtered.add(menu);
 				continue;
 			}
-			final condition = menu.when;
+			final ContextMenuCondition? condition = menu.when;
 			if (condition == null || (_context != null && condition(_context!))) {
 				filtered.add(menu);
 			}
@@ -97,81 +158,46 @@ class ContextMenu {
 		return filtered;
 	}
 
-	void _addEvent() {
-		_contextMenuSubscription = _container.onContextMenu.listen(_proxyContextMenuEvent);
-		_sideEffectSubscription = document.onMouseDown.listen(_handleSideEffect);
-	}
-
-	void _proxyContextMenuEvent(MouseEvent event) {
-		_context = _getContext();
-		final renderList = _filterMenuList(_contextMenuList);
-		final hasRenderableMenu = renderList.any((menu) => menu.isDivider != true);
-		if (hasRenderableMenu) {
-			dispose();
-			_render(
-				renderList: renderList,
-				left: event.client.x.toDouble(),
-				top: event.client.y.toDouble(),
-			);
-		}
-		event.preventDefault();
-	}
-
-	void _handleSideEffect(MouseEvent event) {
-		if (_contextMenuContainerList.isEmpty) {
-			return;
-		}
-		final path = event.composedPath();
-		final EventTarget? firstTarget = path.isNotEmpty ? path.first : event.target;
-		if (firstTarget is! Element) {
-			dispose();
-			return;
-		}
-		final contextMenuDom = findParent(
-			firstTarget,
-			(element) => element.getAttribute(editorComponent) == EditorComponent.contextmenu.name,
-			true,
-		);
-		if (contextMenuDom == null) {
-			dispose();
-		}
-	}
-
 	IContextMenuContext _getContext() {
 		final bool isReadonly = _draw.isReadonly() == true;
-		final dynamic rangeValue = _range.getRange();
-		final int startIndex = rangeValue?.startIndex as int? ?? -1;
-		final int endIndex = rangeValue?.endIndex as int? ?? -1;
-		final bool editorTextFocus = !(startIndex == -1 && endIndex == -1);
+		final IRange rangeValue = _range.getRange();
+		final int startIndex = rangeValue.startIndex;
+		final int endIndex = rangeValue.endIndex;
+		final bool editorTextFocus = startIndex != -1 || endIndex != -1;
 		final bool editorHasSelection = editorTextFocus && startIndex != endIndex;
 
-		final dynamic positionContext = _position.getPositionContext();
-		final bool isTable = positionContext?.isTable == true;
-		final int? trIndex = positionContext?.trIndex as int?;
-		final int? tdIndex = positionContext?.tdIndex as int?;
-		final int? tableIndex = positionContext?.index as int?;
+		final IPositionContext positionContext = _position.getPositionContext();
+		final bool isTable = positionContext.isTable;
+		final int? trIndex = positionContext.trIndex;
+		final int? tdIndex = positionContext.tdIndex;
+		final int? tableIndex = positionContext.index;
 
 		IElement? tableElement;
 		if (isTable && tableIndex != null) {
-			final List<IElement> originalList =
-					element_utils.zipElementList(List<IElement>.from(_draw.getOriginalElementList() as Iterable))
-							.toList();
+			final List<IElement> originalList = (_draw.getOriginalElementList() as List).cast<IElement>();
 			if (tableIndex >= 0 && tableIndex < originalList.length) {
-				tableElement = originalList[tableIndex];
+				final List<IElement> zipped = element_utils.zipElementList(
+					<IElement>[originalList[tableIndex]],
+					options: const element_utils.ZipElementListOption(
+						extraPickAttrs: <String>['id'],
+					),
+				);
+				if (zipped.isNotEmpty) {
+					tableElement = zipped.first;
+				}
 			}
 		}
 
-		final bool isCrossRowCol = isTable && (rangeValue?.isCrossRowCol == true);
-		final List<IElement> elementList =
-				List<IElement>.from((_draw.getElementList() as Iterable?)?.whereType<IElement>() ?? const Iterable<IElement>.empty());
+		final bool isCrossRowCol = isTable && (rangeValue.isCrossRowCol == true);
+		final List<IElement> elementList = (_draw.getElementList() as List).cast<IElement>();
 		final IElement? startElement =
-				startIndex >= 0 && startIndex < elementList.length ? elementList[startIndex] : null;
+			(startIndex >= 0 && startIndex < elementList.length) ? elementList[startIndex] : null;
 		final IElement? endElement =
-				endIndex >= 0 && endIndex < elementList.length ? elementList[endIndex] : null;
+			(endIndex >= 0 && endIndex < elementList.length) ? elementList[endIndex] : null;
 
-		EditorZone zone;
+		EditorZone zone = EditorZone.main;
 		try {
-			zone = _draw.getZone().getZone() as EditorZone? ?? EditorZone.main;
+			zone = (_draw.getZone().getZone() as EditorZone?) ?? EditorZone.main;
 		} catch (_) {
 			zone = EditorZone.main;
 		}
@@ -193,73 +219,75 @@ class ContextMenu {
 	}
 
 	DivElement _createContextMenuContainer() {
-		final container = DivElement()
+		final DivElement container = DivElement()
 			..classes.add('${editorPrefix}-contextmenu-container')
 			..setAttribute(editorComponent, EditorComponent.contextmenu.name);
 		_container.append(container);
 		return container;
 	}
 
-	DivElement _render({
-		required List<IRegisterContextMenu> renderList,
-		required double left,
-		required double top,
-		DivElement? parent,
-	}) {
-		final container = _createContextMenuContainer();
-		final content = DivElement()..classes.add('${editorPrefix}-contextmenu-content');
+	DivElement _render(_RenderPayload payload) {
+		final DivElement container = _createContextMenuContainer();
+		final DivElement content = DivElement()
+			..classes.add('${editorPrefix}-contextmenu-content');
 		container.append(content);
 
-		if (parent != null) {
-			_contextMenuRelationShip[parent] = container;
+		if (payload.parentMenuContainer != null) {
+			_contextMenuRelationShip[payload.parentMenuContainer!] = container;
 		}
 
-		DivElement? childContainer;
+		DivElement? childMenuContainer;
 
-		for (var index = 0; index < renderList.length; index++) {
-			final menu = renderList[index];
+		for (int index = 0; index < payload.contextMenuList.length; index++) {
+			final IRegisterContextMenu menu = payload.contextMenuList[index];
 			if (menu.isDivider == true) {
 				final bool isFirst = index == 0;
-				final bool isLast = index == renderList.length - 1;
-				final prevIsDivider = index > 0 && renderList[index - 1].isDivider == true;
+				final bool isLast = index == payload.contextMenuList.length - 1;
+				final bool prevIsDivider =
+					index > 0 && payload.contextMenuList[index - 1].isDivider == true;
 				if (!isFirst && !isLast && !prevIsDivider) {
 					content.append(DivElement()..classes.add('${editorPrefix}-contextmenu-divider'));
 				}
 				continue;
 			}
 
-			final item = DivElement()..classes.add('${editorPrefix}-contextmenu-item');
+			final DivElement menuItem = DivElement()
+				..classes.add('${editorPrefix}-contextmenu-item');
 
 			if (menu.childMenus != null && menu.childMenus!.isNotEmpty) {
-				final childMenus = _filterMenuList(menu.childMenus!);
-				final hasChild = childMenus.any((child) => child.isDivider != true);
-				if (hasChild) {
-					item.classes.add('${editorPrefix}-contextmenu-sub-item');
-								item.onMouseEnter.listen((_) {
-						_setHoverStatus(item, true);
+				final List<IRegisterContextMenu> childMenus = _filterMenuList(menu.childMenus!);
+				final bool hasRenderableChild = childMenus.any((IRegisterContextMenu child) => child.isDivider != true);
+				if (hasRenderableChild) {
+					menuItem.classes.add('${editorPrefix}-contextmenu-sub-item');
+					menuItem.onMouseEnter.listen((_) {
+						_setHoverStatus(menuItem, true);
 						_removeSubMenu(container);
-						final rect = item.getBoundingClientRect();
-						childContainer = _render(
-							renderList: childMenus,
-										left: rect.right.toDouble(),
-										top: rect.top.toDouble(),
-							parent: container,
+						final Rectangle<num> rect = menuItem.getBoundingClientRect();
+						childMenuContainer = _render(
+							_RenderPayload(
+								contextMenuList: childMenus,
+								left: rect.right.toDouble(),
+								top: rect.top.toDouble(),
+								parentMenuContainer: container,
+							),
 						);
 					});
-					item.onMouseLeave.listen((evt) {
-						final related = evt.relatedTarget;
-						if (childContainer == null || related == null || !childContainer!.contains(related as Node)) {
-							_setHoverStatus(item, false);
+					menuItem.onMouseLeave.listen((MouseEvent evt) {
+						final EventTarget? related = evt.relatedTarget;
+						if (childMenuContainer == null ||
+							related == null ||
+							!childMenuContainer!.contains(related as Node)) {
+							_setHoverStatus(menuItem, false);
 						}
 					});
 				}
 			} else {
-				item.onMouseEnter.listen((_) {
-					_setHoverStatus(item, true);
+				menuItem.onMouseEnter.listen((_) {
+					_setHoverStatus(menuItem, true);
 					_removeSubMenu(container);
 				});
-				item.onMouseLeave.listen((_) => _setHoverStatus(item, false));
-				item.onClick.listen((_) {
+				menuItem.onMouseLeave.listen((_) => _setHoverStatus(menuItem, false));
+				menuItem.onClick.listen((_) {
 					if (menu.callback != null && _context != null) {
 						menu.callback!(_command, _context!);
 					}
@@ -267,27 +295,31 @@ class ContextMenu {
 				});
 			}
 
-			final icon = Element.tag('i');
+			final Element icon = Element.tag('i');
 			if (menu.icon != null && menu.icon!.isNotEmpty) {
 				icon.classes.add('${editorPrefix}-contextmenu-${menu.icon}');
 			}
-			item.append(icon);
+			menuItem.append(icon);
 
-			final label = SpanElement();
-			final name = menu.i18nPath != null
-					? _formatName(_i18n?.t(menu.i18nPath) as String? ?? '')
-					: _formatName(menu.name ?? '');
-			label.text = name;
-			item.append(label);
+			final SpanElement label = SpanElement();
+			final String labelText;
+			if (menu.i18nPath != null) {
+				final dynamic translation = _i18n.t(menu.i18nPath!);
+				labelText = _formatName(translation is String ? translation : (translation?.toString() ?? ''));
+			} else {
+				labelText = _formatName(menu.name ?? '');
+			}
+			label.text = labelText;
+			menuItem.append(label);
 
 			if (menu.shortCut != null && menu.shortCut!.isNotEmpty) {
-				final shortcut = SpanElement()
+				final SpanElement shortcut = SpanElement()
 					..classes.add('${editorPrefix}-shortcut')
 					..text = menu.shortCut;
-				item.append(shortcut);
+				menuItem.append(shortcut);
 			}
 
-			content.append(item);
+			content.append(menuItem);
 		}
 
 		container.style
@@ -296,29 +328,25 @@ class ContextMenu {
 			..top = '0px';
 
 		_contextMenuContainerList.add(container);
-
-		_adjustPosition(container, left, top);
+		_adjustPosition(container, payload.left, payload.top);
 		return container;
 	}
 
 	void _adjustPosition(DivElement container, double left, double top) {
-		final rect = container.getBoundingClientRect();
-		final width = rect.width;
-		final height = rect.height;
-
-		final viewportWidth = window.innerWidth?.toDouble() ?? width;
-		final viewportHeight = window.innerHeight?.toDouble() ?? height;
-
-		final adjustedLeft = left + width > viewportWidth ? left - width : left;
-		final adjustedTop = top + height > viewportHeight ? top - height : top;
-
+		final Rectangle<num> rect = container.getBoundingClientRect();
+		final double width = rect.width.toDouble();
+		final double height = rect.height.toDouble();
+		final double viewportWidth = window.innerWidth?.toDouble() ?? width;
+		final double viewportHeight = window.innerHeight?.toDouble() ?? height;
+		final double adjustedLeft = left + width > viewportWidth ? left - width : left;
+		final double adjustedTop = top + height > viewportHeight ? top - height : top;
 		container.style
 			..left = '${adjustedLeft}px'
 			..top = '${adjustedTop}px';
 	}
 
 	void _removeSubMenu(DivElement parent) {
-		final child = _contextMenuRelationShip.remove(parent);
+		final DivElement? child = _contextMenuRelationShip.remove(parent);
 		if (child != null) {
 			_removeSubMenu(child);
 			child.remove();
@@ -326,9 +354,9 @@ class ContextMenu {
 	}
 
 	void _setHoverStatus(DivElement target, bool status) {
-		final parent = target.parent;
-		if (parent is Element) {
-			for (final element in parent.children.whereType<Element>()) {
+		final Element? parent = target.parent;
+		if (parent != null) {
+			for (final Element element in parent.children.whereType<Element>()) {
 				element.classes.remove('hover');
 			}
 		}
@@ -343,9 +371,9 @@ class ContextMenu {
 		if (name.isEmpty) {
 			return name;
 		}
-		const placeholder = ContextMenuNamePlaceholder.selectedText;
+		const String placeholder = ContextMenuNamePlaceholder.selectedText;
 		if (name.contains(placeholder)) {
-			final selectedText = _range.toString() as String? ?? '';
+			final String selectedText = _range.toString();
 			return name.replaceAll(placeholder, selectedText);
 		}
 		return name;

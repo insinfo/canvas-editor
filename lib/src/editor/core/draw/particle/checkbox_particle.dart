@@ -118,4 +118,3 @@ class CheckboxParticle {
 		ctx.restore();
 	}
 }
-// TODO: Translate from C:\\MyTsProjects\\canvas-editor\\src\\editor\\core\\draw\\particle\\CheckboxParticle.ts

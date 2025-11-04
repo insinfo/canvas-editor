@@ -7,19 +7,23 @@ import '../../../../interface/editor.dart';
 import '../../../../interface/element.dart';
 import '../../../../interface/range.dart';
 import '../../../../utils/element.dart' as element_utils;
+import '../../../draw/draw.dart' show Draw;
+import '../../../draw/particle/list_particle.dart';
+import '../../../range/range_manager.dart';
+import '../../canvas_event.dart' show CanvasEvent;
 
-void enter(KeyboardEvent evt, dynamic host) {
-  final dynamic draw = host.getDraw();
+void enter(KeyboardEvent evt, CanvasEvent host) {
+  final Draw draw = host.getDraw() as Draw;
   if (draw.isReadonly() == true) {
     return;
   }
 
-  final dynamic rangeManager = draw.getRange();
+  final RangeManager rangeManager = draw.getRange() as RangeManager;
   if (rangeManager.getIsCanInput() != true) {
     return;
   }
 
-  final IRange range = rangeManager.getRange() as IRange;
+  final IRange range = rangeManager.getRange();
   final int startIndex = range.startIndex;
   final int endIndex = range.endIndex;
   final bool isCollapsed = rangeManager.getIsCollapsed() == true;
@@ -41,7 +45,7 @@ void enter(KeyboardEvent evt, dynamic host) {
       endElement.value == ZERO &&
       (endIndex + 1 >= elementList.length ||
           elementList[endIndex + 1].listId != endElement.listId)) {
-    final dynamic listParticle = draw.getListParticle();
+    final ListParticle? listParticle = draw.getListParticle() as ListParticle?;
     listParticle?.unsetList();
     return;
   }
@@ -74,8 +78,8 @@ void enter(KeyboardEvent evt, dynamic host) {
       (endIndex + 1 >= elementList.length ||
           elementList[endIndex + 1].titleId != endElement.titleId);
   if (!isTitleBoundary) {
-    final IElement? copyElement =
-        rangeManager.getRangeAnchorStyle(elementList, endIndex) as IElement?;
+  final IElement? copyElement =
+    rangeManager.getRangeAnchorStyle(elementList, endIndex);
     if (copyElement != null) {
       enterText
         ..rowFlex = copyElement.rowFlex
@@ -130,4 +134,3 @@ void enter(KeyboardEvent evt, dynamic host) {
 
   evt.preventDefault();
 }
-// TODO: Translate from C:\\MyTsProjects\\canvas-editor\\src\\editor\\core\\event\\handlers\\keydown\\enter.ts

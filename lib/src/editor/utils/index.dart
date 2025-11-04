@@ -209,10 +209,10 @@ List<String> splitText(String text) {
 }
 
 void downloadFile(String href, String fileName) {
-	final anchor = AnchorElement()
-		..href = href
-		..download = fileName;
-	anchor.click();
+		final anchor = AnchorElement()
+			..href = href
+			..download = fileName;
+		anchor.click();
 }
 
 void threeClick(Element dom, void Function(MouseEvent evt) fn) {
@@ -351,16 +351,16 @@ String convertStringToBase64(String input) {
 
 Element findScrollContainer(Element element) {
 	Element? parent = element.parent;
-	while (parent != null) {
-		final style = parent.getComputedStyle();
-		final overflowY = style.getPropertyValue('overflow-y');
-		if (parent.scrollHeight > parent.clientHeight &&
-				(overflowY == 'auto' || overflowY == 'scroll')) {
+		while (parent != null) {
+			final CssStyleDeclaration style = parent.getComputedStyle();
+			final String overflowY = style.getPropertyValue('overflow-y');
+		final bool canScroll = parent.scrollHeight > parent.clientHeight;
+		if (canScroll && (overflowY == 'auto' || overflowY == 'scroll')) {
 			return parent;
 		}
 		parent = parent.parent;
 	}
-	return document.documentElement ?? document.body ?? element; // fallbacks
+	return document.documentElement ?? document.body ?? element;
 }
 
 bool isArrayEqual(dynamic arr1, dynamic arr2) {
@@ -417,4 +417,3 @@ bool isNonValue(dynamic value) => value == null;
 String normalizeLineBreak(String text) {
 	return text.replaceAll(RegExp(r'\r\n|\r'), '\n');
 }
-// TODO: Translate from C:\\MyTsProjects\\canvas-editor\\src\\editor\\utils\\index.ts

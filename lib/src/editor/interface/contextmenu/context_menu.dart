@@ -1,3 +1,4 @@
+import '../../core/command/command.dart';
 import '../../dataset/enum/editor.dart';
 import '../editor.dart';
 import '../element.dart';
@@ -33,7 +34,10 @@ class IContextMenuContext {
 }
 
 typedef ContextMenuCondition = bool Function(IContextMenuContext payload);
-typedef ContextMenuCallback = dynamic Function(Object? command, IContextMenuContext context);
+typedef ContextMenuCallback = void Function(
+  Command command,
+  IContextMenuContext context,
+);
 
 class IRegisterContextMenu {
   String? key;

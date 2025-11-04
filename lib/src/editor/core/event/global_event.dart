@@ -1,4 +1,3 @@
-// TODO: Translate from C:\\MyTsProjects\\canvas-editor\\src\\editor\\core\\event\\GlobalEvent.ts
 import 'dart:async';
 import 'dart:html';
 import 'dart:js_util' as js_util;
@@ -11,34 +10,42 @@ import '../../interface/range.dart';
 import '../../utils/index.dart' show findParent;
 import '../cursor/cursor.dart';
 import '../range/range_manager.dart';
+import '../draw/control/control.dart';
+import '../draw/draw.dart';
+import '../draw/particle/date/date_particle.dart';
+import '../draw/particle/hyperlink_particle.dart';
+import '../draw/particle/image_particle.dart';
+import '../draw/particle/previewer/previewer.dart';
+import '../draw/particle/table/table_tool.dart';
+import './canvas_event.dart';
 
 class GlobalEvent {
 	GlobalEvent(this.draw, this.canvasEvent)
-			: options = draw.getOptions() as IEditorOption,
+			: options = draw.getOptions(),
 				range = draw.getRange() as RangeManager,
-				previewer = draw.getPreviewer(),
-				tableTool = draw.getTableTool(),
-				hyperlinkParticle = draw.getHyperlinkParticle(),
-				control = draw.getControl(),
-				dateParticle = draw.getDateParticle(),
-				imageParticle = draw.getImageParticle(),
+				previewer = draw.getPreviewer() as Previewer?,
+				tableTool = draw.getTableTool() as TableTool?,
+				hyperlinkParticle = draw.getHyperlinkParticle() as HyperlinkParticle?,
+				control = draw.getControl() as Control?,
+				dateParticle = draw.getDateParticle() as DateParticle?,
+				imageParticle = draw.getImageParticle() as ImageParticle?,
 				dprMediaQueryList = window.matchMedia(
 					'(resolution: ${window.devicePixelRatio}dppx)',
 				) {
 		_initListeners();
 	}
 
-	final dynamic draw;
+	final Draw draw;
 	final IEditorOption options;
 	Cursor? cursor;
-	final dynamic canvasEvent;
+	final CanvasEvent canvasEvent;
 	final RangeManager range;
-	final dynamic previewer;
-	final dynamic tableTool;
-	final dynamic hyperlinkParticle;
-	final dynamic control;
-	final dynamic dateParticle;
-	final dynamic imageParticle;
+	final Previewer? previewer;
+	final TableTool? tableTool;
+	final HyperlinkParticle? hyperlinkParticle;
+	final Control? control;
+	final DateParticle? dateParticle;
+	final ImageParticle? imageParticle;
 	final MediaQueryList dprMediaQueryList;
 
 	late final EventListener _clearSideEffectListener;
@@ -65,7 +72,11 @@ class GlobalEvent {
 		window.removeEventListener('blur', _clearSideEffectListener);
 		document.removeEventListener('mousedown', _clearSideEffectListener);
 		document.removeEventListener('mouseup', _setCanvasEventAbilityListener);
-		document.removeEventListener('wheel', _setPageScaleListener);
+		js_util.callMethod(
+			document,
+			'removeEventListener',
+			<dynamic>['wheel', _setPageScaleListener],
+		);
 		document.removeEventListener('visibilitychange', _visibilityChangeListener);
 		if (_dprUsesEventListener) {
 			js_util.callMethod(
@@ -122,12 +133,8 @@ class GlobalEvent {
 	}
 
 	void setCanvasEventAbility([Event? _]) {
-		try {
-			canvasEvent.setIsAllowDrag(false);
-		} catch (_) {}
-		try {
-			canvasEvent.setIsAllowSelection(false);
-		} catch (_) {}
+		canvasEvent.setIsAllowDrag(false);
+		canvasEvent.setIsAllowSelection(false);
 	}
 
 	void watchCursorActive() {
@@ -147,30 +154,24 @@ class GlobalEvent {
 
 	void setPageScale(WheelEvent evt) {
 		final String? pageScaleKey = internalShortcutKey['PAGE_SCALE'];
-		final List<String>? disableKeys = options.shortcutDisableKeys;
-		if (pageScaleKey != null && disableKeys != null) {
-			if (disableKeys.contains(pageScaleKey)) {
-				return;
-			}
+		final List<String> disableKeys = options.shortcutDisableKeys ?? const <String>[];
+		if (pageScaleKey != null && disableKeys.contains(pageScaleKey)) {
+			return;
 		}
 		if (!evt.ctrlKey) {
 			return;
 		}
 		evt.preventDefault();
-		final double scale = options.scale?.toDouble() ?? 1;
+		final double scale = (options.scale ?? 1).toDouble();
 		if (evt.deltaY < 0) {
 			final double nextScale = scale * 10 + 1;
 			if (nextScale <= 30) {
-				try {
-					draw.setPageScale(nextScale / 10);
-				} catch (_) {}
+				draw.setPageScale(nextScale / 10);
 			}
 		} else {
 			final double nextScale = scale * 10 - 1;
 			if (nextScale >= 5) {
-				try {
-					draw.setPageScale(nextScale / 10);
-				} catch (_) {}
+				draw.setPageScale(nextScale / 10);
 			}
 		}
 	}
@@ -179,25 +180,21 @@ class GlobalEvent {
 		if (document.visibilityState != 'visible') {
 			return;
 		}
-		try {
-			final IRange currentRange = range.getRange();
-			final bool isSetCursor = currentRange.startIndex >= 0 &&
-					currentRange.endIndex >= 0 &&
-					currentRange.startIndex == currentRange.endIndex;
-			range.replaceRange(currentRange);
-					draw.render(IDrawOption(
-						isSetCursor: isSetCursor,
-						isCompute: false,
-						isSubmitHistory: false,
-						curIndex: currentRange.startIndex,
-					));
-		} catch (_) {}
+		final IRange currentRange = range.getRange();
+		final bool isSetCursor = currentRange.startIndex >= 0 &&
+				currentRange.endIndex >= 0 &&
+				currentRange.startIndex == currentRange.endIndex;
+		range.replaceRange(currentRange);
+		draw.render(IDrawOption(
+			isSetCursor: isSetCursor,
+			isCompute: false,
+			isSubmitHistory: false,
+			curIndex: currentRange.startIndex,
+		));
 	}
 
 	void _handleDprChange([Event? _]) {
-		try {
-			draw.setPageDevicePixel();
-		} catch (_) {}
+		draw.setPageDevicePixel();
 	}
 
 	void _addEvent() {
@@ -247,39 +244,13 @@ class GlobalEvent {
 
 	void _resetState() {
 		cursor?.recoveryCursor();
-		try {
-			range.recoveryRangeStyle();
-		} catch (_) {}
-		if (previewer != null) {
-			try {
-				previewer.clearResizer();
-			} catch (_) {}
-		}
-		if (tableTool != null) {
-			try {
-				tableTool.dispose();
-			} catch (_) {}
-		}
-		if (hyperlinkParticle != null) {
-			try {
-				hyperlinkParticle.clearHyperlinkPopup();
-			} catch (_) {}
-		}
-		if (control != null) {
-			try {
-				control.destroyControl();
-			} catch (_) {}
-		}
-		if (dateParticle != null) {
-			try {
-				dateParticle.clearDatePicker();
-			} catch (_) {}
-		}
-		if (imageParticle != null) {
-			try {
-				imageParticle.destroyFloatImage();
-			} catch (_) {}
-		}
+		range.recoveryRangeStyle();
+		previewer?.clearResizer();
+		tableTool?.dispose();
+		hyperlinkParticle?.clearHyperlinkPopup();
+		control?.destroyControl();
+		dateParticle?.clearDatePicker();
+		imageParticle?.destroyFloatImage();
 	}
 
 	Element? _resolveEventTarget(Event event) {
@@ -307,15 +278,13 @@ class GlobalEvent {
 	}
 
 	List<Element> _resolvePageList() {
-		try {
-			final dynamic pageList = draw.getPageList();
-			if (pageList is List<Element>) {
-				return pageList;
-			}
-			if (pageList is Iterable) {
-				return pageList.whereType<Element>().toList();
-			}
-		} catch (_) {}
+		final dynamic pageList = draw.getPageList();
+		if (pageList is List<Element>) {
+			return pageList;
+		}
+		if (pageList is Iterable) {
+			return pageList.whereType<Element>().toList();
+		}
 		return <Element>[];
 	}
 }

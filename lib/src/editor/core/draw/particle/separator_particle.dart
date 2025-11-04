@@ -1,4 +1,3 @@
-// Ported from C:\MyTsProjects\canvas-editor\src\editor\core\draw\particle\SeparatorParticle.ts
 import 'dart:html';
 
 import '../../../interface/editor.dart';
@@ -31,10 +30,10 @@ class SeparatorParticle {
 		ctx.translate(0, ctx.lineWidth / 2);
 		ctx.beginPath();
 		ctx.moveTo(x, offsetY);
-		final double width = (element.width ?? 0) * scale;
+		final double intrinsicWidth = element.width ?? element.metrics.width;
+		final double width = intrinsicWidth * scale;
 		ctx.lineTo(x + width, offsetY);
 		ctx.stroke();
 		ctx.restore();
 	}
 }
-// TODO: Translate from C:\\MyTsProjects\\canvas-editor\\src\\editor\\core\\draw\\particle\\SeparatorParticle.ts

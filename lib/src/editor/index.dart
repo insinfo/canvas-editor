@@ -1,3 +1,5 @@
+import 'dart:core' hide override;
+import 'dart:core' as core show override;
 import 'dart:html';
 
 import 'interface/editor.dart';
@@ -5,17 +7,12 @@ import 'interface/element.dart';
 import 'interface/event_bus.dart';
 import 'interface/plugin.dart';
 import 'utils/element.dart' as element_utils;
+import 'utils/index.dart' as utils;
 import 'utils/option.dart' as option_utils;
 import 'core/command/command.dart';
 import 'core/command/command_adapt.dart';
 import 'core/contextmenu/context_menu.dart';
 import 'core/draw/draw.dart';
-import 'core/draw/particle/checkbox_particle.dart';
-import 'core/draw/particle/hyperlink_particle.dart';
-import 'core/draw/particle/list_particle.dart';
-import 'core/draw/particle/page_break_particle.dart';
-import 'core/draw/particle/radio_particle.dart';
-import 'core/draw/particle/separator_particle.dart';
 import 'core/event/eventbus/event_bus.dart';
 import 'core/listener/listener.dart';
 import 'core/override/override.dart';
@@ -59,48 +56,109 @@ export 'dataset/constant/shortcut.dart';
 
 export 'core/command/command.dart';
 
-class Editor {
-  late Command command;
-  late Listener listener;
-  late EventBus<EventBusMap> eventBus;
-  late Override override;
-  late Register register;
-  late void Function() destroy;
-  late UsePlugin use;
+export 'utils/element.dart'
+    show
+        GetElementListByHtmlOption,
+        createDomFromElementList,
+        getElementListByHTML,
+        getTextFromElementList;
+
+export 'utils/index.dart' show splitText;
+
+typedef IGetElementListByHTMLOption = element_utils.GetElementListByHtmlOption;
+
+List<IElement> _cloneElementList(List<IElement>? source) {
+  if (source == null || source.isEmpty) {
+    return <IElement>[];
+  }
+  return element_utils.cloneElementList(source);
+}
+
+class Editor implements IPluginHost {
+  late Command _command;
+  late Listener _listener;
+  late EventBus<EventBusMap> _eventBus;
+  late Override _overrideHost;
+  late Register _register;
+  late void Function() _destroy;
+  late UsePlugin _use;
+
+  @core.override
+  Command get command => _command;
+
+  @core.override
+  Listener get listener => _listener;
+
+  @core.override
+  EventBus<EventBusMap> get eventBus => _eventBus;
+
+  @core.override
+  Override get override => _overrideHost;
+
+  @core.override
+  Register get register => _register;
+
+  @core.override
+  void Function() get destroy => _destroy;
+
+  @core.override
+  UsePlugin get use => _use;
 
   Editor(
     HtmlElement container,
-    dynamic data, // IEditorData or List<IElement>
-    [IEditorOption? options]
-  ) {
-    final editorOptions = option_utils.mergeOption(options);
+    dynamic data, [
+    IEditorOption? options,
+  ]) {
+    final IEditorOption editorOptions = option_utils.mergeOption(options);
 
-    List<IElement> headerElementList = [];
-    List<IElement> mainElementList = [];
-    List<IElement> footerElementList = [];
+    final List<IElement> headerElementList;
+    final List<IElement> mainElementList;
+    final List<IElement> footerElementList;
 
     if (data is List<IElement>) {
-      mainElementList = data;
+      headerElementList = <IElement>[];
+      mainElementList = element_utils.cloneElementList(data);
+      footerElementList = <IElement>[];
     } else if (data is IEditorData) {
-      headerElementList = data.header ?? [];
-      mainElementList = data.main;
-      footerElementList = data.footer ?? [];
+      headerElementList = _cloneElementList(data.header);
+      mainElementList = element_utils.cloneElementList(data.main);
+      footerElementList = _cloneElementList(data.footer);
+    } else {
+      final dynamic cloned = utils.deepClone(data);
+      if (cloned is List<IElement>) {
+        headerElementList = <IElement>[];
+        mainElementList = element_utils.cloneElementList(cloned);
+        footerElementList = <IElement>[];
+      } else if (cloned is IEditorData) {
+        headerElementList = _cloneElementList(cloned.header);
+        mainElementList = element_utils.cloneElementList(cloned.main);
+        footerElementList = _cloneElementList(cloned.footer);
+      } else {
+        throw ArgumentError(
+            'Editor data must be an IEditorData or List<IElement>.');
+      }
     }
 
-    final pageComponentData = [
+    final List<List<IElement>> pageComponentData = <List<IElement>>[
       headerElementList,
       mainElementList,
-      footerElementList
+      footerElementList,
     ];
-    for (var elementList in pageComponentData) {
-      element_utils.formatElementList(elementList, element_utils.FormatElementListOption(editorOptions: editorOptions, isForceCompensation: true));
+    for (final List<IElement> elementList in pageComponentData) {
+      element_utils.formatElementList(
+        elementList,
+        element_utils.FormatElementListOption(
+          editorOptions: editorOptions,
+          isForceCompensation: true,
+        ),
+      );
     }
 
-    listener = Listener();
-    eventBus = EventBus<EventBusMap>();
-    override = Override();
+  _listener = Listener();
+  _eventBus = EventBus<EventBusMap>();
+  _overrideHost = Override();
 
-    final draw = Draw(
+    final Draw draw = Draw(
       container,
       editorOptions,
       IEditorData(
@@ -113,37 +171,23 @@ class Editor {
       override,
     );
 
-    final listParticle = ListParticle(draw);
-    final checkboxParticle = CheckboxParticle(draw);
-    final radioParticle = RadioParticle(draw);
-    final separatorParticle = SeparatorParticle(draw);
-    final hyperlinkParticle = HyperlinkParticle(draw);
-    final pageBreakParticle = PageBreakParticle(draw);
-    draw
-      ..attachListParticle(listParticle)
-      ..attachCheckboxParticle(checkboxParticle)
-      ..attachRadioParticle(radioParticle)
-      ..attachSeparatorParticle(separatorParticle)
-      ..attachHyperlinkParticle(hyperlinkParticle)
-      ..attachPageBreakParticle(pageBreakParticle);
+  _command = Command(CommandAdapt(draw));
+    final ContextMenu contextMenu = ContextMenu(draw, command);
+    final Shortcut shortcut = Shortcut(draw, command);
 
-    command = Command(CommandAdapt(draw));
-    final contextMenu = ContextMenu(draw, command);
-    final shortcut = Shortcut(draw, command);
-
-    register = Register(
+  _register = Register(
       contextMenu: contextMenu,
       shortcut: shortcut,
       i18n: draw.getI18n(),
     );
 
-    destroy = () {
+  _destroy = () {
       draw.destroy();
       shortcut.removeEvent();
       contextMenu.removeEvent();
     };
 
-    final plugin = Plugin(this);
-    use = plugin.use;
+    final Plugin plugin = Plugin(this);
+  _use = plugin.use;
   }
 }

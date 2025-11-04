@@ -1,5 +1,5 @@
-// TODO: Translate from C:\\MyTsProjects\\canvas-editor\\src\\editor\\core\\draw\\particle\\HyperlinkParticle.ts
 import 'dart:html';
+import 'dart:js_util' as js_util;
 
 import '../../../dataset/constant/editor.dart';
 import '../../../interface/editor.dart';
@@ -63,7 +63,10 @@ class HyperlinkParticle {
 		if (url == null || url.isEmpty) {
 			return;
 		}
-		window.open(url, '_blank');
+		final WindowBase? newTab = window.open(url, '_blank');
+		if (newTab != null) {
+			js_util.setProperty(newTab, 'opener', null);
+		}
 	}
 
 	void render(

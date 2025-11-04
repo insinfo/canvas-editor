@@ -1,4 +1,3 @@
-// TODO: Translate from C:\\MyTsProjects\\canvas-editor\\src\\editor\\core\\draw\\particle\\ListParticle.ts
 import 'dart:html';
 
 import '../../../dataset/constant/common.dart';
