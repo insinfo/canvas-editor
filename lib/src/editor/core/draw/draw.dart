@@ -22,10 +22,16 @@ import '../../interface/table/table.dart';
 import '../../interface/table/td.dart';
 import '../../utils/element.dart' as element_utils;
 import '../../utils/index.dart' as utils;
+import '../actuator/actuator.dart';
+import '../cursor/cursor.dart';
+import '../event/canvas_event.dart';
 import '../event/eventbus/event_bus.dart';
+import '../event/global_event.dart';
 import '../history/history_manager.dart';
 import '../i18n/i18n.dart';
-import '../cursor/cursor.dart';
+import '../observer/mouse_observer.dart';
+import '../observer/scroll_observer.dart';
+import '../observer/selection_observer.dart';
 import '../position/position.dart';
 import '../range/range_manager.dart';
 import '../worker/worker_manager.dart';
@@ -57,7 +63,9 @@ import 'particle/page_break_particle.dart';
 import 'particle/radio_particle.dart';
 import 'particle/separator_particle.dart';
 import 'particle/subscript_particle.dart';
+import 'particle/table/table_operate.dart';
 import 'particle/table/table_particle.dart';
+import 'particle/table/table_tool.dart';
 import 'particle/text_particle.dart';
 import 'particle/superscript_particle.dart';
 import '../observer/image_observer.dart';
@@ -140,12 +148,52 @@ class Draw {
 		_pageBorder = PageBorder(this);
 		_placeholder = Placeholder(this);
 		_badge = Badge(this);
-		_area = Area(this);
-		_previewer = Previewer(this);
-		_imageObserver = ImageObserver();
-		_workerManager = WorkerManager(this);
-		_header = Header(this, _headerElementList);
-		_footer = Footer(this, _footerElementList);
+			_area = Area(this);
+			_previewer = Previewer(this);
+			_imageObserver = ImageObserver();
+			_tableTool = TableTool(this);
+			_tableOperate = TableOperate(this);
+			final CanvasEvent canvasEvent = CanvasEvent(this);
+			_canvasEvent = canvasEvent;
+			_cursor = Cursor(this, canvasEvent);
+			canvasEvent.register();
+			final GlobalEvent globalEvent = GlobalEvent(this, canvasEvent);
+			_globalEvent = globalEvent;
+			globalEvent.register();
+			_workerManager = WorkerManager(this);
+			ScrollObserver? scrollObserver;
+			try {
+				scrollObserver = ScrollObserver(this);
+			} catch (_) {
+				scrollObserver = null;
+			}
+			_scrollObserver = scrollObserver;
+			SelectionObserver? selectionObserver;
+			try {
+				selectionObserver = SelectionObserver(this);
+			} catch (_) {
+				selectionObserver = null;
+			}
+			_selectionObserver = selectionObserver;
+			MouseObserver? mouseObserver;
+			try {
+				mouseObserver = MouseObserver(this);
+			} catch (_) {
+				mouseObserver = null;
+			}
+			_mouseObserver = mouseObserver;
+			Actuator(this);
+			_header = Header(this, _headerElementList);
+			_footer = Footer(this, _footerElementList);
+			_zone = Zone(this);
+
+			render(
+				IDrawOption(
+					isInit: true,
+					isSetCursor: false,
+					isFirstRender: true,
+				),
+			);
 	}
         
 	final HtmlElement _rootContainer;
@@ -220,6 +268,9 @@ class Draw {
 	WorkerManager? _workerManager;
 	Zone? _zone;
 	IntersectionObserver? _lazyRenderObserver;
+	ScrollObserver? _scrollObserver;
+	SelectionObserver? _selectionObserver;
+	MouseObserver? _mouseObserver;
 
 	void ensureContainerMounted() {
 		if (!_containerInitialized) {
@@ -234,7 +285,12 @@ class Draw {
 	}
 
 	void destroy() {
-		_globalEvent?.removeEvent();
+		(_globalEvent as GlobalEvent?)?.removeEvent();
+		(_canvasEvent as CanvasEvent?)?.dispose();
+		_scrollObserver?.removeEvent();
+		_selectionObserver?.dispose();
+		_mouseObserver?.dispose();
+		(_tableTool as TableTool?)?.dispose();
 		_pageContainer.children.clear();
 		_pageList.clear();
 		_ctxList.clear();
