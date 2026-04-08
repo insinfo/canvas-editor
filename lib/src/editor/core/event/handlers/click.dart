@@ -8,6 +8,7 @@ import '../../../interface/draw.dart';
 import '../../../interface/element.dart';
 import '../../../interface/position.dart';
 import '../../../interface/range.dart';
+import 'mouse_offset.dart';
 
 IRange? _getWordRangeBySegmenter(dynamic host) {
 	final dynamic draw = host.getDraw();
@@ -220,8 +221,9 @@ IRange? _getWordRangeByCursor(dynamic host) {
 void dblclick(dynamic host, dynamic evt) {
 	final dynamic draw = host.getDraw();
 	final dynamic position = draw.getPosition();
-	final double offsetX = (evt?.offsetX as num?)?.toDouble() ?? 0;
-	final double offsetY = (evt?.offsetY as num?)?.toDouble() ?? 0;
+	final offset = getMouseOffset(evt);
+	final double offsetX = offset.x;
+	final double offsetY = offset.y;
 
 	final ICurrentPosition positionContext = position.getPositionByXY(
 		IGetPositionByXYPayload(x: offsetX, y: offsetY),

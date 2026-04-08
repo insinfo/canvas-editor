@@ -5,7 +5,6 @@ import '../../../interface/editor.dart';
 import '../../../interface/element.dart';
 import '../../../interface/line_number.dart';
 import '../../../interface/row.dart';
-import '../../../interface/text.dart';
 import '../draw.dart';
 
 class LineNumber {
@@ -70,7 +69,7 @@ class LineNumber {
 
 		ctx.save();
 		ctx.fillStyle = color;
-		ctx.font = '${size * scale}px ${font}';
+		ctx.font = '${size * scale}px $font';
 
 			for (int i = 0; i < rowList.length; i++) {
 				final IRow row = rowList[i];

@@ -77,7 +77,7 @@ IEditorOption mergeOption([IEditorOption? options]) {
 
   return IEditorOption(
     mode: options?.mode ?? EditorMode.edit,
-    locale: options?.locale ?? 'zhCN',
+    locale: options?.locale ?? 'ptBR',
     defaultType: options?.defaultType ?? 'TEXT',
     defaultColor: options?.defaultColor ?? '#000000',
     defaultFont: options?.defaultFont ?? 'Microsoft YaHei',

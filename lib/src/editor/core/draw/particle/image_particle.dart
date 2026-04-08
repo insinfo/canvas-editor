@@ -148,6 +148,22 @@ class ImageParticle {
 		return fallback;
 	}
 
+	String _normalizeImageSource(String rawSource) {
+		final String trimmed = rawSource.trim();
+		if (!trimmed.startsWith('data:image/')) {
+			return trimmed;
+		}
+
+		final int commaIndex = trimmed.indexOf(',');
+		if (commaIndex == -1) {
+			return trimmed.replaceAll(RegExp(r'\s+'), '');
+		}
+
+		final String header = trimmed.substring(0, commaIndex).replaceAll(RegExp(r'\s+'), '');
+		final String payload = trimmed.substring(commaIndex + 1).replaceAll(RegExp(r'\s+'), '');
+		return '$header,$payload';
+	}
+
 	void render(
 		CanvasRenderingContext2D ctx,
 		IElement element,
@@ -161,7 +177,8 @@ class ImageParticle {
 			return;
 		}
 
-		final String cacheKey = element.value;
+		final String source = _normalizeImageSource(element.value);
+		final String cacheKey = source;
 		final ImageElement? cached = _imageCache[cacheKey];
 		if (cached != null) {
 			ctx.drawImageScaled(cached, x, y, width, height);
@@ -172,7 +189,7 @@ class ImageParticle {
 		final Completer<IElement> completer = Completer<IElement>();
 		final ImageElement image = ImageElement()
 			..crossOrigin = 'Anonymous'
-			..src = element.value;
+			..src = source;
 
 		image.onLoad.first.then((_) {
 			_imageCache[cacheKey] = image;
@@ -200,10 +217,17 @@ class ImageParticle {
 			fallback.onLoad.first.then((_) {
 				ctx.drawImageScaled(fallback, x, y, width, height);
 				_imageCache[cacheKey] = fallback;
+				if (!completer.isCompleted) {
+					completer.complete(element);
+				}
 			});
-			if (!completer.isCompleted) {
-				completer.completeError(error ?? StateError('image load error'));
-			}
+			fallback.onError.first.then((dynamic fallbackError) {
+				if (!completer.isCompleted) {
+					completer.completeError(
+						fallbackError ?? error ?? StateError('image load error'),
+					);
+				}
+			});
 		});
 
 		_addImageObserver(completer.future);

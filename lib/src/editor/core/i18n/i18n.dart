@@ -8,6 +8,7 @@ class I18n {
   I18n(String locale)
       : _currentLocale = locale,
         _langMap = <String, Map<String, dynamic>>{
+          'ptBR': _deepCopy(_ptBrLang),
           'zhCN': _deepCopy(_zhCnLang),
           'en': _deepCopy(_enLang),
         };
@@ -16,7 +17,7 @@ class I18n {
   final Map<String, Map<String, dynamic>> _langMap;
 
   void registerLangMap(String locale, DeepPartial<ILang> lang) {
-    final Map<String, dynamic> base = _langMap[locale] ?? _deepCopy(_zhCnLang);
+    final Map<String, dynamic> base = _langMap[locale] ?? _deepCopy(_ptBrLang);
     final Map<String, dynamic> merged = mergeObject(
       _deepCopy(base),
       _deepCopy(Map<String, dynamic>.from(lang)),
@@ -31,7 +32,7 @@ class I18n {
   }
 
   Map<String, dynamic> getLang() =>
-      _langMap[_currentLocale] ?? _langMap['zhCN']!;
+      _langMap[_currentLocale] ?? _langMap['ptBR']!;
 
   String t(String path) {
     final keys = path.split('.');
@@ -49,6 +50,99 @@ class I18n {
   static Map<String, dynamic> _deepCopy(Map<String, dynamic> source) =>
       jsonDecode(jsonEncode(source)) as Map<String, dynamic>;
 }
+
+const Map<String, dynamic> _ptBrLang = {
+  'contextmenu': {
+    'global': {
+      'cut': 'Recortar',
+      'copy': 'Copiar',
+      'paste': 'Colar',
+      'selectAll': 'Selecionar tudo',
+      'print': 'Imprimir',
+    },
+    'control': {
+      'delete': 'Excluir controle',
+    },
+    'hyperlink': {
+      'delete': 'Excluir link',
+      'cancel': 'Remover link',
+      'edit': 'Editar link',
+    },
+    'image': {
+      'change': 'Alterar imagem',
+      'saveAs': 'Salvar como imagem',
+      'textWrap': 'Ajuste do texto',
+      'textWrapType': {
+        'embed': 'Em linha',
+        'upDown': 'Superior e inferior',
+        'surround': 'Ao redor',
+        'floatTop': 'Sobre o texto',
+        'floatBottom': 'Atrás do texto',
+      },
+    },
+    'table': {
+      'insertRowCol': 'Inserir linha ou coluna',
+      'insertTopRow': 'Inserir 1 linha acima',
+      'insertBottomRow': 'Inserir 1 linha abaixo',
+      'insertLeftCol': 'Inserir 1 coluna à esquerda',
+      'insertRightCol': 'Inserir 1 coluna à direita',
+      'deleteRowCol': 'Excluir linha ou coluna',
+      'deleteRow': 'Excluir 1 linha',
+      'deleteCol': 'Excluir 1 coluna',
+      'deleteTable': 'Excluir tabela',
+      'mergeCell': 'Mesclar células',
+      'mergeCancelCell': 'Desfazer mesclagem',
+      'verticalAlign': 'Alinhamento vertical',
+      'verticalAlignTop': 'Alinhar no topo',
+      'verticalAlignMiddle': 'Centralizar verticalmente',
+      'verticalAlignBottom': 'Alinhar na base',
+      'border': 'Borda da tabela',
+      'borderAll': 'Todas as bordas',
+      'borderEmpty': 'Sem bordas',
+      'borderDash': 'Borda tracejada',
+      'borderExternal': 'Bordas externas',
+      'borderInternal': 'Bordas internas',
+      'borderTd': 'Borda da célula',
+      'borderTdTop': 'Borda superior',
+      'borderTdRight': 'Borda direita',
+      'borderTdBottom': 'Borda inferior',
+      'borderTdLeft': 'Borda esquerda',
+      'borderTdForward': 'Diagonal principal',
+      'borderTdBack': 'Diagonal secundária',
+    },
+  },
+  'datePicker': {
+    'now': 'Agora',
+    'confirm': 'Confirmar',
+    'return': 'Voltar para a data',
+    'timeSelect': 'Selecionar horário',
+    'weeks': {
+      'sun': 'Dom',
+      'mon': 'Seg',
+      'tue': 'Ter',
+      'wed': 'Qua',
+      'thu': 'Qui',
+      'fri': 'Sex',
+      'sat': 'Sáb',
+    },
+    'year': 'Ano',
+    'month': 'Mês',
+    'hour': 'Hora',
+    'minute': 'Minuto',
+    'second': 'Segundo',
+  },
+  'frame': {
+    'header': 'Cabeçalho',
+    'footer': 'Rodapé',
+  },
+  'pageBreak': {
+    'displayName': 'Quebra de página',
+  },
+  'zone': {
+    'headerTip': 'Clique duas vezes para editar o cabeçalho',
+    'footerTip': 'Clique duas vezes para editar o rodapé',
+  },
+};
 
 const Map<String, dynamic> _zhCnLang = {
   'contextmenu': {

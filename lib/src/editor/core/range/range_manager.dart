@@ -353,10 +353,11 @@ class RangeManager {
       if (pos == null) {
         continue;
       }
+      final dynamic coordinate = pos.coordinate;
       final List<dynamic> leftTop =
-          pos.coordinate?.leftTop as List<dynamic>? ?? <dynamic>[0, 0];
+          (coordinate is Map ? coordinate['leftTop'] : coordinate?.leftTop) as List<dynamic>? ?? <dynamic>[0, 0];
       final List<dynamic> rightBottom =
-          pos.coordinate?.rightBottom as List<dynamic>? ?? <dynamic>[0, 0];
+          (coordinate is Map ? coordinate['rightBottom'] : coordinate?.rightBottom) as List<dynamic>? ?? <dynamic>[0, 0];
       final double left = (leftTop.first as num).toDouble();
       final double top =
           leftTop.length > 1 ? (leftTop[1] as num).toDouble() : left;
@@ -492,16 +493,12 @@ class RangeManager {
       if (startIndex < elementList.length) {
         final IElement element = elementList[startIndex];
         if (element.controlId != null) {
-          try {
-            control?.initControl();
-          } catch (_) {}
+          control?.initControl();
           return;
         }
       }
     }
-    try {
-      control?.destroyControl();
-    } catch (_) {}
+    control?.destroyControl();
   }
 
   void replaceRange(IRange nextRange) {

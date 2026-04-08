@@ -13,6 +13,7 @@ import '../../../interface/previewer.dart';
 import '../../../interface/range.dart';
 import '../../../utils/hotkey.dart';
 import '../../cursor/cursor.dart';
+import 'mouse_offset.dart';
 
 void setRangeCache(dynamic host) {
   final dynamic draw = host.getDraw();
@@ -92,9 +93,9 @@ void mousedown(dynamic evt, dynamic host) {
     return;
   }
 
-  final Map<String, double> offsets = _extractOffsets(evt);
-  final double offsetX = offsets['x'] ?? 0;
-  final double offsetY = offsets['y'] ?? 0;
+  final offsets = getMouseOffset(evt);
+  final double offsetX = offsets.x;
+  final double offsetY = offsets.y;
 
   if (host.isAllowDrag != true) {
     if (!isReadonly && range.startIndex != range.endIndex) {
@@ -343,33 +344,6 @@ ICurrentPosition _cloneCurrentPosition(
     zone: source.zone,
     hitLineStartIndex: source.hitLineStartIndex,
   );
-}
-
-Map<String, double> _extractOffsets(dynamic evt) {
-  final Map<String, double> result = <String, double>{'x': 0, 'y': 0};
-  try {
-    final dynamic offsetPoint = evt?.offset;
-    if (offsetPoint != null) {
-      final double? offsetX = (offsetPoint.x as num?)?.toDouble();
-      final double? offsetY = (offsetPoint.y as num?)?.toDouble();
-      if (offsetX != null) {
-        result['x'] = offsetX;
-      }
-      if (offsetY != null) {
-        result['y'] = offsetY;
-      }
-    }
-  } catch (_) {}
-
-  final double? offsetX = (evt?.offsetX as num?)?.toDouble();
-  final double? offsetY = (evt?.offsetY as num?)?.toDouble();
-  if (offsetX != null) {
-    result['x'] = offsetX;
-  }
-  if (offsetY != null) {
-    result['y'] = offsetY;
-  }
-  return result;
 }
 
 void _invokeControlSetSelect(dynamic control, List<String> codes) {

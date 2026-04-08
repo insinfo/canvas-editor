@@ -177,27 +177,29 @@ class DatePicker {
 
   _DatePickerDom _createDom() {
     final DivElement container = DivElement()
-      ..classes.add('${editorPrefix}-date-container')
+      ..classes.add('$editorPrefix-date-container')
+      ..style.display = 'none'
       ..setAttribute(editorComponent, EditorComponent.popup.name);
 
     final DivElement dateWrap = DivElement()
-      ..classes.add('${editorPrefix}-date-wrap');
+      ..classes.add('$editorPrefix-date-wrap')
+      ..style.display = 'none';
     final DivElement titleWrap = DivElement()
-      ..classes.add('${editorPrefix}-date-title');
+      ..classes.add('$editorPrefix-date-title');
 
     final SpanElement preYear = SpanElement()
-      ..classes.add('${editorPrefix}-date-title__pre-year')
+      ..classes.add('$editorPrefix-date-title__pre-year')
       ..innerText = '<<';
     final SpanElement preMonth = SpanElement()
-      ..classes.add('${editorPrefix}-date-title__pre-month')
+      ..classes.add('$editorPrefix-date-title__pre-month')
       ..innerText = '<';
     final SpanElement nowTitle = SpanElement()
-      ..classes.add('${editorPrefix}-date-title__now');
+      ..classes.add('$editorPrefix-date-title__now');
     final SpanElement nextMonth = SpanElement()
-      ..classes.add('${editorPrefix}-date-title__next-month')
+      ..classes.add('$editorPrefix-date-title__next-month')
       ..innerText = '>';
     final SpanElement nextYear = SpanElement()
-      ..classes.add('${editorPrefix}-date-title__next-year')
+      ..classes.add('$editorPrefix-date-title__next-year')
       ..innerText = '>>';
 
     titleWrap
@@ -208,7 +210,7 @@ class DatePicker {
       ..append(nextYear);
 
     final DivElement weekWrap = DivElement()
-      ..classes.add('${editorPrefix}-date-week');
+      ..classes.add('$editorPrefix-date-week');
     final List<SpanElement> weekItems = <SpanElement>[];
     for (int i = 0; i < 7; i++) {
       final SpanElement weekSpan = SpanElement();
@@ -217,7 +219,7 @@ class DatePicker {
     }
 
     final DivElement dayWrap = DivElement()
-      ..classes.add('${editorPrefix}-date-day');
+      ..classes.add('$editorPrefix-date-day');
 
     dateWrap
       ..append(titleWrap)
@@ -225,7 +227,8 @@ class DatePicker {
       ..append(dayWrap);
 
     final UListElement timeWrap = UListElement()
-      ..classes.add('${editorPrefix}-time-wrap');
+      ..classes.add('$editorPrefix-time-wrap')
+      ..style.display = 'none';
     final List<SpanElement> timeLabels = <SpanElement>[];
     final List<OListElement> timeColumns = <OListElement>[];
     for (int i = 0; i < 3; i++) {
@@ -247,13 +250,13 @@ class DatePicker {
     }
 
     final DivElement menuWrap = DivElement()
-      ..classes.add('${editorPrefix}-date-menu');
+      ..classes.add('$editorPrefix-date-menu');
     final ButtonElement timeBtn = ButtonElement()
-      ..classes.add('${editorPrefix}-date-menu__time');
+      ..classes.add('$editorPrefix-date-menu__time');
     final ButtonElement nowBtn = ButtonElement()
-      ..classes.add('${editorPrefix}-date-menu__now');
+      ..classes.add('$editorPrefix-date-menu__now');
     final ButtonElement submitBtn = ButtonElement()
-      ..classes.add('${editorPrefix}-date-menu__submit');
+      ..classes.add('$editorPrefix-date-menu__submit');
     menuWrap
       ..append(timeBtn)
       ..append(nowBtn)
@@ -651,10 +654,14 @@ class DatePicker {
     if (_isDatePicker) {
       _dom.dateWrap.classes.add('active');
       _dom.timeWrap.classes.remove('active');
+      _dom.dateWrap.style.display = 'block';
+      _dom.timeWrap.style.display = 'none';
       _dom.menu.time.innerText = _lang.timeSelect;
     } else {
       _dom.dateWrap.classes.remove('active');
       _dom.timeWrap.classes.add('active');
+      _dom.dateWrap.style.display = 'none';
+      _dom.timeWrap.style.display = 'flex';
       _dom.menu.time.innerText = _lang.returnText;
       _setTimePick();
     }
@@ -671,8 +678,10 @@ class DatePicker {
   void _toggleVisible(bool isVisible) {
     if (isVisible) {
       _dom.container.classes.add('active');
+      _dom.container.style.display = 'block';
     } else {
       _dom.container.classes.remove('active');
+      _dom.container.style.display = 'none';
     }
   }
 

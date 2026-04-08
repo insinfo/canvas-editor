@@ -7,11 +7,13 @@ import '../../../interface/draw.dart';
 import '../../../interface/element.dart';
 import '../../../interface/position.dart';
 import '../../../interface/range.dart';
+import 'mouse_offset.dart';
 
 void mousemove(dynamic evt, dynamic host) {
   final dynamic draw = host.getDraw();
-  final double offsetX = (evt?.offsetX as num?)?.toDouble() ?? 0;
-  final double offsetY = (evt?.offsetY as num?)?.toDouble() ?? 0;
+  final offset = getMouseOffset(evt);
+  final double offsetX = offset.x;
+  final double offsetY = offset.y;
 
   if (host.isAllowDrag == true) {
     final IRange? cacheRange = host.cacheRange as IRange?;
@@ -76,7 +78,7 @@ void mousemove(dynamic evt, dynamic host) {
   final String? pageIndex = target?.dataset['index'];
   if (pageIndex != null) {
     final int? parsed = int.tryParse(pageIndex);
-    if (parsed != null) {
+    if (parsed != null && draw.getPageNo() != parsed) {
       draw.setPageNo(parsed);
     }
   }
@@ -102,6 +104,17 @@ void mousemove(dynamic evt, dynamic host) {
       startIsTable &&
       (positionResult.tdIndex != startPosition.tdIndex ||
           positionResult.trIndex != startPosition.trIndex)) {
+    if (!rangeManager.getIsRangeChange(
+      endIndex,
+      endIndex,
+      positionResult.tableId,
+      startPosition.tdIndex,
+      positionResult.tdIndex,
+      startPosition.trIndex,
+      positionResult.trIndex,
+    )) {
+      return;
+    }
     rangeManager.setRange(
       endIndex,
       endIndex,
@@ -154,6 +167,10 @@ void mousemove(dynamic evt, dynamic host) {
           startElement.controlId == endElement.controlId) {
         return;
       }
+    }
+
+    if (!rangeManager.getIsRangeChange(start, end)) {
+      return;
     }
 
     rangeManager.setRange(start, end);

@@ -6,6 +6,7 @@ import '../../../../dataset/enum/editor.dart';
 import '../../../../dataset/enum/element.dart';
 import '../../../../dataset/enum/observer.dart';
 import '../../../../interface/draw.dart';
+import '../../../../interface/control.dart';
 import '../../../../interface/element.dart';
 import '../../../../interface/position.dart';
 import '../../../../interface/range.dart';
@@ -45,17 +46,18 @@ void right(KeyboardEvent evt, dynamic host) {
       (draw.getElementList() as List?)?.cast<IElement>() ?? <IElement>[];
 
   final dynamic control = draw.getControl();
+  final dynamic activeControl = control?.ensureActiveControl();
   final IElement? nextControlElement =
       index + 1 < elementList.length ? elementList[index + 1] : null;
   if (draw.getMode() == EditorMode.form &&
       control != null &&
-      control.getActiveControl() != null &&
+      activeControl != null &&
       nextControlElement != null &&
       (nextControlElement.controlComponent == ControlComponent.postfix ||
           nextControlElement.controlComponent == ControlComponent.postText)) {
-    control.initNextControl(<String, dynamic>{
-      'direction': MoveDirection.down,
-    });
+    control.initNextControl(
+      IInitNextControlOption(direction: MoveDirection.down),
+    );
     return;
   }
 

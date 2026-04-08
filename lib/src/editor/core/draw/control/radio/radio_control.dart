@@ -1,5 +1,4 @@
 import '../../../../dataset/enum/control.dart';
-import '../../../../interface/control.dart';
 import '../../../../interface/element.dart';
 import '../checkbox/checkbox_control.dart';
 import '../control.dart';

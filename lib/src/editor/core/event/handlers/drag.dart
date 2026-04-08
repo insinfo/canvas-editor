@@ -9,6 +9,7 @@ import '../../../interface/position.dart';
 import '../../../interface/range.dart';
 import '../../../utils/index.dart';
 import '../../cursor/cursor.dart';
+import 'mouse_offset.dart';
 
 void dragover(dynamic evt, dynamic host) {
   final dynamic draw = host.getDraw();
@@ -55,15 +56,9 @@ void dragover(dynamic evt, dynamic host) {
     }
   }
 
-  double offsetX;
-  double offsetY;
-  if (evt is html.MouseEvent) {
-    offsetX = evt.offset.x.toDouble();
-    offsetY = evt.offset.y.toDouble();
-  } else {
-    offsetX = (evt?.offsetX as num?)?.toDouble() ?? 0;
-    offsetY = (evt?.offsetY as num?)?.toDouble() ?? 0;
-  }
+  final offset = getMouseOffset(evt);
+  final double offsetX = offset.x;
+  final double offsetY = offset.y;
 
   final dynamic position = draw.getPosition();
   final ICurrentPosition? positionContext = position.adjustPositionContext(

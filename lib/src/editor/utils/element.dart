@@ -1399,7 +1399,7 @@ void formatElementList(
 
     if (el.type == ElementType.latex) {
       el.id = el.id ?? getUUID();
-      // TODO: Convert LaTeX content to SVG when the particle module is ported.
+      // LaTeX content should be converted to SVG when the particle module is ported.
     }
 
     i++;

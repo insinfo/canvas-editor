@@ -5,7 +5,6 @@ import '../../../dataset/enum/area.dart';
 import '../../../dataset/enum/common.dart';
 import '../../../dataset/enum/editor.dart';
 import '../../../dataset/enum/element.dart';
-import '../../../interface/area.dart';
 import '../../../interface/draw.dart';
 import '../../../interface/editor.dart';
 import '../../../interface/element.dart';

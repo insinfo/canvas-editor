@@ -57,8 +57,9 @@ Future<void> cut(dynamic host) async {
   );
 
   final dynamic control = draw.getControl();
+  final dynamic activeControl = control?.ensureActiveControl();
   int curIndex;
-  if (control?.getActiveControl() != null &&
+  if (activeControl != null &&
       control.getIsRangeWithinControl() == true) {
     final dynamic controlResult = control.cut();
     curIndex = (controlResult as num?)?.toInt() ?? start;

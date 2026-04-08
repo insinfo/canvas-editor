@@ -100,7 +100,7 @@ void enter(KeyboardEvent evt, CanvasEvent host) {
   }
 
   final dynamic control = draw.getControl();
-  final dynamic activeControl = control?.getActiveControl();
+  final dynamic activeControl = control?.ensureActiveControl();
   int? curIndex;
 
   if (activeControl != null && control.getIsRangeWithinControl() == true) {

@@ -2,7 +2,6 @@ import 'dart:html';
 
 import '../../../../dataset/enum/control.dart';
 import '../../../../dataset/enum/key_map.dart';
-import '../../../../interface/control.dart';
 import '../../../../interface/element.dart';
 import '../../../../interface/range.dart';
 import '../control.dart';

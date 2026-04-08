@@ -5,7 +5,6 @@ import '../../../../dataset/enum/control.dart';
 import '../../../../dataset/enum/editor.dart';
 import '../../../../dataset/enum/element.dart';
 import '../../../../dataset/enum/key_map.dart';
-import '../../../../interface/control.dart';
 import '../../../../interface/editor.dart';
 import '../../../../interface/element.dart';
 import '../../../../interface/range.dart';

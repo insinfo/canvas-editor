@@ -1,5 +1,4 @@
 import '../../editor/index.dart';
-import '../../editor/interface/element.dart';
 import '../../editor/utils/clipboard.dart';
 
 class CopyWithCopyrightOption {

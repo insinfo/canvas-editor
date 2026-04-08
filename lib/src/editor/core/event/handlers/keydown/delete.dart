@@ -69,6 +69,7 @@ void del(KeyboardEvent evt, dynamic host) {
   final List<IElement> elementList =
       (draw.getElementList() as List?)?.cast<IElement>() ?? <IElement>[];
   final dynamic control = draw.getControl();
+  final dynamic activeControl = control?.ensureActiveControl();
 
   if (rangeManager.getIsCollapsed() == true) {
     _deleteHideElement(host);
@@ -97,7 +98,7 @@ void del(KeyboardEvent evt, dynamic host) {
     }
     curIndex = isDeleted ? 0 : null;
   } else if (control != null &&
-      control.getActiveControl() != null &&
+      activeControl != null &&
       control.getIsRangeWithinControl() == true) {
     curIndex = (control.keydown(evt) as num?)?.toInt();
     if (curIndex != null) {

@@ -220,7 +220,7 @@ class ContextMenu {
 
 	DivElement _createContextMenuContainer() {
 		final DivElement container = DivElement()
-			..classes.add('${editorPrefix}-contextmenu-container')
+			..classes.add('$editorPrefix-contextmenu-container')
 			..setAttribute(editorComponent, EditorComponent.contextmenu.name);
 		_container.append(container);
 		return container;
@@ -229,7 +229,7 @@ class ContextMenu {
 	DivElement _render(_RenderPayload payload) {
 		final DivElement container = _createContextMenuContainer();
 		final DivElement content = DivElement()
-			..classes.add('${editorPrefix}-contextmenu-content');
+			..classes.add('$editorPrefix-contextmenu-content');
 		container.append(content);
 
 		if (payload.parentMenuContainer != null) {
@@ -246,19 +246,19 @@ class ContextMenu {
 				final bool prevIsDivider =
 					index > 0 && payload.contextMenuList[index - 1].isDivider == true;
 				if (!isFirst && !isLast && !prevIsDivider) {
-					content.append(DivElement()..classes.add('${editorPrefix}-contextmenu-divider'));
+					content.append(DivElement()..classes.add('$editorPrefix-contextmenu-divider'));
 				}
 				continue;
 			}
 
 			final DivElement menuItem = DivElement()
-				..classes.add('${editorPrefix}-contextmenu-item');
+				..classes.add('$editorPrefix-contextmenu-item');
 
 			if (menu.childMenus != null && menu.childMenus!.isNotEmpty) {
 				final List<IRegisterContextMenu> childMenus = _filterMenuList(menu.childMenus!);
 				final bool hasRenderableChild = childMenus.any((IRegisterContextMenu child) => child.isDivider != true);
 				if (hasRenderableChild) {
-					menuItem.classes.add('${editorPrefix}-contextmenu-sub-item');
+					menuItem.classes.add('$editorPrefix-contextmenu-sub-item');
 					menuItem.onMouseEnter.listen((_) {
 						_setHoverStatus(menuItem, true);
 						_removeSubMenu(container);
@@ -297,7 +297,7 @@ class ContextMenu {
 
 			final Element icon = Element.tag('i');
 			if (menu.icon != null && menu.icon!.isNotEmpty) {
-				icon.classes.add('${editorPrefix}-contextmenu-${menu.icon}');
+				icon.classes.add('$editorPrefix-contextmenu-${menu.icon}');
 			}
 			menuItem.append(icon);
 
@@ -314,7 +314,7 @@ class ContextMenu {
 
 			if (menu.shortCut != null && menu.shortCut!.isNotEmpty) {
 				final SpanElement shortcut = SpanElement()
-					..classes.add('${editorPrefix}-shortcut')
+					..classes.add('$editorPrefix-shortcut')
 					..text = menu.shortCut;
 				menuItem.append(shortcut);
 			}

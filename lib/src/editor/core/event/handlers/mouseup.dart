@@ -10,6 +10,7 @@ import '../../../interface/range.dart';
 import '../../../interface/table/td.dart';
 import '../../../utils/element.dart' as element_utils;
 import '../../../utils/index.dart';
+import 'mouse_offset.dart';
 
 final Expando<String> _dragIdExpando = Expando<String>('dragId');
 
@@ -371,8 +372,9 @@ void _moveImgPosition(IElement element, dynamic evt, dynamic host) {
 		final ICurrentPosition? start =
 				host.mouseDownStartPosition as ICurrentPosition?;
 		if (start != null && element.imgFloatPosition != null) {
-			final double offsetX = (evt?.offsetX as num?)?.toDouble() ?? 0;
-			final double offsetY = (evt?.offsetY as num?)?.toDouble() ?? 0;
+			final offset = getMouseOffset(evt);
+			final double offsetX = offset.x;
+			final double offsetY = offset.y;
 			final double startX = start.x ?? 0;
 			final double startY = start.y ?? 0;
 			final Map<String, num> floatPosition =

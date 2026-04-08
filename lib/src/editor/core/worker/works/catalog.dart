@@ -4,7 +4,6 @@ import '../../../dataset/enum/title.dart';
 import '../../../interface/catalog.dart';
 import '../../../interface/element.dart';
 import '../../../interface/table/td.dart';
-import '../../../interface/table/tr.dart';
 
 class _CatalogElement {
 	_CatalogElement({

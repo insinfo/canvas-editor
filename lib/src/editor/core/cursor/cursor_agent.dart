@@ -10,8 +10,27 @@ class CursorAgent {
         eventBus = draw.getEventBus() {
     final TextAreaElement element = TextAreaElement()
       ..setAttribute('autocomplete', 'off')
+      ..setAttribute('spellcheck', 'false')
       ..classes.add('$editorPrefix-inputarea')
+      ..style.position = 'absolute'
+      ..style.left = '0'
+      ..style.top = '0'
+      ..style.width = '100px'
+      ..style.height = '30px'
+      ..style.minWidth = '0'
+      ..style.minHeight = '0'
+      ..style.margin = '0'
+      ..style.padding = '0'
+      ..style.border = 'none'
+      ..style.outline = 'none'
+      ..style.resize = 'none'
+      ..style.overflow = 'hidden'
+      ..style.backgroundColor = 'transparent'
+      ..style.color = 'transparent'
+      ..style.userSelect = 'none'
+      ..style.zIndex = '-1'
       ..value = '';
+    element.style.setProperty('caret-color', 'transparent');
     container.append(element);
     agentCursorDom = element;
 

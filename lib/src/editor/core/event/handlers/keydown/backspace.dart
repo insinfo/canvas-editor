@@ -84,6 +84,7 @@ void backspace(KeyboardEvent evt, dynamic host) {
 
   final IRange range = rangeManager.getRange() as IRange;
   final dynamic control = draw.getControl();
+  final dynamic activeControl = control?.ensureActiveControl();
   final int startIndex = range.startIndex;
   final int endIndex = range.endIndex;
   final bool isCrossRowCol = range.isCrossRowCol == true;
@@ -111,7 +112,7 @@ void backspace(KeyboardEvent evt, dynamic host) {
     }
     curIndex = isDeleted ? 0 : null;
   } else if (control != null &&
-      control.getActiveControl() != null &&
+      activeControl != null &&
       control.getIsRangeCanCaptureEvent() == true) {
     curIndex = (control.keydown(evt) as num?)?.toInt();
     if (curIndex != null) {

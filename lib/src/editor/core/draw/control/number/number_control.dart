@@ -1,5 +1,4 @@
 import '../../../../dataset/enum/control.dart';
-import '../../../../interface/control.dart';
 import '../../../../interface/element.dart';
 import '../../../../interface/range.dart';
 import '../../../../utils/element.dart' as element_utils;

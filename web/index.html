@@ -1,19 +1,423 @@
 <!DOCTYPE html>
-
-<html>
+<html lang="pt-BR">
 
 <head>
-  <meta charset="utf-8">
-  <meta http-equiv="X-UA-Compatible" content="IE=edge">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-
-  <title>Editor de Texto</title>
-  <link rel="stylesheet" href="styles.css">
+  <meta charset="UTF-8" />
+  <link rel="icon" type="image/png" href="favicon.png" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Editor Canvas</title>
+  <link rel="stylesheet" href="styles.css" />
   <script defer src="main.dart.js"></script>
 </head>
 
 <body>
-  <canvas id="canvas" width="800" height="600"></canvas>
+  <div id="app">
+    <div class="menu" editor-component="menu">
+      <div class="menu-item">
+        <div class="menu-item__undo">
+          <i></i>
+        </div>
+        <div class="menu-item__redo">
+          <i></i>
+        </div>
+        <div class="menu-item__painter" title="Pincel de formatação (duplo clique para uso contínuo)">
+          <i></i>
+        </div>
+        <div class="menu-item__format" title="Limpar formatação">
+          <i></i>
+        </div>
+      </div>
+      <div class="menu-divider"></div>
+      <div class="menu-item">
+        <div class="menu-item__font">
+          <span class="select" title="Fonte">Microsoft YaHei</span>
+          <div class="options">
+            <ul>
+              <li data-family="Microsoft YaHei" style="font-family:'Microsoft YaHei';">Microsoft YaHei</li>
+              <li data-family="STSong" style="font-family:'STSong';">STSong</li>
+              <li data-family="STHeiti" style="font-family:'STHeiti';">STHeiti</li>
+              <li data-family="STFangsong" style="font-family:'STFangsong';">STFangsong</li>
+              <li data-family="STKaiti" style="font-family:'STKaiti';">STKaiti</li>
+              <li data-family="STHupo" style="font-family:'STHupo';">STHupo</li>
+              <li data-family="STKaiti" style="font-family:'STKaiti';">STKaiti</li>
+              <li data-family="STLiti" style="font-family:'STLiti';">STLiti</li>
+              <li data-family="STXinwei" style="font-family:'STXinwei';">STXinwei</li>
+              <li data-family="STXingkai" style="font-family:'STXingkai';">STXingkai</li>
+              <li data-family="STZhongsong" style="font-family:'STZhongsong';">STZhongsong</li>
+              <li data-family="STCaiyun" style="font-family:'STCaiyun';">STCaiyun</li>
+              <li data-family="Arial" style="font-family:'Arial';">Arial</li>
+              <li data-family="Segoe UI" style="font-family:'Segoe UI';">Segoe UI</li>
+              <li data-family="Ink Free" style="font-family:'Ink Free';">Ink Free</li>
+              <li data-family="Fantasy" style="font-family:'Fantasy';">Fantasy</li>
+            </ul>
+          </div>
+        </div>
+        <div class="menu-item__size">
+          <span class="select" title="Tamanho da fonte">16 pt</span>
+          <div class="options">
+            <ul>
+              <li data-size="56">56 pt</li>
+              <li data-size="48">48 pt</li>
+              <li data-size="34">34 pt</li>
+              <li data-size="32">32 pt</li>
+              <li data-size="29">29 pt</li>
+              <li data-size="24">24 pt</li>
+              <li data-size="21">21 pt</li>
+              <li data-size="20">20 pt</li>
+              <li data-size="18">18 pt</li>
+              <li data-size="16">16 pt</li>
+              <li data-size="14">14 pt</li>
+              <li data-size="12">12 pt</li>
+              <li data-size="10">10 pt</li>
+              <li data-size="8">8 pt</li>
+              <li data-size="7">7 pt</li>
+              <li data-size="6">6 pt</li>
+            </ul>
+          </div>
+        </div>
+        <div class="menu-item__size-add">
+          <i></i>
+        </div>
+        <div class="menu-item__size-minus">
+          <i></i>
+        </div>
+        <div class="menu-item__bold">
+          <i></i>
+        </div>
+        <div class="menu-item__italic">
+          <i></i>
+        </div>
+        <div class="menu-item__underline">
+          <i></i>
+          <span class="select"></span>
+          <div class="options">
+            <ul>
+              <li data-decoration-style='solid'>
+                <i></i>
+              </li>
+              <li data-decoration-style='double'>
+                <i></i>
+              </li>
+              <li data-decoration-style='dashed'>
+                <i></i>
+              </li>
+              <li data-decoration-style='dotted'>
+                <i></i>
+              </li>
+              <li data-decoration-style='wavy'>
+                <i></i>
+              </li>
+            </ul>
+          </div>
+        </div>
+        <div class="menu-item__strikeout" title="Tachado (Ctrl+Shift+X)">
+          <i></i>
+        </div>
+        <div class="menu-item__superscript">
+          <i></i>
+        </div>
+        <div class="menu-item__subscript">
+          <i></i>
+        </div>
+        <div class="menu-item__color" title="Cor da fonte">
+          <i></i>
+          <span></span>
+          <input type="color" id="color" />
+        </div>
+        <div class="menu-item__highlight" title="Realce">
+          <i></i>
+          <span></span>
+          <input type="color" id="highlight">
+        </div>
+      </div>
+      <div class="menu-divider"></div>
+      <div class="menu-item">
+        <div class="menu-item__title">
+          <i></i>
+          <span class="select" title="Alternar título">Normal</span>
+          <div class="options">
+            <ul>
+              <li style="font-size:16px;">Normal</li>
+              <li data-level="first" style="font-size:26px;">Título 1</li>
+              <li data-level="second" style="font-size:24px;">Título 2</li>
+              <li data-level="third" style="font-size:22px;">Título 3</li>
+              <li data-level="fourth" style="font-size:20px;">Título 4</li>
+              <li data-level="fifth" style="font-size:18px;">Título 5</li>
+              <li data-level="sixth" style="font-size:16px;">Título 6</li>
+            </ul>
+          </div>
+        </div>
+        <div class="menu-item__left">
+          <i></i>
+        </div>
+        <div class="menu-item__center">
+          <i></i>
+        </div>
+        <div class="menu-item__right">
+          <i></i>
+        </div>
+        <div class="menu-item__alignment">
+          <i></i>
+        </div>
+        <div class="menu-item__justify">
+          <i></i>
+        </div>
+        <div class="menu-item__row-margin">
+          <i title="Espaçamento entre linhas"></i>
+          <div class="options">
+            <ul>
+              <li data-rowmargin='1'>1</li>
+              <li data-rowmargin="1.25">1.25</li>
+              <li data-rowmargin="1.5">1.5</li>
+              <li data-rowmargin="1.75">1.75</li>
+              <li data-rowmargin="2">2</li>
+              <li data-rowmargin="2.5">2.5</li>
+              <li data-rowmargin="3">3</li>
+            </ul>
+          </div>
+        </div>
+        <div class="menu-item__list">
+          <i></i>
+          <div class="options">
+            <ul>
+              <li>
+                <label>Remover lista</label>
+              </li>
+              <li data-list-type="ol" data-list-style='decimal'>
+                <label>Lista ordenada:</label>
+                <ol>
+                  <li>________</li>
+                </ol>
+              </li>
+              <li data-list-type="ul" data-list-style='checkbox'>
+                <label>Lista com caixas de seleção:</label>
+                <ul style="list-style-type: '☑️ ';">
+                  <li>________</li>
+                </ul>
+              </li>
+              <li data-list-type="ul" data-list-style='disc'>
+                <label>Lista com marcadores preenchidos:</label>
+                <ul style="list-style-type: disc;">
+                  <li>________</li>
+                </ul>
+              </li>
+              <li data-list-type="ul" data-list-style='circle'>
+                <label>Lista com marcadores vazados:</label>
+                <ul style="list-style-type: circle;">
+                  <li>________</li>
+                </ul>
+              </li>
+              <li data-list-type="ul" data-list-style='square'>
+                <label>Lista com quadrados vazados:</label>
+                <ul style="list-style-type: '☐ ';">
+                  <li>________</li>
+                </ul>
+              </li>
+            </ul>
+          </div>
+        </div>
+      </div>
+      <div class="menu-divider"></div>
+      <div class="menu-item">
+        <div class="menu-item__table">
+          <i title="Tabela"></i>
+        </div>
+        <div class="menu-item__table__collapse">
+          <div class="table-close">×</div>
+          <div class="table-title">
+            <span class="table-select">Inserir</span>
+            <span>Tabela</span>
+          </div>
+          <div class="table-panel"></div>
+        </div>
+        <div class="menu-item__image">
+          <i title="Imagem"></i>
+          <input type="file" id="image" accept=".png, .jpg, .jpeg, .svg, .gif">
+        </div>
+        <div class="menu-item__hyperlink">
+          <i title="Hiperlink"></i>
+        </div>
+        <div class="menu-item__separator">
+          <i title="Linha divisória"></i>
+          <div class="options">
+            <ul>
+              <li data-separator='0,0'>
+                <i></i>
+              </li>
+              <li data-separator="1,1">
+                <i></i>
+              </li>
+              <li data-separator="3,1">
+                <i></i>
+              </li>
+              <li data-separator="4,4">
+                <i></i>
+              </li>
+              <li data-separator="7,3,3,3">
+                <i></i>
+              </li>
+              <li data-separator="6,2,2,2,2,2">
+                <i></i>
+              </li>
+            </ul>
+          </div>
+        </div>
+        <div class="menu-item__watermark">
+          <i title="Marca d'água (adicionar, remover)"></i>
+          <div class="options">
+            <ul>
+              <li data-menu="add">Adicionar marca d'água</li>
+              <li data-menu="delete">Remover marca d'água</li>
+            </ul>
+          </div>
+        </div>
+        <div class="menu-item__codeblock" title="Bloco de código">
+          <i></i>
+        </div>
+        <div class="menu-item__page-break" title="Quebra de página">
+          <i></i>
+        </div>
+        <div class="menu-item__control">
+          <i title="Controles"></i>
+          <div class="options">
+            <ul>
+              <li data-control='text'>Texto</li>
+              <li data-control="number">Número</li>
+              <li data-control="select">Seleção</li>
+              <li data-control="date">Data</li>
+              <li data-control="checkbox">Caixa de seleção</li>
+              <li data-control="radio">Opção única</li>
+            </ul>
+          </div>
+        </div>
+        <div class="menu-item__checkbox" title="Caixa de seleção">
+          <i></i>
+        </div>
+        <div class="menu-item__radio" title="Opção única">
+          <i></i>
+        </div>
+        <div class="menu-item__latex" title="LaTeX">
+          <i></i>
+        </div>
+        <div class="menu-item__date">
+          <i title="Data"></i>
+          <div class="options">
+            <ul>
+              <li data-format="yyyy-MM-dd"></li>
+              <li data-format="yyyy-MM-dd hh:mm:ss"></li>
+            </ul>
+          </div>
+        </div>
+        <div class="menu-item__block" title="Bloco de conteúdo">
+          <i></i>
+        </div>
+      </div>
+      <div class="menu-divider"></div>
+      <div class="menu-item">
+        <div class="menu-item__search" data-menu="search">
+          <i></i>
+        </div>
+        <div class="menu-item__search__collapse" data-menu="search">
+          <div class="menu-item__search__collapse__search">
+            <input type="text" />
+            <label class="search-result"></label>
+            <div class="arrow-left">
+              <i></i>
+            </div>
+            <div class="arrow-right">
+              <i></i>
+            </div>
+            <span>×</span>
+          </div>
+          <div class="menu-item__search__collapse__replace">
+            <input type="text">
+            <button>Substituir</button>
+          </div>
+        </div>
+        <div class="menu-item__print" data-menu="print">
+          <i></i>
+        </div>
+      </div>
+    </div>
+    <div class="catalog" editor-component="catalog">
+      <div class="catalog__header">
+        <span>Catálogo</span>
+        <div class="catalog__header__close">
+          <i></i>
+        </div>
+      </div>
+      <div class="catalog__main"></div>
+    </div>
+    <div class="editor"></div>
+    <div class="comment" editor-component="comment"></div>
+    <div class="footer" editor-component="footer">
+      <div>
+        <div class="catalog-mode" title="Catálogo">
+          <i></i>
+        </div>
+        <div class="page-mode">
+          <i title="Modo de página (paginado, contínuo)"></i>
+          <div class="options">
+            <ul>
+              <li data-page-mode="paging" class="active">Paginado</li>
+              <li data-page-mode="continuity">Contínuo</li>
+            </ul>
+          </div>
+        </div>
+        <span>Páginas visíveis:<span class="page-no-list">1</span></span>
+        <span>Página:<span class="page-no">1</span>/<span class="page-size">1</span></span>
+        <span>Palavras:<span class="word-count">0</span></span>
+        <span>Linha:<span class="row-no">0</span></span>
+        <span>Coluna:<span class="col-no">0</span></span>
+      </div>
+      <div class="editor-mode" title="Modo do editor (edição, limpo, somente leitura, formulário, impressão, design)">Modo de edição</div>
+      <div>
+        <div class="page-scale-minus" title="Reduzir zoom (Ctrl+-)">
+          <i></i>
+        </div>
+        <span class="page-scale-percentage" title="Escala de exibição (clique para restaurar Ctrl+0)">100%</span>
+        <div class="page-scale-add" title="Aumentar zoom (Ctrl+=)">
+          <i></i>
+        </div>
+        <div class="paper-size">
+          <i title="Tamanho do papel"></i>
+          <div class="options">
+            <ul>
+              <li data-paper-size="794*1123" class="active">A4</li>
+              <li data-paper-size="1593*2251">A2</li>
+              <li data-paper-size="1125*1593">A3</li>
+              <li data-paper-size="565*796">A5</li>
+              <li data-paper-size="412*488">Envelope nº 5</li>
+              <li data-paper-size="450*866">Envelope nº 6</li>
+              <li data-paper-size="609*862">Envelope nº 7</li>
+              <li data-paper-size="862*1221">Envelope nº 9</li>
+              <li data-paper-size="813*1266">Papel legal</li>
+              <li data-paper-size="813*1054">Carta</li>
+            </ul>
+          </div>
+        </div>
+        <div class="paper-direction">
+          <i title="Orientação do papel"></i>
+          <div class="options">
+            <ul>
+              <li data-paper-direction="vertical" class="active">Retrato</li>
+              <li data-paper-direction="horizontal">Paisagem</li>
+            </ul>
+          </div>
+        </div>
+        <div class="paper-margin" title="Margens da página">
+          <i></i>
+        </div>
+        <div class="fullscreen" title="Tela cheia">
+          <i></i>
+        </div>
+        <div class="editor-option" title="Configurações do editor">
+          <i></i>
+        </div>
+      </div>
+    </div>
+  </div>
 </body>
 
 </html>
+

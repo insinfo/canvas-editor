@@ -1,7 +1,6 @@
 import '../../../dataset/enum/element.dart';
 import '../../../interface/element.dart';
 import '../../../interface/table/td.dart';
-import '../../../interface/table/tr.dart';
 
 /// Returns the unique set of group identifiers referenced by the given
 /// element list, including any nested table content.

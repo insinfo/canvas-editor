@@ -4,7 +4,6 @@ import 'dart:math' as math;
 
 import '../../../../../dataset/constant/editor.dart';
 import '../../../../../dataset/enum/block.dart';
-import '../../../../../interface/block.dart';
 import '../../../../../interface/editor.dart';
 import '../../../../../interface/element.dart';
 import '../../../../../interface/row.dart';

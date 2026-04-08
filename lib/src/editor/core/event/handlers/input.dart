@@ -63,9 +63,11 @@ void input(String data, CanvasEvent host) {
 			))
 		.toList(growable: false);
 	final dynamic control = draw.getControl();
+	final dynamic activeControl =
+		control?.ensureActiveControl();
 	int curIndex = -1;
 	if (control != null &&
-		control.getActiveControl() != null &&
+		activeControl != null &&
 		control.getIsRangeWithinControl() == true) {
 		final dynamic result = control.setValue(inputData);
 		if (result is int) {

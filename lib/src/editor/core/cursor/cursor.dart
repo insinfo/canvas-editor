@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:html';
+import 'dart:js_util' as js_util;
 import 'dart:math' as math;
 
 import '../../dataset/constant/cursor.dart';
@@ -124,7 +125,13 @@ class Cursor {
     }
     final TextAreaElement agentCursorDom = cursorAgent.getAgentCursorDom();
     if (!identical(document.activeElement, agentCursorDom)) {
-      agentCursorDom.focus();
+      try {
+        js_util.callMethod(agentCursorDom, 'focus', <Object>[
+          js_util.jsify(<String, bool>{'preventScroll': true}),
+        ]);
+      } catch (_) {
+        agentCursorDom.focus();
+      }
       agentCursorDom.setSelectionRange(0, 0);
     }
   }

@@ -8,7 +8,6 @@ import '../../../dataset/enum/editor.dart';
 import '../../../dataset/enum/element.dart';
 import '../../../dataset/enum/observer.dart';
 import '../../../dataset/enum/row.dart';
-import '../../../interface/control.dart';
 import '../../../interface/draw.dart';
 import '../../../interface/editor.dart';
 import '../../../interface/element.dart';
@@ -17,7 +16,6 @@ import '../../../interface/position.dart';
 import '../../../interface/range.dart';
 import '../../../interface/row.dart';
 import '../../../interface/table/td.dart';
-import '../../../interface/table/tr.dart';
 import '../../../utils/element.dart' as element_utils;
 import '../../../utils/index.dart' as utils;
 import '../../cursor/cursor.dart' show IMoveCursorToVisibleOption;
@@ -381,6 +379,98 @@ class Control {
         <IElement>[newElement],
       );
     }
+  }
+
+  void initControl() {
+    final List<IElement> elementList = getElementList();
+    final IRange range = getRange();
+    final int startIndex = range.startIndex;
+    if (startIndex < 0 || startIndex >= elementList.length) {
+      return;
+    }
+
+    final IElement element = elementList[startIndex];
+    if (_activeControl != null) {
+      final IControlInstance activeControl = _activeControl!;
+      if (activeControl is SelectControl) {
+        if (element.controlComponent == ControlComponent.postfix) {
+          activeControl.destroy();
+        } else {
+          activeControl.awake();
+        }
+      } else if (activeControl is DateControl) {
+        if (element.controlComponent == ControlComponent.postfix) {
+          activeControl.destroy();
+        } else {
+          activeControl.awake();
+        }
+      }
+
+      if (_preElement?.controlId == element.controlId) {
+        if (element.controlComponent == ControlComponent.postfix) {
+          emitControlChange(ControlState.inactive);
+        } else if (_preElement?.controlComponent == ControlComponent.postfix) {
+          emitControlChange(ControlState.active);
+        }
+      }
+
+      final IElement controlElement = activeControl.getElement();
+      if (element.controlId != null &&
+          element.controlId == controlElement.controlId) {
+        updateActiveControlValue();
+        _preElement = element;
+        return;
+      }
+    }
+
+    destroyControl();
+    if (_draw.isReadonly() == true) {
+      return;
+    }
+
+    final IControl? control = element.control;
+    if (control == null) {
+      return;
+    }
+
+    if (control.type == ControlType.text) {
+      _activeControl = TextControl(element, this);
+    } else if (control.type == ControlType.select) {
+      final SelectControl selectControl = SelectControl(element, this);
+      _activeControl = selectControl;
+      selectControl.awake();
+    } else if (control.type == ControlType.checkbox) {
+      _activeControl = CheckboxControl(element, this);
+    } else if (control.type == ControlType.radio) {
+      _activeControl = RadioControl(element, this);
+    } else if (control.type == ControlType.date) {
+      final DateControl dateControl = DateControl(element, this);
+      _activeControl = dateControl;
+      dateControl.awake();
+    } else if (control.type == ControlType.number) {
+      _activeControl = NumberControl(element, this);
+    }
+
+    if (_activeControl == null) {
+      return;
+    }
+
+    updateActiveControlValue();
+    _preElement = element;
+    if (element.controlComponent != ControlComponent.postfix) {
+      emitControlChange(ControlState.active);
+    }
+  }
+
+  IControlInstance? ensureActiveControl() {
+    if (_activeControl != null) {
+      return _activeControl;
+    }
+    if (!getIsRangeWithinControl()) {
+      return null;
+    }
+    initControl();
+    return _activeControl;
   }
 
   void destroyControl([IDestroyControlOption? options]) {

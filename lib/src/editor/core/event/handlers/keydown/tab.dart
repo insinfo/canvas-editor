@@ -3,6 +3,7 @@ import 'dart:html';
 import '../../../../dataset/constant/element.dart' as element_constants;
 import '../../../../dataset/enum/element.dart';
 import '../../../../dataset/enum/observer.dart';
+import '../../../../interface/control.dart';
 import '../../../../interface/editor.dart';
 import '../../../../interface/element.dart';
 import '../../../../interface/range.dart';
@@ -17,11 +18,13 @@ void tab(KeyboardEvent evt, dynamic host) {
   evt.preventDefault();
 
   final dynamic control = draw.getControl();
-  final dynamic activeControl = control?.getActiveControl();
+  final dynamic activeControl = control?.ensureActiveControl();
   if (activeControl != null && control.getIsRangeWithinControl() == true) {
-    control.initNextControl(<String, dynamic>{
-      'direction': evt.shiftKey ? MoveDirection.up : MoveDirection.down,
-    });
+    control.initNextControl(
+      IInitNextControlOption(
+        direction: evt.shiftKey ? MoveDirection.up : MoveDirection.down,
+      ),
+    );
     return;
   }
 

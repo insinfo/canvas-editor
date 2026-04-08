@@ -838,21 +838,20 @@ class Position {
     if (positionResult.isControl == true &&
         draw.getMode() != EditorMode.readonly) {
       final dynamic control = draw.getControl();
-      final Map<String, dynamic> moveResult =
-          control.moveCursor(<String, dynamic>{
-        'index': positionResult.index,
-        'isTable': positionResult.isTable,
-        'trIndex': positionResult.trIndex,
-        'tdIndex': positionResult.tdIndex,
-        'tdValueIndex': positionResult.tdValueIndex,
-      }) as Map<String, dynamic>;
-      final int? newIndex = moveResult['newIndex'] as int?;
+      final IMoveCursorResult moveResult = control.moveCursor(
+        IControlInitOption(
+          index: positionResult.index,
+          isTable: positionResult.isTable,
+          trIndex: positionResult.trIndex,
+          tdIndex: positionResult.tdIndex,
+          tdValueIndex: positionResult.tdValueIndex,
+        ),
+      ) as IMoveCursorResult;
+      final int newIndex = moveResult.newIndex;
       if (positionResult.isTable == true) {
         positionResult.tdValueIndex = newIndex;
       } else {
-        if (newIndex != null) {
-          positionResult.index = newIndex;
-        }
+        positionResult.index = newIndex;
       }
     }
 

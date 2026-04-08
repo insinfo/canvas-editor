@@ -75,7 +75,7 @@ class PageNumber {
 		ctx.save();
 		ctx
 			..fillStyle = color
-			..font = '${fontSize}px ${fontFamily}';
+			..font = '${fontSize}px $fontFamily';
 
 		final List<double> margins = _draw.getMargins();
 		final TextMetrics metrics = ctx.measureText(text);
