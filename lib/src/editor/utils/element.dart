@@ -1,5 +1,6 @@
 import 'dart:html';
 
+import '../core/draw/particle/latex/la_tex_particle.dart';
 import '../dataset/constant/common.dart';
 import '../dataset/constant/element.dart' as element_constants;
 import '../dataset/constant/list.dart' as list_constants;
@@ -1398,8 +1399,11 @@ void formatElementList(
     }
 
     if (el.type == ElementType.latex) {
+      final latexSvg = LaTexParticle.convertLaTextToSVG(el.value);
+      el.width = el.width ?? latexSvg.width.toDouble();
+      el.height = el.height ?? latexSvg.height.toDouble();
+      el.laTexSVG = latexSvg.svg;
       el.id = el.id ?? getUUID();
-      // LaTeX content should be converted to SVG when the particle module is ported.
     }
 
     i++;
@@ -1862,6 +1866,12 @@ DivElement createDomFromElementList(
 }) {
   final editorOptions = mergeOption(options);
 
+  void appendChildNodes(Node target, Node source) {
+    for (final child in source.childNodes.toList()) {
+      target.append(child.clone(true));
+    }
+  }
+
   DivElement buildDom(List<IElement> payload) {
     final container = DivElement();
 
@@ -1933,7 +1943,7 @@ DivElement createDomFromElementList(
 
               final childDom =
                   createDomFromElementList(td.value, options: options);
-              tdDom.innerHtml = childDom.innerHtml;
+              appendChildNodes(tdDom, childDom);
 
               if (td.backgroundColor != null) {
                 tdDom.style.backgroundColor = td.backgroundColor;
@@ -1960,7 +1970,7 @@ DivElement createDomFromElementList(
         final level = element.level ?? TitleLevel.first;
         final heading = Element.tag('h${titleOrderNumberMapping[level]}');
         final childDom = buildDom(element.valueList ?? <IElement>[]);
-        heading.innerHtml = childDom.innerHtml;
+        appendChildNodes(heading, childDom);
         container.append(heading);
       } else if (element.type == ElementType.list) {
         final listTag =
@@ -1980,7 +1990,7 @@ DivElement createDomFromElementList(
         listElementMap.forEach((_, listValue) {
           final li = LIElement();
           final childDom = buildDom(listValue);
-          li.innerHtml = childDom.innerHtml;
+          appendChildNodes(li, childDom);
           listElement.append(li);
         });
 
@@ -2067,7 +2077,7 @@ DivElement createDomFromElementList(
       } else if (element.type == ElementType.control) {
         final controlSpan = SpanElement();
         final childDom = buildDom(element.control?.value ?? <IElement>[]);
-        controlSpan.innerHtml = childDom.innerHtml;
+        appendChildNodes(controlSpan, childDom);
         container.append(controlSpan);
       } else if (element.type == ElementType.date) {
         final text =
@@ -2127,7 +2137,7 @@ DivElement createDomFromElementList(
       }
     }
 
-    rowContainer.innerHtml = buildDom(group.data).innerHtml;
+    appendChildNodes(rowContainer, buildDom(group.data));
 
     if (isDefaultRowFlex) {
       final childNodes = rowContainer.childNodes.toList();

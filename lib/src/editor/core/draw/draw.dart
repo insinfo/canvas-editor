@@ -2146,6 +2146,68 @@ class Draw {
     return pageRowList;
   }
 
+  void _syncCachedRowElementsForFastRender() {
+    final List<IElement> sourceElementList = getElementList();
+    final List<IRow> rowList = getRowList();
+    if (sourceElementList.isEmpty || rowList.isEmpty) {
+      return;
+    }
+
+    int from = 0;
+    int to = sourceElementList.length - 1;
+    final RangeManager? rangeManager = _rangeManager as RangeManager?;
+    final IRange? currentRange = rangeManager?.getRange();
+    if (currentRange != null) {
+      if (currentRange.startIndex != currentRange.endIndex) {
+        from = currentRange.startIndex + 1;
+        to = currentRange.endIndex;
+      } else if (currentRange.endIndex >= 0) {
+        from = currentRange.endIndex;
+        to = currentRange.endIndex;
+      }
+    }
+
+    if (from < 0) {
+      from = 0;
+    }
+    if (to >= sourceElementList.length) {
+      to = sourceElementList.length - 1;
+    }
+    if (from > to) {
+      from = 0;
+      to = sourceElementList.length - 1;
+    }
+
+    final double scale = _resolveScale();
+    for (final IRow row in rowList) {
+      final int rowStart = row.startIndex;
+      final int rowEnd = rowStart + row.elementList.length - 1;
+      if (rowEnd < from) {
+        continue;
+      }
+      if (rowStart > to) {
+        break;
+      }
+      for (int index = 0; index < row.elementList.length; index++) {
+        final int sourceIndex = rowStart + index;
+        if (sourceIndex < from || sourceIndex > to) {
+          continue;
+        }
+        if (sourceIndex < 0 || sourceIndex >= sourceElementList.length) {
+          continue;
+        }
+        final IRowElement currentRowElement = row.elementList[index];
+        final IElement sourceElement = sourceElementList[sourceIndex];
+        final IRowElement syncedRowElement = _buildRowElement(
+          sourceElement,
+          currentRowElement.metrics,
+          getElementFont(sourceElement, scale),
+        )..left = currentRowElement.left;
+        row.elementList[index] = syncedRowElement;
+      }
+    }
+  }
+
   void _drawHighlight(CanvasRenderingContext2D ctx, IDrawRowPayload payload) {
     final Highlight? highlight = _highlight as Highlight?;
     if (highlight == null) {
@@ -2874,6 +2936,8 @@ class Draw {
         }
         control?.computeHighlightList();
       }
+    } else {
+      _syncCachedRowElementsForFastRender();
     }
 
     final ImageObserver? imageObserver = _imageObserver as ImageObserver?;

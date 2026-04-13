@@ -323,7 +323,7 @@ class EditorApp {
             }
             final formatTokens =
                 formatPrismToken(List<dynamic>.from(tokenList));
-            final elements = <IElement>[IElement(value: '\\n')];
+            final elements = <IElement>[IElement(value: '\n')];
             for (final token in formatTokens) {
               final parts = editor_utils.splitText(token.content);
               for (final part in parts) {
@@ -864,7 +864,7 @@ class EditorApp {
 
   void _setupSearchAndReplace() {
     searchDom = _requireElement<DivElement>('.menu-item__search');
-    searchDom.title = 'Buscar e substituir (${isApple ? '⌘' : 'Ctrl'}+F)';
+        searchDom.title = 'Buscar e substituir (${isApple ? '⌘' : 'Ctrl'}+F)';
     searchCollapseDom =
         _requireElement<DivElement>('.menu-item__search__collapse');
     searchInputDom = _requireElement<InputElement>(
@@ -885,8 +885,8 @@ class EditorApp {
       if (info is Map) {
         final index = info['index'];
         final count = info['count'];
-        searchResultDom.text =
-            (index != null && count != null) ? '$index/$count' : '';
+            searchResultDom.text =
+                (index != null && count != null) ? '$index/$count' : '';
       } else {
         searchResultDom.text = '';
       }
@@ -1948,11 +1948,11 @@ class EditorApp {
     final container = _requireElement<DivElement>('.editor');
     final header = <IElement>[
       IElement(value: 'Hospital Municipal', size: 32, rowFlex: RowFlex.center),
-      IElement(
-          value: '\\nProntuário ambulatorial',
+        IElement(
+          value: '\nProntuário ambulatorial',
           size: 18,
           rowFlex: RowFlex.center),
-      IElement(value: '\\n', type: ElementType.separator),
+        IElement(value: '\n', type: ElementType.separator),
     ];
     final footer = <IElement>[
       IElement(value: 'canvas-editor', size: 12),
@@ -2113,18 +2113,30 @@ class EditorApp {
       ..onClick.listen((_) => command.executeSubscript());
 
     colorControlDom = _requireElement<InputElement>('#color');
-    colorControlDom.onInput
-        .listen((_) => command.executeColor(colorControlDom.value));
+    colorControlDom.onInput.listen((_) {
+      command.executeColor(colorControlDom.value);
+    });
+    colorControlDom.onChange.listen((_) {
+      command.executeColor(colorControlDom.value);
+    });
     colorDom = _requireElement<DivElement>('.menu-item__color');
     colorSpanDom = _requireElementFrom<SpanElement>(colorDom, 'span');
-    colorDom.onClick.listen((_) => colorControlDom.click());
+    colorDom.onClick.listen((_) {
+      colorControlDom.click();
+    });
 
     highlightControlDom = _requireElement<InputElement>('#highlight');
-    highlightControlDom.onInput
-        .listen((_) => command.executeHighlight(highlightControlDom.value));
+    highlightControlDom.onInput.listen((_) {
+      command.executeHighlight(highlightControlDom.value);
+    });
+    highlightControlDom.onChange.listen((_) {
+      command.executeHighlight(highlightControlDom.value);
+    });
     highlightDom = _requireElement<DivElement>('.menu-item__highlight');
     highlightSpanDom = _requireElementFrom<SpanElement>(highlightDom, 'span');
-    highlightDom.onClick.listen((_) => highlightControlDom.click());
+    highlightDom.onClick.listen((_) {
+      highlightControlDom.click();
+    });
   }
 
   void _setupTitleAndAlignmentControls() {

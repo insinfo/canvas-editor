@@ -113,6 +113,13 @@ export class TextParticle {
     return textMetrics
   }
 
+  public getBasisWordBoundingBoxAscent(
+    ctx: CanvasRenderingContext2D,
+    font: string
+  ): number {
+    return this.measureBasisWord(ctx, font).actualBoundingBoxAscent
+  }
+
   public complete() {
     this._render()
     this.text = ''
@@ -157,7 +164,7 @@ export class TextParticle {
   }
 
   private _render() {
-    if (!this.text || !~this.curX || !~this.curX) return
+    if (!this.text || !~this.curX || !~this.curY) return
     this.ctx.save()
     this.ctx.font = this.curStyle
     this.ctx.fillStyle = this.curColor || this.options.defaultColor

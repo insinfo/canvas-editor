@@ -139,6 +139,16 @@ Usage:
 instance.command.executeBlur()
 ```
 
+## executeHideCursor
+
+Feature: Hide cursor (keep range)
+
+Usage:
+
+```javascript
+instance.command.executeHideCursor()
+```
+
 ## executeUndo
 
 Feature: Undo
@@ -607,7 +617,7 @@ Feature: Insert a dividing line
 Usage:
 
 ```javascript
-instance.command.executeSeparator(dashArray: number[])
+instance.command.executeSeparator(dashArray: number[], option?: { lineWidth?: number; color?: string })
 ```
 
 ## executePageBreak
@@ -633,6 +643,7 @@ instance.command.executeAddWatermark({
   opacity?: number;
   size?: number;
   font?: string;
+  layer?: WatermarkLayer;
 })
 ```
 
@@ -653,7 +664,7 @@ Feature: 搜索
 Usage:
 
 ```javascript
-instance.command.executeSearch(keyword: string)
+instance.command.executeSearch(keyword: string, options?: ISearchOption)
 ```
 
 ## executeSearchNavigatePre
@@ -724,6 +735,16 @@ Usage:
 
 ```javascript
 instance.command.executeChangeImageDisplay(element: IElement, display: ImageDisplay)
+```
+
+## executeSetImageCrop
+
+Feature: Set image crop information
+
+Usage:
+
+```javascript
+instance.command.executeSetImageCrop(crop: IImageCrop)
 ```
 
 ## executePageMode
@@ -1056,6 +1077,16 @@ Usage:
 instance.command.executeInsertControl(payload: IElement)
 ```
 
+## executeJumpControl
+
+Feature: Jump to the next/previous control
+
+Usage:
+
+```javascript
+instance.command.executeJumpControl(payload?: { direction?: MoveDirection })
+```
+
 ## executeUpdateOptions
 
 Feature: Update options
@@ -1116,6 +1147,16 @@ Usage:
 instance.command.executeSetAreaValue(payload: ISetAreaValueOption)
 ```
 
+## executeDeleteArea
+
+Feature: delete area
+
+Usage:
+
+```javascript
+instance.command.executeDeleteArea(payload?: IDeleteAreaOption)
+```
+
 ## executeLocationArea
 
 Feature: positioning area position
@@ -1124,4 +1165,14 @@ Usage:
 
 ```javascript
 instance.command.executeLocationArea(areaId: string, options?: ILocationAreaOption)
+```
+
+## executeClearGraffiti
+
+Feature: clear graffiti data
+
+Usage:
+
+```javascript
+instance.command.executeClearGraffiti()
 ```

@@ -17,6 +17,15 @@ continuar portando o que falta de C:\MyDartProjects\canvas-editor-port\typescrip
 - Os fluxos de mouse, digitação e navegação foram estabilizados em `mousedown.dart`, `mousemove.dart`, `mouseup.dart`, `click.dart`, `drag.dart`, `input.dart`, `cut.dart`, `backspace.dart`, `delete.dart`, `enter.dart`, `left.dart`, `right.dart` e `tab.dart`.
 - Os erros de tipo em runtime na navegação de controles foram corrigidos: chamadas que antes passavam `Map<String, dynamic>` agora usam objetos tipados como `IControlInitOption`, `IMoveCursorResult` e `IInitNextControlOption`.
 - O cálculo de posição/range ficou mais resiliente: `position.dart`, `range_manager.dart` e o novo helper `mouse_offset.dart` tratam melhor offsets, seleção, contexto de controle e coordenadas vindas do DOM.
+- O fluxo HTML -> `IElement` agora também fecha a paridade básica de LaTeX: `lib/src/editor/utils/element.dart` passou a converter conteúdo LaTeX em SVG durante a normalização, preenchendo `width`, `height` e `laTexSVG` como no TypeScript.
+- O E2E passou a cobrir inserção de LaTeX no fluxo real do editor: a suíte valida que o elemento inserido recebe `width`, `height` e `laTexSVG` preenchidos durante a normalização.
+- O E2E agora cobre operações centrais antes pendentes: copy/paste, undo/redo, colagem de LaTeX via clipboard interno, importação de tabela HTML, inserção de tabela e cenários básicos de controles embutidos já são validados no fluxo real da demo web.
+- A toolbar voltou a aplicar fonte e cor sem erro de tipo em runtime: `command_adapt.dart` agora usa `IRangeElementStyle` nos estilos padrão de range, e o E2E passou a cobrir explicitamente essa regressão.
+- A shell Dart passou a preservar a seleção ao abrir os pickers nativos de cor e realce, evitando que a toolbar perca o range antes do `change/input` do navegador.
+- O repaint rápido do editor voltou a refletir mudanças de estilo sem recomputar todo o layout: `draw.dart` agora sincroniza os `IRowElement` em cache antes de `render(isCompute: false)`, corrigindo o caso em que a cor só aparecia depois de outro comando como `bold`.
+- O fluxo de impressão foi realinhado com o TypeScript original em `print.dart`, removendo o cast inválido de `Window` em iframes cross-frame e restaurando a montagem do documento de impressão por `iframe` oculto.
+- A impressão voltou a funcionar no navegador sem `TypeError`: `print.dart` passou a chamar `contentWindow`, `document`, `focus()` e `print()` via JS interop no iframe real.
+- O seed inicial da demo deixou de exibir `\\n` literal no cabeçalho: `lib/src/editor.dart` agora usa quebras de linha reais no documento de exemplo.
 - O E2E deixou de ser apenas um smoke test de canvas vazio: `test/e2e/editor_smoke_test.dart` agora sobe a shell real, inicializa o editor completo e valida boot, digitação, backspace, setas, expansão de seleção e `Enter`.
 - `.gitignore` foi atualizado para ignorar artefatos locais adicionais, incluindo `build/`.
 
@@ -59,6 +68,7 @@ continuar portando o que falta de C:\MyDartProjects\canvas-editor-port\typescrip
 - `position.dart` foi ajustado para usar tipos corretos ao mover o cursor dentro de controles.
 - `left.dart`, `right.dart` e `tab.dart` passaram a usar `IInitNextControlOption` em vez de mapas soltos.
 - `range_manager.dart` ganhou tratamento mais defensivo para coordenadas e seleção.
+- O E2E passou a inserir controles `text` e `checkbox` por comando, verificando placeholder, valor e estrutura básica serializada no documento resultante.
 
 ### 7. Eventos, seleção e mouse
 - `mousedown.dart`, `mousemove.dart` e `mouseup.dart` foram alterados para reduzir flicker de seleção, melhorar cálculo de offset e evitar inconsistências em arrasto/seleção.
@@ -67,31 +77,46 @@ continuar portando o que falta de C:\MyDartProjects\canvas-editor-port\typescrip
 
 ### 8. Partículas e componentes auxiliares
 - `date_picker.dart` recebeu correções funcionais importantes de visibilidade e alternância entre calendário e lista de tempo.
-- `image_particle.dart` foi ajustado no tratamento de imagens/data URL.
+- `image_particle.dart` foi ajustado no tratamento de imagens/data URL e o previewer de imagem segue funcional no port Dart.
+- `element.dart` passou a usar `LaTexParticle.convertLaTextToSVG()` no fluxo de normalização, fechando a lacuna que ainda existia ao importar/transformar conteúdo HTML com elementos LaTeX.
 - `hyperlink_particle.dart` e módulos de bloco/frame/interativos também tiveram ajustes para acompanhar a nova shell e o pipeline do draw.
 - `dialog.dart` e `signature.dart` foram reestruturados e traduzidos, mantendo a funcionalidade em cima da UI web portada.
 
 ### 9. Testes e suporte de execução
 - `test/e2e/editor_smoke_test.dart` agora sobe uma cópia da pasta `web`, compila `main.dart` temporário e expõe helpers JS para inspecionar conteúdo e range do editor durante o teste.
 - O E2E passou a validar comportamento real do editor em vez de um canvas de placeholder.
+- A suíte E2E agora também verifica inserção de LaTeX com geração de metadados SVG, cobrindo `laTexSVG`, `width` e `height` no documento resultante.
+- A suíte E2E agora cobre copy/paste e undo/redo de seleção textual, colagem de LaTeX via clipboard interno do editor, importação de tabela HTML, inserção programática de tabela e cenários básicos de controles embutidos.
+- A suíte E2E também valida aplicação de fonte e cor sobre seleção textual, protegendo o fluxo da toolbar contra regressões de tipagem em runtime.
+- A suíte E2E agora também cobre o caminho da própria toolbar de cor, inclusive o cenário em que o picker nativo faz o editor perder foco antes da aplicação da cor.
 - `pubspec.yaml` mantém as dependências necessárias para esse fluxo de E2E com `puppeteer`, `shelf` e `shelf_static`.
 - `.github/copilot-instructions.md` foi adicionada para registrar convenções operacionais do repositório durante o port.
 
 ## Pendências Atuais Confirmadas
-- `lib/src/editor/utils/element.dart`: a conversão de conteúdo LaTeX para SVG no fluxo HTML -> `IElement` ainda não foi portada; o comentário continua registrando essa lacuna.
+- A seleção/edição de imagem ainda não está em paridade com o original. O TypeScript já expõe `executeSetImageCrop` e `executeSetImageCaption`, além de renderizar `imgCrop` e `imgCaption` em `ImageParticle`; no Dart, `command.dart`, `command_adapt.dart`, `interface/element.dart` e `image_particle.dart` ainda não expõem nem persistem crop/legenda, então a seleção de imagem segue parcial.
+- O previewer de imagem e a opção `imagePreviewerDisabled` já existem no Dart, mas a parte nova de crop, legenda e edição rica por seleção ainda não foi portada.
+- APIs públicas novas do upstream ainda ausentes no Dart: `executeHideCursor`, `executeDeleteArea`, `executeClearGraffiti`, `executeJumpControl`, `executeComputeElementListHeight` e `getRemainingContentHeight`.
+- O modo graffiti ainda não foi portado. O changelog e o `CommandAdapt.ts` do TypeScript mostram suporte dedicado e limpeza via API; no Dart não há partículas, eventos nem comando equivalente.
+- Suporte a `label` ainda falta no núcleo Dart. Não encontrei `ElementType.label`, `LabelParticle` nem eventos correlatos, então interações como clique em label associado continuam sem contraparte.
+- A renderização de marcadores de espaço em branco (`whiteSpace`) ainda não foi portada. O upstream ganhou partícula/comportamento específico e o Dart ainda não expõe esse fluxo.
+- O cálculo utilitário de altura ainda está atrás do upstream: o TypeScript tem `computeElementListHeight()` e `getRemainingContentHeight()`, úteis para paginação e composição externa, e o Dart ainda não oferece essas entradas.
 - Ainda faltam validações mais profundas de paridade em cenários avançados de tabela, controles embutidos complexos e fluxos longos de edição contínua.
-- O E2E melhorou bastante, mas ainda não cobre copy/paste, undo/redo, drag-selection real com mouse, contexto de tabela, date picker interativo e menu de contexto ponta a ponta.
+- O E2E melhorou bastante, mas ainda não cobre drag-selection real com mouse, contexto de tabela mais profundo, date picker interativo, menu de contexto ponta a ponta e os novos cenários de imagem/preview/crop/caption.
 - O port funcional da demo web está bem mais próximo do TypeScript, mas ainda há espaço para acabamento fino de comportamento visual, atalhos e estados ativos da toolbar.
 
 ## Reclassificação das Pendências Antigas
 - `main.ts`: na prática, a lacuna foi fechada pelo conjunto `lib/src/editor.dart` + `web/index.html` + `web/main.dart` + `web/styles.css`; não existe uma cópia literal 1:1, mas agora existe uma contraparte funcional da demo web no lado Dart.
 - `editor/core/draw/control/Control.ts`: a pendência antiga sobre `initControl()` não se aplica mais, porque o método já existe e participa do fluxo atual.
+- Recursos que já não devem mais aparecer como pendência genérica: previewer de imagem básico, `imagePreviewerDisabled`, `tableSelectAll`, `titleId`, separador com `lineWidth`/cor e suporte básico de checkbox/radio já têm contraparte funcional no Dart.
 - `vite-env.d.ts` e `editor/types/index.d.ts`: continuam sem contraparte formal, mas são itens de tipagem/barrel do projeto TypeScript e não bloqueiam a demo funcional em Dart.
 
 ## Próximas Ações
-- Portar a conversão LaTeX -> SVG em `lib/src/editor/utils/element.dart`.
-- Expandir o E2E para cobrir copy/paste, undo/redo, seleção com mouse, controles e menu de contexto.
-- Validar cenários avançados de tabela e controle embutido após a estabilização da shell web.
+- Priorizar a paridade de imagem: portar `imgCrop`, `imgCaption`, comandos de edição e o fluxo visual de seleção/edição de imagem do TypeScript.
+- Portar as APIs públicas mais recentes do `Command`/`CommandAdapt` para reduzir a defasagem funcional do editor Dart perante o upstream.
+- Mapear e portar `graffiti`, `label` e `whiteSpace`, que hoje são os três blocos funcionais mais claros ainda ausentes no núcleo Dart.
+- Expandir o E2E para cobrir seleção real com mouse, menu de contexto e fluxos interativos que ainda dependem mais do DOM.
+- Cobrir preview e importação HTML mais rica de LaTeX, para garantir que a mesma integridade de `laTexSVG`, dimensões e renderização continue válida fora da inserção direta e da colagem interna.
+- Validar cenários avançados de tabela e controles embutidos complexos após a estabilização da shell web.
 - Rodar uma rodada maior de validação manual da demo web agora que cursor, date picker, contexto e renderização principal estão mais estáveis.
 
 ## Leitura Rápida

@@ -5,7 +5,7 @@ import { DeepRequired } from '../../interface/Common'
 import { ICursorOption } from '../../interface/Cursor'
 import { IEditorOption } from '../../interface/Editor'
 import { IElementPosition } from '../../interface/Element'
-import { findScrollContainer } from '../../utils'
+import { findScrollContainer, nextTick } from '../../utils'
 import { isMobile } from '../../utils/ua'
 import { Draw } from '../draw/Draw'
 import { CanvasEvent } from '../event/CanvasEvent'
@@ -165,6 +165,9 @@ export class Cursor {
       this.recoveryCursor()
       return
     }
+    // 记录旧光标位置：用于光标移动到可视范围内
+    const oldTop = this.cursorDom.style.top
+    // 设置光标位置
     const isReadonly = this.draw.isReadonly()
     this.cursorDom.style.width = `${width * scale}px`
     this.cursorDom.style.backgroundColor = color
@@ -176,6 +179,17 @@ export class Cursor {
       this._setBlinkTimeout()
     } else {
       this._clearBlinkTimeout()
+    }
+    // 移动到视野范围内（仅在聚焦时）
+    if (isFocus) {
+      nextTick(() => {
+        // nexttick后执行 => 避免画布没有渲染完成造成残影
+        this.moveCursorToVisible({
+          cursorPosition: cursorPosition!,
+          direction:
+            parseInt(oldTop) > cursorTop ? MoveDirection.UP : MoveDirection.DOWN
+        })
+      })
     }
   }
 
@@ -191,14 +205,6 @@ export class Cursor {
       pageNo,
       coordinate: { leftTop, leftBottom }
     } = cursorPosition
-    // 当前页面距离滚动容器顶部距离
-    const prePageY =
-      pageNo * (this.draw.getHeight() + this.draw.getPageGap()) +
-      this.container.getBoundingClientRect().top
-    // 向上移动时：以顶部距离为准，向下移动时：以底部位置为准
-    const isUp = direction === MoveDirection.UP
-    const x = leftBottom[0]
-    const y = isUp ? leftTop[1] + prePageY : leftBottom[1] + prePageY
     // 查找滚动容器，如果是滚动容器是document，则限制范围为当前窗口
     const scrollContainer = findScrollContainer(this.container)
     const rect = {
@@ -207,7 +213,8 @@ export class Cursor {
       top: 0,
       bottom: 0
     }
-    if (scrollContainer === document.documentElement) {
+    const isDocumentScroll = scrollContainer === document.documentElement
+    if (isDocumentScroll) {
       rect.right = window.innerWidth
       rect.bottom = window.innerHeight
     } else {
@@ -218,6 +225,14 @@ export class Cursor {
       rect.top = top
       rect.bottom = bottom
     }
+    // 当前页面距离滚动容器顶部距离
+    const prePageY =
+      pageNo * (this.draw.getHeight() + this.draw.getPageGap()) +
+      this.container.getBoundingClientRect().top
+    // 向上移动时：以顶部距离为准，向下移动时：以底部位置为准
+    const isUp = direction === MoveDirection.UP
+    const x = leftBottom[0] + (isDocumentScroll ? 0 : rect.left)
+    const y = isUp ? leftTop[1] + prePageY : leftBottom[1] + prePageY
     // 可视范围根据参数调整
     const { maskMargin } = this.options
     rect.top += maskMargin[0]

@@ -7,7 +7,6 @@ import 'editor/interface/editor.dart';
 import 'editor/interface/element.dart';
 import 'editor/interface/page_number.dart';
 import 'editor/interface/placeholder.dart';
-import 'editor/interface/watermark.dart';
 import 'editor/interface/zone.dart';
 
 IElement _sectionTitle(String value) {
@@ -212,7 +211,8 @@ const List<EditorComment> commentList = [
 final IEditorOption options = IEditorOption(
 	locale: 'ptBR',
 	margins: [100, 120, 100, 120],
-	watermark: IWatermark(data: 'CANVAS-EDITOR', size: 120),
+	// Marca d'agua desativada ate a revisao final da shell web da demo.
+	//watermark: IWatermark(data: '', size: 120),
 	pageNumber: IPageNumber(format: 'Página {pageNo} de {pageCount}'),
 	placeholder: IPlaceholder(data: 'Digite o conteúdo principal'),
 	zone: IZoneOption(tipDisabled: true),

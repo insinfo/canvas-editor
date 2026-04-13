@@ -12,3 +12,4 @@
 
 - Não rode `dart format` automaticamente. Só formate arquivos Dart quando o usuário pedir explicitamente.
 - Depois de editar arquivos Dart, valide os arquivos alterados com análise focada.
+- Nunca execute testes sem antes rodar `dart analyze` no escopo relevante e corrigir os erros relacionados às mudanças atuais. Se existirem erros preexistentes não relacionados, registre isso explicitamente antes de prosseguir para os testes.

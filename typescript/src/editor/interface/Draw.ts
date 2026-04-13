@@ -37,6 +37,7 @@ export interface IDrawRowPayload {
   innerWidth: number
   zone?: EditorZone
   isDrawLineBreak?: boolean
+  isDrawWhiteSpace?: boolean
 }
 
 export interface IDrawFloatPayload {
@@ -70,6 +71,7 @@ export interface IAppendElementListOption {
 export interface IGetImageOption {
   pixelRatio?: number
   mode?: EditorMode
+  snapDomFunction?: (iframe: HTMLIFrameElement) => Promise<string>
 }
 
 export interface IComputeRowListPayload {

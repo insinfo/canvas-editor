@@ -86,7 +86,8 @@ interface IElement {
   // Superscript and subscript
   actualSize?: number;
   // Dividing line
-  dashArray?: number[];
+  dashArray?: number[]; // Array for dashed line style
+  lineWidth?: number; // Line width of the separator
   // control
   control?: {
     type: {
@@ -135,6 +136,9 @@ interface IElement {
     strikeout?: boolean;
     selectExclusiveOptions?: {
       inputAble?: boolean;
+    },
+    numberExclusiveOptions?: {
+      calculatorDisabled?: boolean;
     }
   };
   controlComponent?: {
@@ -167,7 +171,21 @@ interface IElement {
     y: number;
     pageNo?: number;
   }
+  imgCrop?: {
+    x: number;      // Crop start X coordinate (relative to original image)
+    y: number;      // Crop start Y coordinate (relative to original image)
+    width: number;  // Crop width
+    height: number; // Crop height
+  }
+  imgCaption?: {
+    value: string;  // Caption content, supports {imageNo} placeholder
+    color?: string; // Caption font color
+    font?: string;  // Caption font family
+    size?: number;  // Caption font size
+    top?: number;   // Spacing between caption and image
+  }
   imgToolDisabled?: boolean;
+  imgPreviewDisabled?: boolean;
   // block
   block?: {
     type: {
@@ -177,6 +195,8 @@ interface IElement {
     iframeBlock?: {
       src?: string;
       srcdoc?: string;
+      sandbox?: string[];
+      allow?: string[];
     };
     videoBlock?: {
       src: string;
@@ -204,6 +224,14 @@ interface IElement {
     mode?: AreaMode;
     deletable?: boolean;
     placeholder?: IPlaceholder;
+  };
+  // label
+  labelId?: string;
+  label?: {
+    color?: string;
+    backgroundColor?: string;
+    borderRadius?: number;
+    padding?: IPadding;
   };
 }
 ```

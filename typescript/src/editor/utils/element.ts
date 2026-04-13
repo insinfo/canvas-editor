@@ -2,6 +2,7 @@ import {
   cloneProperty,
   deepClone,
   deepCloneOmitKeys,
+  deleteProperty,
   getUUID,
   isArrayEqual,
   omitObject,
@@ -83,11 +84,11 @@ export function formatElementList(
   const startElement = elementList[0]
   // 非首字符零宽节点文本元素则补偿-列表元素内部会补偿此处忽略
   if (
-    isForceCompensation ||
-    (isHandleFirstElement &&
-      startElement?.type !== ElementType.LIST &&
-      ((startElement?.type && startElement.type !== ElementType.TEXT) ||
-        !START_LINE_BREAK_REG.test(startElement?.value)))
+    startElement?.type !== ElementType.LIST &&
+    (isForceCompensation ||
+      (isHandleFirstElement &&
+        ((startElement?.type && startElement.type !== ElementType.TEXT) ||
+          !START_LINE_BREAK_REG.test(startElement?.value))))
   ) {
     elementList.unshift({
       value: ZERO
@@ -151,6 +152,18 @@ export function formatElementList(
           value.listType = el.listType
           value.listStyle = el.listStyle
           elementList.splice(i, 0, value)
+          i++
+        }
+        // 尾部如果不是换行符则补充一个换行符
+        if (
+          elementList[i] &&
+          (elementList[i].valueList?.length
+            ? !START_LINE_BREAK_REG.test(elementList[i].valueList![0].value)
+            : !START_LINE_BREAK_REG.test(elementList[i].value))
+        ) {
+          elementList.splice(i, 0, {
+            value: ZERO
+          })
           i++
         }
       }
@@ -949,6 +962,10 @@ export function isTextLikeElement(element: IElement): boolean {
   return !element.type || TEXTLIKE_ELEMENT_TYPE.includes(element.type)
 }
 
+export function isTextElement(element: IElement): boolean {
+  return !element.type || element.type === ElementType.TEXT
+}
+
 export function getElementListText(elementList: IElement[]): string {
   return elementList
     .filter(el => isTextLikeElement(el))
@@ -976,6 +993,7 @@ export function getAnchorElement(
 
 export interface IFormatElementContextOption {
   isBreakWhenWrap?: boolean
+  ignoreContextKeys?: Array<keyof IElement>
   editorOptions?: DeepRequired<IEditorOption>
 }
 
@@ -987,7 +1005,11 @@ export function formatElementContext(
 ) {
   let copyElement = getAnchorElement(sourceElementList, anchorIndex)
   if (!copyElement) return
-  const { isBreakWhenWrap = false, editorOptions } = options || {}
+  const {
+    isBreakWhenWrap = false,
+    editorOptions,
+    ignoreContextKeys = []
+  } = options || {}
   const { mode } = editorOptions || {}
   // 非设计模式时：标题元素禁用时不复制标题属性
   if (mode !== EditorMode.DESIGN && copyElement.title?.disabled) {
@@ -1015,6 +1037,7 @@ export function formatElementContext(
         ...EDITOR_ROW_ATTR,
         ...AREA_CONTEXT_ATTR
       ]
+      deleteProperty(cloneAttr, ignoreContextKeys)
       cloneProperty<IElement>(cloneAttr, copyElement!, targetElement)
       targetElement.valueList?.forEach(valueItem => {
         cloneProperty<IElement>(cloneAttr, copyElement!, valueItem)
@@ -1034,6 +1057,7 @@ export function formatElementContext(
     if (!getIsBlockElement(targetElement)) {
       cloneAttr.push(...EDITOR_ROW_ATTR)
     }
+    deleteProperty(cloneAttr, ignoreContextKeys)
     cloneProperty<IElement>(cloneAttr, copyElement, targetElement)
   }
 }
@@ -1068,9 +1092,18 @@ export function convertElementToDom(
   }
   if (element.underline) {
     dom.style.textDecoration = 'underline'
+    dom.style.textDecorationStyle = element.textDecoration?.style || 'solid'
   }
   if (element.strikeout) {
     dom.style.textDecoration += ' line-through'
+  }
+  if (element.type) {
+    dom.setAttribute('data-type', element.type)
+  }
+  if (element.rowMargin) {
+    dom.style.lineHeight = (
+      element.rowMargin ?? options.defaultRowMargin
+    ).toString()
   }
   dom.innerText = element.value.replace(new RegExp(`${ZERO}`, 'g'), '\n')
   return dom
@@ -1277,10 +1310,12 @@ export function createDomFromElementList(
             clipboardDom.append(video)
           }
         } else if (element.block?.type === BlockType.IFRAME) {
-          const { src, srcdoc } = element.block.iframeBlock || {}
+          const { src, srcdoc, sandbox, allow } =
+            element.block.iframeBlock || {}
           if (src || srcdoc) {
             const iframe = document.createElement('iframe')
-            iframe.sandbox.add(...IFrameBlock.sandbox)
+            iframe.sandbox.add(...(sandbox || IFrameBlock.sandbox))
+            iframe.setAttribute('allow', [allow || IFrameBlock.allow].join(' '))
             iframe.style.display = 'block'
             iframe.style.border = 'none'
             if (src) {
@@ -1297,6 +1332,9 @@ export function createDomFromElementList(
         }
       } else if (element.type === ElementType.SEPARATOR) {
         const hr = document.createElement('hr')
+        if (element.dashArray?.length) {
+          hr.setAttribute('data-dash-array', element.dashArray.join(','))
+        }
         clipboardDom.append(hr)
       } else if (element.type === ElementType.CHECKBOX) {
         const checkbox = document.createElement('input')
@@ -1321,6 +1359,10 @@ export function createDomFromElementList(
         const childDom = buildDom(element.control?.value || [])
         controlElement.innerHTML = childDom.innerHTML
         clipboardDom.append(controlElement)
+      } else if (element.type === ElementType.PAGE_BREAK) {
+        const pageBreakElement = document.createElement('div')
+        pageBreakElement.style.breakAfter = 'page'
+        clipboardDom.append(pageBreakElement)
       } else if (
         !element.type ||
         element.type === ElementType.LATEX ||
@@ -1366,6 +1408,9 @@ export function createDomFromElementList(
         rowFlexDom.style.textAlign = convertRowFlexToTextAlign(
           elementGroupRowFlex.rowFlex!
         )
+        if (elementGroupRowFlex.rowFlex === 'justify') {
+          rowFlexDom.style.textAlignLast = 'justify'
+        }
       }
     }
     // 布局内容
@@ -1526,7 +1571,8 @@ export function getElementListByHTML(
               width,
               height,
               value: src,
-              type: ElementType.IMAGE
+              type: ElementType.IMAGE,
+              rowFlex: convertTextAlignToRowFlex(node.parentElement!)
             })
           }
         } else if (node.nodeName === 'VIDEO') {
@@ -1658,10 +1704,13 @@ export function getElementListByHTML(
       }
     }
   }
-  // 追加dom
+  // 追加dom - 使用Shadow DOM隔离外部样式影响
+  const clipboardHost = document.createElement('div')
+  document.body.appendChild(clipboardHost)
+  const shadowRoot = clipboardHost.attachShadow({ mode: 'open' })
   const clipboardDom = document.createElement('div')
   clipboardDom.innerHTML = htmlText
-  document.body.appendChild(clipboardDom)
+  shadowRoot.appendChild(clipboardDom)
   const deleteNodes: ChildNode[] = []
   clipboardDom.childNodes.forEach(child => {
     if (child.nodeType !== 1 && !child.textContent?.trim()) {
@@ -1672,7 +1721,7 @@ export function getElementListByHTML(
   // 搜索文本节点
   findTextNode(clipboardDom)
   // 移除dom
-  clipboardDom.remove()
+  clipboardHost.remove()
   return elementList
 }
 

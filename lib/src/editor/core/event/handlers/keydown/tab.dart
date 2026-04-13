@@ -3,7 +3,6 @@ import 'dart:html';
 import '../../../../dataset/constant/element.dart' as element_constants;
 import '../../../../dataset/enum/element.dart';
 import '../../../../dataset/enum/observer.dart';
-import '../../../../interface/control.dart';
 import '../../../../interface/editor.dart';
 import '../../../../interface/element.dart';
 import '../../../../interface/range.dart';

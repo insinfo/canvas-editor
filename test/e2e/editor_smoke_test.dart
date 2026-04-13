@@ -17,6 +17,12 @@ import 'dart:js_util' as js_util;
 
 import 'package:canvas_text_editor/src/editor.dart';
 import 'package:canvas_text_editor/src/editor/index.dart' as editor_core;
+import 'package:canvas_text_editor/src/editor/interface/draw.dart'
+  as draw_model;
+import 'package:canvas_text_editor/src/editor/interface/control.dart'
+  as control_model;
+import 'package:canvas_text_editor/src/editor/utils/clipboard.dart'
+  as clipboard_utils;
 
 void main() {
   html.window.onLoad.listen((_) async {
@@ -30,6 +36,25 @@ void main() {
       if (input is html.TextAreaElement) {
         input.focus();
       }
+    }
+
+    String flattenElementText(List<editor_core.IElement>? elements) {
+      if (elements == null || elements.isEmpty) {
+        return '';
+      }
+      final buffer = StringBuffer();
+      for (final element in elements) {
+        if (element.value.isNotEmpty && element.value != '\u200B') {
+          buffer.write(element.value);
+        }
+        if (element.valueList != null && element.valueList!.isNotEmpty) {
+          buffer.write(flattenElementText(element.valueList));
+        }
+        if (element.control?.value?.isNotEmpty == true) {
+          buffer.write(flattenElementText(element.control!.value));
+        }
+      }
+      return buffer.toString();
     }
 
     js_util.setProperty(
@@ -53,6 +78,51 @@ void main() {
           app.editor.command.executeSetRange(0, 0);
           focusInput();
         }),
+        'selectAll': js_util.allowInterop(() {
+          app.editor.command.executeSelectAll();
+          focusInput();
+        }),
+        'copySelection': js_util.allowInterop(() async {
+          await app.editor.command.executeCopy();
+          focusInput();
+        }),
+        'pasteStoredClipboard': js_util.allowInterop(() {
+          final payload = clipboard_utils.getClipboardData();
+          if (payload == null) {
+            return;
+          }
+          app.editor.command.executeInsertElementList(payload.elementList);
+          focusInput();
+        }),
+        'storeLatexClipboard': js_util.allowInterop((String value) {
+          clipboard_utils.setClipboardData(
+            clipboard_utils.ClipboardDataPayload(
+              text: value,
+              elementList: <editor_core.IElement>[
+                editor_core.IElement(
+                  type: editor_core.ElementType.latex,
+                  value: value,
+                ),
+              ],
+            ),
+          );
+        }),
+        'undo': js_util.allowInterop(() {
+          app.editor.command.executeUndo();
+          focusInput();
+        }),
+        'redo': js_util.allowInterop(() {
+          app.editor.command.executeRedo();
+          focusInput();
+        }),
+        'setFont': js_util.allowInterop((String value) {
+          app.editor.command.executeFont(value);
+          focusInput();
+        }),
+        'setColor': js_util.allowInterop((String value) {
+          app.editor.command.executeColor(value);
+          focusInput();
+        }),
         'mainText': js_util.allowInterop(() {
           final result = app.editor.command.getValue();
           return result.data.main.map((element) => element.value).join('');
@@ -64,6 +134,112 @@ void main() {
                 .map((element) => element.value)
                 .toList(growable: false),
           );
+        }),
+        'mainElements': js_util.allowInterop(() {
+          final result = app.editor.command.getValue(
+            draw_model.IGetValueOption(
+              extraPickAttrs: <String>['laTexSVG'],
+            ),
+          );
+          return js_util.jsify(
+            result.data.main
+                .map(
+                  (element) => <String, Object?>{
+                    'type': element.type?.name,
+                    'value': element.value,
+                    'width': element.width,
+                    'height': element.height,
+                    'laTexSVG': element.laTexSVG,
+                    'font': element.font,
+                    'color': element.color,
+                    'controlType': element.control?.type.name,
+                    'controlPlaceholder': element.control?.placeholder,
+                    'controlValue': element.control?.value
+                        ?.map((value) => value.value)
+                        .join(''),
+                    'controlValueSetCount':
+                        element.control?.valueSets.length ?? 0,
+                    'tableRowCount': element.trList?.length ?? 0,
+                    'tableColCount':
+                        element.trList?.isNotEmpty == true
+                            ? element.trList!.first.tdList.length
+                            : 0,
+                    'tableTexts': element.trList
+                        ?.map(
+                          (tr) => tr.tdList
+                              .map(
+                                (td) => flattenElementText(td.value),
+                              )
+                              .toList(growable: false),
+                        )
+                        .toList(growable: false),
+                  },
+                )
+                .toList(growable: false),
+          );
+        }),
+        'insertLatex': js_util.allowInterop((String value) {
+          app.editor.command.executeInsertElementList(
+            <editor_core.IElement>[
+              editor_core.IElement(
+                type: editor_core.ElementType.latex,
+                value: value,
+              ),
+            ],
+          );
+          focusInput();
+        }),
+        'importHtml': js_util.allowInterop((String htmlText) {
+          final elements = editor_core.getElementListByHTML(
+            htmlText,
+            const editor_core.GetElementListByHtmlOption(innerWidth: 794),
+          );
+          app.editor.command.executeInsertElementList(elements);
+          focusInput();
+        }),
+        'insertTable': js_util.allowInterop((num row, num col) {
+          app.editor.command.executeInsertTable(row.toInt(), col.toInt());
+          focusInput();
+        }),
+        'insertTextControl': js_util.allowInterop(
+          (String placeholder, String value) {
+            app.editor.command.executeInsertControl(
+              editor_core.IElement(
+                type: editor_core.ElementType.control,
+                value: '',
+                control: control_model.IControl(
+                  type: editor_core.ControlType.text,
+                  placeholder: placeholder,
+                  value: value.isEmpty
+                      ? null
+                      : <editor_core.IElement>[
+                          editor_core.IElement(value: value),
+                        ],
+                  valueSets: <control_model.IValueSet>[],
+                  flexDirection: editor_core.FlexDirection.row,
+                ),
+              ),
+            );
+            focusInput();
+          },
+        ),
+        'insertCheckboxControl': js_util.allowInterop(() {
+          app.editor.command.executeInsertControl(
+            editor_core.IElement(
+              type: editor_core.ElementType.control,
+              value: '',
+              control: control_model.IControl(
+                type: editor_core.ControlType.checkbox,
+                value: null,
+                valueSets: <control_model.IValueSet>[
+                  control_model.IValueSet(value: 'Sim', code: '1'),
+                  control_model.IValueSet(value: 'Nao', code: '2'),
+                ],
+                flexDirection: editor_core.FlexDirection.row,
+              ),
+            ),
+          );
+          focusInput();
         }),
         'range': js_util.allowInterop(() {
           final range = app.editor.command.getRange();
@@ -148,12 +324,90 @@ Future<String> _readMainText(Page page) async {
       '';
 }
 
-Future<List<dynamic>> _readMainValues(Page page) async {
+Future<List<Map<String, dynamic>>> _readMainElements(Page page) async {
   final String json = await page.evaluate<String?>(
-        '() => JSON.stringify(window.__editorTest.mainValues())',
+        '() => JSON.stringify(window.__editorTest.mainElements())',
       ) ??
       '[]';
-  return List<dynamic>.from(jsonDecode(json) as List<dynamic>);
+  return (jsonDecode(json) as List<dynamic>)
+      .map((entry) => Map<String, dynamic>.from(entry as Map<dynamic, dynamic>))
+      .toList(growable: false);
+}
+
+Future<void> _insertLatex(Page page, String value) async {
+  final String encoded = jsonEncode(value);
+  await page.evaluate<void>('() => window.__editorTest.insertLatex($encoded)');
+  await Future<void>.delayed(const Duration(milliseconds: 120));
+}
+
+Future<void> _copySelection(Page page) async {
+  await page.evaluate<void>('() => window.__editorTest.copySelection()');
+  await Future<void>.delayed(const Duration(milliseconds: 120));
+}
+
+Future<void> _pasteStoredClipboard(Page page) async {
+  await page.evaluate<void>('() => window.__editorTest.pasteStoredClipboard()');
+  await Future<void>.delayed(const Duration(milliseconds: 120));
+}
+
+Future<void> _storeLatexClipboard(Page page, String value) async {
+  final String encoded = jsonEncode(value);
+  await page.evaluate<void>(
+    '() => window.__editorTest.storeLatexClipboard($encoded)',
+  );
+}
+
+Future<void> _undo(Page page) async {
+  await page.evaluate<void>('() => window.__editorTest.undo()');
+  await Future<void>.delayed(const Duration(milliseconds: 120));
+}
+
+Future<void> _redo(Page page) async {
+  await page.evaluate<void>('() => window.__editorTest.redo()');
+  await Future<void>.delayed(const Duration(milliseconds: 120));
+}
+
+Future<void> _setFont(Page page, String value) async {
+  final String encoded = jsonEncode(value);
+  await page.evaluate<void>('() => window.__editorTest.setFont($encoded)');
+  await Future<void>.delayed(const Duration(milliseconds: 120));
+}
+
+Future<void> _setColor(Page page, String value) async {
+  final String encoded = jsonEncode(value);
+  await page.evaluate<void>('() => window.__editorTest.setColor($encoded)');
+  await Future<void>.delayed(const Duration(milliseconds: 120));
+}
+
+Future<void> _importHtml(Page page, String htmlText) async {
+  final String encoded = jsonEncode(htmlText);
+  await page.evaluate<void>('() => window.__editorTest.importHtml($encoded)');
+  await Future<void>.delayed(const Duration(milliseconds: 120));
+}
+
+Future<void> _insertTable(Page page, int row, int col) async {
+  await page.evaluate<void>(
+    '() => window.__editorTest.insertTable($row, $col)',
+  );
+  await Future<void>.delayed(const Duration(milliseconds: 120));
+}
+
+Future<void> _insertTextControl(
+  Page page,
+  String placeholder,
+  String value,
+) async {
+  final String placeholderJson = jsonEncode(placeholder);
+  final String valueJson = jsonEncode(value);
+  await page.evaluate<void>(
+    '() => window.__editorTest.insertTextControl($placeholderJson, $valueJson)',
+  );
+  await Future<void>.delayed(const Duration(milliseconds: 120));
+}
+
+Future<void> _insertCheckboxControl(Page page) async {
+  await page.evaluate<void>('() => window.__editorTest.insertCheckboxControl()');
+  await Future<void>.delayed(const Duration(milliseconds: 120));
 }
 
 Future<Map<String, dynamic>> _readRange(Page page) async {
@@ -346,6 +600,233 @@ void main() {
       );
       expect(range['startIndex'], range['endIndex']);
       expect(range['startIndex'], greaterThanOrEqualTo(1));
+    });
+
+    test('supports latex insertion with generated SVG metadata', () async {
+      if (skipReason != null) {
+        print('Skipping test: $skipReason');
+        return;
+      }
+
+      await _resetContent(page!, '');
+      await _setRange(page!, 0, 0);
+      await _insertLatex(page!, r'x^2 + y^2 = z^2');
+
+      final elements = await _readMainElements(page!);
+      final latexElement = elements.cast<Map<String, dynamic>?>().firstWhere(
+            (element) => element?['type'] == 'latex',
+            orElse: () => null,
+          );
+
+      expect(latexElement, isNotNull);
+      expect(latexElement!['value'], r'x^2 + y^2 = z^2');
+      expect((latexElement['width'] as num?)?.toDouble() ?? 0, greaterThan(0));
+      expect(
+        (latexElement['height'] as num?)?.toDouble() ?? 0,
+        greaterThan(0),
+      );
+      expect(latexElement['laTexSVG'], isA<String>());
+      expect((latexElement['laTexSVG'] as String), startsWith('data:image/svg+xml;base64,'));
+    });
+
+    test('supports copy paste and undo redo for text selections', () async {
+      if (skipReason != null) {
+        print('Skipping test: $skipReason');
+        return;
+      }
+
+      await _resetContent(page!, 'abcd');
+      await _setRange(page!, 1, 3);
+      await _copySelection(page!);
+      await _setRange(page!, 4, 4);
+      await _pasteStoredClipboard(page!);
+      expect(await _readMainText(page!), 'abcdbc');
+
+      await _undo(page!);
+      expect(await _readMainText(page!), 'abcd');
+
+      await _redo(page!);
+      expect(await _readMainText(page!), 'abcdbc');
+    });
+
+    test('supports latex paste from editor clipboard with SVG metadata', () async {
+      if (skipReason != null) {
+        print('Skipping test: $skipReason');
+        return;
+      }
+
+      await _resetContent(page!, '');
+      await _setRange(page!, 0, 0);
+      await _storeLatexClipboard(page!, r'\frac{a}{b}');
+      await _pasteStoredClipboard(page!);
+
+      final elements = await _readMainElements(page!);
+      final latexElement = elements.cast<Map<String, dynamic>?>().firstWhere(
+            (element) => element?['type'] == 'latex',
+            orElse: () => null,
+          );
+
+      expect(latexElement, isNotNull);
+      expect(latexElement!['value'], r'\frac{a}{b}');
+      expect((latexElement['width'] as num?)?.toDouble() ?? 0, greaterThan(0));
+      expect((latexElement['height'] as num?)?.toDouble() ?? 0, greaterThan(0));
+      expect((latexElement['laTexSVG'] as String), startsWith('data:image/svg+xml;base64,'));
+    });
+
+    test('imports HTML tables into table elements', () async {
+      if (skipReason != null) {
+        print('Skipping test: $skipReason');
+        return;
+      }
+
+      await _resetContent(page!, '');
+      await _setRange(page!, 0, 0);
+      await _importHtml(
+        page!,
+        '<table><tr><td>A1</td><td>B1</td></tr><tr><td>A2</td><td>B2</td></tr></table>',
+      );
+
+      final elements = await _readMainElements(page!);
+      final tableElement = elements.cast<Map<String, dynamic>?>().firstWhere(
+            (element) => element?['type'] == 'table',
+            orElse: () => null,
+          );
+
+      expect(tableElement, isNotNull);
+      expect(tableElement!['tableRowCount'], 2);
+      expect(tableElement['tableColCount'], 2);
+      expect(tableElement['tableTexts'], <List<String>>[
+        <String>['A1', 'B1'],
+        <String>['A2', 'B2'],
+      ]);
+    });
+
+    test('supports table insertion and undo redo', () async {
+      if (skipReason != null) {
+        print('Skipping test: $skipReason');
+        return;
+      }
+
+      await _resetContent(page!, '');
+      await _setRange(page!, 0, 0);
+      await _insertTable(page!, 2, 2);
+
+      var elements = await _readMainElements(page!);
+      expect(elements.any((element) => element['type'] == 'table'), isTrue);
+
+      await _undo(page!);
+      elements = await _readMainElements(page!);
+      expect(elements.any((element) => element['type'] == 'table'), isFalse);
+
+      await _redo(page!);
+      elements = await _readMainElements(page!);
+      expect(elements.any((element) => element['type'] == 'table'), isTrue);
+    });
+
+    test('supports embedded control insertion scenarios', () async {
+      if (skipReason != null) {
+        print('Skipping test: $skipReason');
+        return;
+      }
+
+      await _resetContent(page!, '');
+      await _setRange(page!, 0, 0);
+      await _insertTextControl(page!, 'Nome completo', 'Maria');
+      await _insertCheckboxControl(page!);
+
+      final elements = await _readMainElements(page!);
+      final textControl = elements.cast<Map<String, dynamic>?>().firstWhere(
+            (element) => element?['type'] == 'control' &&
+                element?['controlType'] == 'text',
+            orElse: () => null,
+          );
+      final checkboxControl = elements.cast<Map<String, dynamic>?>().firstWhere(
+            (element) => element?['type'] == 'control' &&
+                element?['controlType'] == 'checkbox',
+            orElse: () => null,
+          );
+
+      expect(textControl, isNotNull);
+      expect(textControl!['controlPlaceholder'], 'Nome completo');
+      expect(textControl['controlValue'], 'Maria');
+
+      expect(checkboxControl, isNotNull);
+      expect(checkboxControl!['controlValueSetCount'], 2);
+    });
+
+    test('applies font and color without runtime type errors', () async {
+      if (skipReason != null) {
+        print('Skipping test: $skipReason');
+        return;
+      }
+
+      await _resetContent(page!, 'FonteCor');
+      await _setRange(page!, 0, 8);
+      await _setFont(page!, 'Arial');
+      await _setColor(page!, '#ff0000');
+
+      final elements = await _readMainElements(page!);
+      final styledElement = elements.cast<Map<String, dynamic>?>().firstWhere(
+            (element) =>
+                element?['value'] == 'FonteCor' &&
+                element?['font'] == 'Arial' &&
+                element?['color'] == '#ff0000',
+            orElse: () => null,
+          );
+
+      expect(styledElement, isNotNull);
+    });
+
+    test('applies toolbar color through native input events', () async {
+      if (skipReason != null) {
+        print('Skipping test: $skipReason');
+        return;
+      }
+
+      await _resetContent(page!, 'Cor');
+      await _setRange(page!, 0, 3);
+      await page!.evaluate<void>('''() => {
+        const colorInput = document.querySelector('#color');
+        colorInput.value = '#00ff00';
+        colorInput.dispatchEvent(new Event('input', { bubbles: true }));
+      }''');
+      await Future<void>.delayed(const Duration(milliseconds: 120));
+
+      final elements = await _readMainElements(page!);
+      final styledElement = elements.cast<Map<String, dynamic>?>().firstWhere(
+            (element) =>
+                element?['value'] == 'Cor' &&
+                element?['color'] == '#00ff00',
+            orElse: () => null,
+          );
+
+      expect(styledElement, isNotNull);
+    });
+
+    test('applies toolbar color through native change events', () async {
+      if (skipReason != null) {
+        print('Skipping test: $skipReason');
+        return;
+      }
+
+      await _resetContent(page!, 'Change');
+      await _setRange(page!, 0, 6);
+      await page!.evaluate<void>('''() => {
+        const colorInput = document.querySelector('#color');
+        colorInput.value = '#008000';
+        colorInput.dispatchEvent(new Event('change', { bubbles: true }));
+      }''');
+      await Future<void>.delayed(const Duration(milliseconds: 120));
+
+      final elements = await _readMainElements(page!);
+      final styledElement = elements.cast<Map<String, dynamic>?>().firstWhere(
+            (element) =>
+                element?['value'] == 'Change' &&
+                element?['color'] == '#008000',
+            orElse: () => null,
+          );
+
+      expect(styledElement, isNotNull);
     });
   });
 }

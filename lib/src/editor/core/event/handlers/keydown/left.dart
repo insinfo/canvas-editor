@@ -5,7 +5,6 @@ import '../../../../dataset/enum/editor.dart';
 import '../../../../dataset/enum/element.dart';
 import '../../../../dataset/enum/observer.dart';
 import '../../../../interface/draw.dart';
-import '../../../../interface/control.dart';
 import '../../../../interface/element.dart';
 import '../../../../interface/position.dart';
 import '../../../../interface/range.dart';

@@ -345,7 +345,7 @@ class CommandAdapt {
       return;
     }
     final IElement enterElement = elementList[endIndex];
-    range.setDefaultStyle(IElementStyle(font: payload));
+    range.setDefaultStyle(IRangeElementStyle(font: payload));
     bool isSubmitHistory = true;
     if (enterElement.value == ZERO) {
       enterElement.font = payload;
@@ -392,7 +392,7 @@ class CommandAdapt {
           _castElementList(draw.getElementList());
       if (endIndex >= 0 && endIndex < elementList.length) {
         final IElement enterElement = elementList[endIndex];
-        range.setDefaultStyle(IElementStyle(size: payload));
+        range.setDefaultStyle(IRangeElementStyle(size: payload));
         if (enterElement.value == ZERO) {
           changeElementList.add(enterElement);
           renderOption.curIndex = endIndex;
@@ -458,7 +458,7 @@ class CommandAdapt {
             defaultStyle?.size ?? enterElement.size ?? defaultSize;
         final int nextSize =
             (anchorSize + 2) > maxSize ? maxSize : anchorSize + 2;
-        range.setDefaultStyle(IElementStyle(size: nextSize));
+        range.setDefaultStyle(IRangeElementStyle(size: nextSize));
         if (enterElement.value == ZERO) {
           changeElementList.add(enterElement);
           renderOption.curIndex = endIndex;
@@ -524,7 +524,7 @@ class CommandAdapt {
             defaultStyle?.size ?? enterElement.size ?? defaultSize;
         final int nextSize =
             (anchorSize - 2) < minSize ? minSize : anchorSize - 2;
-        range.setDefaultStyle(IElementStyle(size: nextSize));
+        range.setDefaultStyle(IRangeElementStyle(size: nextSize));
         if (enterElement.value == ZERO) {
           changeElementList.add(enterElement);
           renderOption.curIndex = endIndex;
@@ -589,7 +589,7 @@ class CommandAdapt {
     final bool nextBold = enterElement.bold != true
         ? true
         : !(range.getDefaultStyle()?.bold ?? false);
-    range.setDefaultStyle(IElementStyle(bold: nextBold));
+    range.setDefaultStyle(IRangeElementStyle(bold: nextBold));
     bool isSubmitHistory = true;
     if (enterElement.value == ZERO) {
       enterElement.bold = enterElement.bold != true;
@@ -634,7 +634,7 @@ class CommandAdapt {
     final bool nextItalic = enterElement.italic != true
         ? true
         : !(range.getDefaultStyle()?.italic ?? false);
-    range.setDefaultStyle(IElementStyle(italic: nextItalic));
+    range.setDefaultStyle(IRangeElementStyle(italic: nextItalic));
     bool isSubmitHistory = true;
     if (enterElement.value == ZERO) {
       enterElement.italic = enterElement.italic != true;
@@ -712,7 +712,7 @@ class CommandAdapt {
     }
     final IElement enterElement = elementList[endIndex];
     range.setDefaultStyle(
-      IElementStyle(underline: enterElement.underline != true),
+      IRangeElementStyle(underline: enterElement.underline != true),
     );
     bool isSubmitHistory = true;
     if (enterElement.value == ZERO) {
@@ -762,7 +762,7 @@ class CommandAdapt {
     }
     final IElement enterElement = elementList[endIndex];
     range.setDefaultStyle(
-      IElementStyle(strikeout: enterElement.strikeout != true),
+      IRangeElementStyle(strikeout: enterElement.strikeout != true),
     );
     bool isSubmitHistory = true;
     if (enterElement.value == ZERO) {
@@ -883,7 +883,7 @@ class CommandAdapt {
       return;
     }
     final IElement enterElement = elementList[endIndex];
-    range.setDefaultStyle(IElementStyle(color: payload));
+    range.setDefaultStyle(IRangeElementStyle(color: payload));
     bool isSubmitHistory = true;
     if (enterElement.value == ZERO) {
       if (payload != null) {
@@ -937,7 +937,7 @@ class CommandAdapt {
       return;
     }
     final IElement enterElement = elementList[endIndex];
-    range.setDefaultStyle(IElementStyle(highlight: payload));
+    range.setDefaultStyle(IRangeElementStyle(highlight: payload));
     bool isSubmitHistory = true;
     if (enterElement.value == ZERO) {
       if (payload != null) {

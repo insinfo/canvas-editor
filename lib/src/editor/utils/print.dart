@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:html';
+import 'dart:js_util' as js_util;
 
 import '../dataset/enum/editor.dart';
 
@@ -52,14 +53,13 @@ void printImageBase64(
     ..style.border = 'none';
 
   document.body?.append(iframe);
-  final WindowBase? windowBase = iframe.contentWindow;
-  if (windowBase == null) {
+  final dynamic contentWindow = js_util.getProperty(iframe, 'contentWindow');
+  if (contentWindow == null) {
     iframe.remove();
     return;
   }
 
-  final Window iframeWindow = windowBase as Window;
-  final HtmlDocument? doc = iframeWindow.document as HtmlDocument?;
+  final dynamic doc = js_util.getProperty(contentWindow, 'document');
   if (doc == null) {
     iframe.remove();
     return;
@@ -91,23 +91,21 @@ void printImageBase64(
   }
 ''');
 
-  final HtmlHtmlElement? root = doc.documentElement as HtmlHtmlElement?;
-  if (root == null) {
-    iframe.remove();
-    return;
-  }
-
-  root.children.clear();
-
-  final HeadElement head = HeadElement()..append(style);
-  final BodyElement body = BodyElement()..append(container);
-
-  root
-    ..append(head)
-    ..append(body);
+  js_util.callMethod<void>(doc, 'open', const <dynamic>[]);
 
   scheduleMicrotask(() {
-    iframeWindow.print();
-    window.onMouseOver.first.then((_) => iframe.remove());
+    js_util.callMethod<void>(
+      doc,
+      'write',
+      <dynamic>['${style.outerHtml}${container.innerHtml}'],
+    );
+    Future<void>.delayed(Duration.zero, () {
+      try {
+        js_util.callMethod<void>(contentWindow, 'focus', const <dynamic>[]);
+      } catch (_) {}
+      js_util.callMethod<void>(contentWindow, 'print', const <dynamic>[]);
+      js_util.callMethod<void>(doc, 'close', const <dynamic>[]);
+      window.onMouseOver.first.then((_) => iframe.remove());
+    });
   });
 }

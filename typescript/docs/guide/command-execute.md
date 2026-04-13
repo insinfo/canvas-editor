@@ -139,6 +139,16 @@ instance.command.executeForceUpdate(options?: IForceUpdateOption)
 instance.command.executeBlur()
 ```
 
+## executeHideCursor
+
+功能：隐藏光标（保留选区）
+
+用法：
+
+```javascript
+instance.command.executeHideCursor()
+```
+
 ## executeUndo
 
 功能：撤销
@@ -607,7 +617,7 @@ instance.command.executeEditHyperlink(newUrl: string)
 用法：
 
 ```javascript
-instance.command.executeSeparator(dashArray: number[])
+instance.command.executeSeparator(dashArray: number[], option?: { lineWidth?: number; color?: string })
 ```
 
 ## executePageBreak
@@ -633,6 +643,7 @@ instance.command.executeAddWatermark({
   opacity?: number;
   size?: number;
   font?: string;
+  layer?: WatermarkLayer;
 })
 ```
 
@@ -653,7 +664,7 @@ instance.command.executeDeleteWatermark()
 用法：
 
 ```javascript
-instance.command.executeSearch(keyword: string)
+instance.command.executeSearch(keyword: string, options?: ISearchOption)
 ```
 
 ## executeSearchNavigatePre
@@ -724,6 +735,16 @@ instance.command.executeSaveAsImageElement()
 
 ```javascript
 instance.command.executeChangeImageDisplay(element: IElement, display: ImageDisplay)
+```
+
+## executeSetImageCrop
+
+功能：设置图片裁剪信息
+
+用法：
+
+```javascript
+instance.command.executeSetImageCrop(crop: IImageCrop)
 ```
 
 ## executePageMode
@@ -1056,6 +1077,16 @@ instance.command.executeLocationControl(controlId: string, options?: ILocationCo
 instance.command.executeInsertControl(payload: IElement)
 ```
 
+## executeJumpControl
+
+功能：跳转到下/上一个控件
+
+用法：
+
+```javascript
+instance.command.executeJumpControl(payload?: { direction?: MoveDirection })
+```
+
 ## executeUpdateOptions
 
 功能：修改配置
@@ -1110,10 +1141,26 @@ instance.command.executeSetAreaProperties(payload: ISetAreaPropertiesOption)
 instance.command.executeSetAreaValue(payload: ISetAreaValueOption)
 ```
 
+## executeDeleteArea
+
+功能：删除区域
+
+```js
+instance.command.executeDeleteArea(payload?: IDeleteAreaOption)
+```
+
 ## executeLocationArea
 
 功能：定位区域位置
 
 ```js
 instance.command.executeLocationArea(areaId: string, options?: ILocationAreaOption)
+```
+
+## executeClearGraffiti
+
+功能：清空涂鸦信息
+
+```js
+instance.command.executeClearGraffiti()
 ```

@@ -321,8 +321,8 @@ export function updown(evt: KeyboardEvent, host: CanvasEvent) {
   // 执行跳转
   if (!~anchorStartIndex || !~anchorEndIndex) return
   if (anchorStartIndex > anchorEndIndex) {
-    // prettier-ignore
-    [anchorStartIndex, anchorEndIndex] = [anchorEndIndex, anchorStartIndex]
+    // eslint-disable-next-line @typescript-eslint/no-extra-semi
+    ;[anchorStartIndex, anchorEndIndex] = [anchorEndIndex, anchorStartIndex]
   }
   rangeManager.setRange(anchorStartIndex, anchorEndIndex)
   const isCollapsed = anchorStartIndex === anchorEndIndex
@@ -332,9 +332,11 @@ export function updown(evt: KeyboardEvent, host: CanvasEvent) {
     isSubmitHistory: false,
     isCompute: false
   })
-  // 将光标移动到可视范围内
-  draw.getCursor().moveCursorToVisible({
-    cursorPosition: positionList[isUp ? anchorStartIndex : anchorEndIndex],
-    direction: isUp ? MoveDirection.UP : MoveDirection.DOWN
-  })
+  // 非光标闭合：将光标移动到可视范围内，闭合光标统一处理
+  if (!isCollapsed) {
+    draw.getCursor().moveCursorToVisible({
+      cursorPosition: positionList[isUp ? anchorStartIndex : anchorEndIndex],
+      direction: isUp ? MoveDirection.UP : MoveDirection.DOWN
+    })
+  }
 }

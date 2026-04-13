@@ -128,6 +128,9 @@ export class Control {
 
   // 过滤控件辅助元素（前后缀、背景提示）
   public filterAssistElement(elementList: IElement[]): IElement[] {
+    // 打印模式配置
+    const { filterEmptyControl } = this.options.modeRule[EditorMode.PRINT]
+
     return elementList.filter((element, index) => {
       if (element.type === ElementType.TABLE) {
         const trList = element.trList!
@@ -188,7 +191,8 @@ export class Control {
       return (
         element.controlComponent !== ControlComponent.PREFIX &&
         element.controlComponent !== ControlComponent.POSTFIX &&
-        element.controlComponent !== ControlComponent.PLACEHOLDER
+        (!filterEmptyControl ||
+          element.controlComponent !== ControlComponent.PLACEHOLDER)
       )
     })
   }
@@ -383,6 +387,43 @@ export class Control {
     return this.range.getRange()
   }
 
+  public getValueRange(context: IControlContext = {}): IRange | null {
+    const elementList = context.elementList || this.getElementList()
+    const { startIndex } = context.range || this.getRange()
+    const startElement = elementList[startIndex]
+    // 向左查找
+    let preIndex = startIndex
+    while (preIndex > 0) {
+      const preElement = elementList[preIndex]
+      if (
+        preElement.controlId !== startElement.controlId ||
+        preElement.controlComponent === ControlComponent.PREFIX ||
+        preElement.controlComponent === ControlComponent.PRE_TEXT
+      ) {
+        break
+      }
+      preIndex--
+    }
+    // 向右查找
+    let nextIndex = startIndex + 1
+    while (nextIndex < elementList.length) {
+      const nextElement = elementList[nextIndex]
+      if (
+        nextElement.controlId !== startElement.controlId ||
+        nextElement.controlComponent === ControlComponent.POSTFIX ||
+        nextElement.controlComponent === ControlComponent.POST_TEXT
+      ) {
+        break
+      }
+      nextIndex++
+    }
+    if (preIndex === nextIndex) return null
+    return {
+      startIndex: preIndex,
+      endIndex: nextIndex - 1
+    }
+  }
+
   public shrinkBoundary(context: IControlContext = {}) {
     this.range.shrinkBoundary(context)
   }
@@ -455,7 +496,8 @@ export class Control {
       // 弹窗类控件唤醒弹窗，后缀处移除弹窗
       if (
         this.activeControl instanceof SelectControl ||
-        this.activeControl instanceof DateControl
+        this.activeControl instanceof DateControl ||
+        this.activeControl instanceof NumberControl
       ) {
         if (element.controlComponent === ControlComponent.POSTFIX) {
           this.activeControl.destroy()
@@ -504,7 +546,9 @@ export class Control {
       this.activeControl = dateControl
       dateControl.awake()
     } else if (control.type === ControlType.NUMBER) {
-      this.activeControl = new NumberControl(element, this)
+      const numberControl = new NumberControl(element, this)
+      this.activeControl = numberControl
+      numberControl.awake()
     }
     // 缓存控件数据
     this.updateActiveControlValue()
@@ -520,7 +564,8 @@ export class Control {
     const { isEmitEvent = true } = options
     if (
       this.activeControl instanceof SelectControl ||
-      this.activeControl instanceof DateControl
+      this.activeControl instanceof DateControl ||
+      this.activeControl instanceof NumberControl
     ) {
       this.activeControl.destroy()
     }
@@ -609,12 +654,59 @@ export class Control {
     this.activeControl.setElement(element)
     if (
       (this.activeControl instanceof DateControl ||
-        this.activeControl instanceof SelectControl) &&
+        this.activeControl instanceof SelectControl ||
+        this.activeControl instanceof NumberControl) &&
       this.activeControl.getIsPopup()
     ) {
       this.activeControl.destroy()
       this.activeControl.awake()
     }
+  }
+
+  public selectValue(): boolean {
+    const elementList = this.getElementList()
+    const { startIndex } = this.getRange()
+    const startElement = elementList[startIndex]
+    if (
+      !startElement?.controlId ||
+      (startElement.controlComponent !== ControlComponent.VALUE &&
+        elementList[startIndex + 1]?.controlComponent ===
+          ControlComponent.VALUE)
+    ) {
+      return false
+    }
+    // 向左查找
+    let preIndex = startIndex
+    while (preIndex > 0) {
+      const preElement = elementList[preIndex]
+      if (preElement.controlComponent !== ControlComponent.VALUE) break
+      preIndex--
+    }
+    // 向右查找
+    let nextIndex = startIndex + 1
+    while (nextIndex < elementList.length) {
+      const nextElement = elementList[nextIndex]
+      if (nextElement.controlComponent !== ControlComponent.VALUE) {
+        nextIndex--
+        break
+      }
+      nextIndex++
+    }
+    if (preIndex !== nextIndex) {
+      const range = this.range.getRange()
+      this.range.replaceRange({
+        ...range,
+        startIndex: preIndex,
+        endIndex: nextIndex
+      })
+      this.draw.render({
+        isCompute: false,
+        isSetCursor: false,
+        isSubmitHistory: false
+      })
+      return true
+    }
+    return false
   }
 
   public moveCursor(position: IControlInitOption): IMoveCursorResult {
@@ -652,6 +744,13 @@ export class Control {
           return {
             newIndex: startIndex - 1,
             newElement: elementList[startIndex - 1]
+          }
+        }
+        // 全文最后一个元素时移动后缀尾部
+        if (startIndex === elementList.length - 1) {
+          return {
+            newIndex: startIndex,
+            newElement: elementList[startIndex]
           }
         }
         startIndex++
@@ -1039,8 +1138,8 @@ export class Control {
           const formatValue = Array.isArray(value)
             ? value
             : value
-            ? [{ value }]
-            : []
+              ? [{ value }]
+              : []
           if (formatValue.length) {
             formatElementList(formatValue, {
               isHandleFirstElement: false,
@@ -1095,8 +1194,8 @@ export class Control {
           const formatValue = Array.isArray(value)
             ? value
             : value
-            ? [{ value }]
-            : []
+              ? [{ value }]
+              : []
           if (formatValue.length) {
             formatElementList(formatValue, {
               isHandleFirstElement: false,
@@ -1281,13 +1380,14 @@ export class Control {
       footer: this.draw.getFooterElementList()
     }
     for (const key in pageComponentData) {
-      const elementList = pageComponentData[<keyof IEditorData>key]!
+      const elementList =
+        pageComponentData[<keyof Omit<IEditorData, 'graffiti'>>key]!
       setProperties(elementList)
     }
     if (!isExistUpdate) return
     // 强制更新
     for (const key in pageComponentData) {
-      const pageComponentKey = <keyof IEditorData>key
+      const pageComponentKey = <keyof Omit<IEditorData, 'graffiti'>>key
       const elementList = zipElementList(pageComponentData[pageComponentKey]!, {
         isClassifyArea: true,
         extraPickAttrs: ['id']
@@ -1610,11 +1710,6 @@ export class Control {
       isCompute: false,
       isSetCursor: true,
       isSubmitHistory: false
-    })
-    const positionList = position.getPositionList()
-    this.draw.getCursor().moveCursorToVisible({
-      cursorPosition: positionList[nextIndex],
-      direction
     })
   }
 
