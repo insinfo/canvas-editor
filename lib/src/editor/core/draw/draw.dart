@@ -750,7 +750,6 @@ class Draw {
     final element_utils.ZipElementListOption commonOption =
         element_utils.ZipElementListOption(
       extraPickAttrs: extraPickAttrs,
-      isClone: false,
     );
     final element_utils.ZipElementListOption mainOption =
         commonOption.copyWith(isClassifyArea: true);

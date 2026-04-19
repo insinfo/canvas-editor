@@ -7,6 +7,7 @@ import 'editor/interface/editor.dart';
 import 'editor/interface/element.dart';
 import 'editor/interface/page_number.dart';
 import 'editor/interface/placeholder.dart';
+import 'editor/interface/table/td.dart';
 import 'editor/interface/zone.dart';
 
 IElement _sectionTitle(String value) {
@@ -16,6 +17,55 @@ IElement _sectionTitle(String value) {
 		level: TitleLevel.first,
 		valueList: [
 			IElement(value: value, size: 18),
+		],
+	);
+}
+
+IElement _sampleTable() {
+	List<IElement> cellText(String value) => <IElement>[
+			IElement(value: value, size: 16),
+			IElement(value: '.', size: 16),
+		];
+
+	return IElement(
+		value: '',
+		type: ElementType.table,
+		colgroup: <IColgroup>[
+			IColgroup(width: 180),
+			IColgroup(width: 80),
+			IColgroup(width: 130),
+			IColgroup(width: 130),
+		],
+		trList: <ITr>[
+			ITr(
+				height: 40,
+				tdList: <ITd>[
+					ITd(colspan: 1, rowspan: 2, value: cellText('1')),
+					ITd(colspan: 1, rowspan: 1, value: cellText('2')),
+					ITd(colspan: 2, rowspan: 1, value: cellText('3')),
+				],
+			),
+			ITr(
+				height: 40,
+				tdList: <ITd>[
+					ITd(colspan: 1, rowspan: 1, value: cellText('4')),
+					ITd(colspan: 1, rowspan: 1, value: cellText('5')),
+					ITd(colspan: 1, rowspan: 1, value: cellText('6')),
+				],
+			),
+			ITr(
+				height: 40,
+				tdList: <ITd>[
+					ITd(colspan: 1, rowspan: 1, value: cellText('7')),
+					ITd(colspan: 1, rowspan: 1, value: cellText('8')),
+					ITd(colspan: 1, rowspan: 1, value: cellText('9')),
+					ITd(colspan: 1, rowspan: 1, value: <IElement>[
+						IElement(value: '1', size: 16),
+						IElement(value: '0', size: 16),
+						IElement(value: '.', size: 16),
+					]),
+				],
+			),
 		],
 	);
 }
@@ -160,6 +210,9 @@ List<IElement> _mockElementList() {
 				flexDirection: FlexDirection.row,
 			),
 		),
+		IElement(value: '\n'),
+
+		_sampleTable(),
 		IElement(value: '\n'),
 
 		IElement(value: 'Observações finais: '),

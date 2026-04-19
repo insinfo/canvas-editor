@@ -5,9 +5,9 @@
   // "search.exclude": {
   //   "**/referencias": true
   // },
-  // "files.watcherExclude": {
-  //   "**/referencias/**": true
-  // },
+  "files.watcherExclude": {
+    "**/referencias/**": true
+  },
   "js/ts.tsserver.experimental.enableProjectDiagnostics": false
   
 }

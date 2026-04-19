@@ -75,6 +75,7 @@ List<IElement> _cloneElementList(List<IElement>? source) {
 }
 
 class Editor implements IPluginHost {
+  late Draw _draw;
   late Command _command;
   late Listener _listener;
   late EventBus<EventBusMap> _eventBus;
@@ -103,6 +104,8 @@ class Editor implements IPluginHost {
 
   @core.override
   UsePlugin get use => _use;
+
+  Draw getDraw() => _draw;
 
   Editor(
     HtmlElement container,
@@ -170,6 +173,7 @@ class Editor implements IPluginHost {
       eventBus,
       override,
     );
+    _draw = draw;
 
   _command = Command(CommandAdapt(draw));
     final ContextMenu contextMenu = ContextMenu(draw, command);

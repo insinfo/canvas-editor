@@ -23,6 +23,9 @@ import 'package:canvas_text_editor/src/editor/interface/area.dart'
   as area_model;
 import 'package:canvas_text_editor/src/editor/interface/control.dart'
   as control_model;
+import 'package:canvas_text_editor/src/editor/interface/range.dart'
+  as range_model;
+import 'package:canvas_text_editor/src/mock.dart' as mock_data;
 import 'package:canvas_text_editor/src/editor/utils/clipboard.dart'
   as clipboard_utils;
 
@@ -67,15 +70,44 @@ void main() {
           focusInput();
         }),
         'setRange': js_util.allowInterop((num start, num end) {
+          app.editor.command.executeSetPositionContext(
+            range_model.IRange(
+              startIndex: start.toInt(),
+              endIndex: end.toInt(),
+            ),
+          );
           app.editor.command.executeSetRange(start.toInt(), end.toInt());
           focusInput();
         }),
         'resetContent': js_util.allowInterop((String text) {
           final elements = editor_core.splitText(text)
+        'setRangeBeforeTextValue': js_util.allowInterop((String text) {
+          final elements = app.editor.getDraw().getOriginalMainElementList();
+          final index = elements.indexWhere((element) => element.value == text);
+          if (index == -1) {
+            return false;
+          }
+          app.editor.command.executeSetPositionContext(
+            range_model.IRange(
+              startIndex: index,
+              endIndex: index,
+            ),
+          );
+          app.editor.command.executeSetRange(index, index);
+          focusInput();
+          return true;
+        }),
               .map((value) => editor_core.IElement(value: value))
               .toList(growable: false);
           app.editor.command.executeSetValue(
             editor_core.IEditorData(main: elements),
+          );
+          app.editor.command.executeSetRange(0, 0);
+          focusInput();
+        }),
+        'resetMockContent': js_util.allowInterop(() {
+          app.editor.command.executeSetValue(
+            editor_core.IEditorData(main: mock_data.data),
           );
           app.editor.command.executeSetRange(0, 0);
           focusInput();
@@ -168,11 +200,27 @@ void main() {
                         element.trList?.isNotEmpty == true
                             ? element.trList!.first.tdList.length
                             : 0,
+                    'tableColgroupCount': element.colgroup?.length ?? 0,
+                    'tableColWidths': element.colgroup
+                      ?.map((col) => col.width)
+                      .toList(growable: false),
                     'tableTexts': element.trList
                         ?.map(
                           (tr) => tr.tdList
                               .map(
                                 (td) => flattenElementText(td.value),
+                              )
+                              .toList(growable: false),
+                        )
+                        .toList(growable: false),
+                    'tableCellSpans': element.trList
+                        ?.map(
+                          (tr) => tr.tdList
+                              .map(
+                                (td) => <String, Object?>{
+                                  'rowspan': td.rowspan,
+                                  'colspan': td.colspan,
+                                },
                               )
                               .toList(growable: false),
                         )
@@ -219,6 +267,132 @@ void main() {
         'insertTable': js_util.allowInterop((num row, num col) {
           app.editor.command.executeInsertTable(row.toInt(), col.toInt());
           focusInput();
+        }),
+        'insertTableTopRow': js_util.allowInterop(() {
+          app.editor.command.executeInsertTableTopRow();
+          focusInput();
+        }),
+        'insertTableBottomRow': js_util.allowInterop(() {
+          app.editor.command.executeInsertTableBottomRow();
+          focusInput();
+        }),
+        'insertTableLeftCol': js_util.allowInterop(() {
+          app.editor.command.executeInsertTableLeftCol();
+          focusInput();
+        }),
+        'insertTableRightCol': js_util.allowInterop(() {
+          app.editor.command.executeInsertTableRightCol();
+          focusInput();
+        }),
+        'deleteTableRow': js_util.allowInterop(() {
+          app.editor.command.executeDeleteTableRow();
+          focusInput();
+        }),
+        'deleteTableCol': js_util.allowInterop(() {
+          app.editor.command.executeDeleteTableCol();
+          focusInput();
+        }),
+        'deleteTable': js_util.allowInterop(() {
+          app.editor.command.executeDeleteTable();
+          focusInput();
+        }),
+        'deleteFirstTableCol': js_util.allowInterop(() {
+          final result = app.editor.command.getValue(
+            draw_model.IGetValueOption(extraPickAttrs: <String>['id']),
+          );
+          final elements = result.data.main;
+          final tableIndex = elements.indexWhere(
+            (element) => element.type == editor_core.ElementType.table,
+          );
+          if (tableIndex == -1) {
+            return false;
+          }
+          final table = elements[tableIndex];
+          if (table.id == null) {
+            return false;
+          }
+          app.editor.command.executeSetPositionContext(
+            range_model.IRange(
+              startIndex: 0,
+              endIndex: 0,
+              tableId: table.id,
+              startTdIndex: 0,
+              endTdIndex: 0,
+              startTrIndex: 0,
+              endTrIndex: 0,
+            ),
+          );
+          app.editor.command.executeSetRange(0, 0, table.id, 0, 0, 0, 0);
+          app.editor.command.executeDeleteTableCol();
+          focusInput();
+          return true;
+        }),
+        'deleteFirstTable': js_util.allowInterop(() {
+          final result = app.editor.command.getValue(
+            draw_model.IGetValueOption(extraPickAttrs: <String>['id']),
+          );
+          final elements = result.data.main;
+          final tableIndex = elements.indexWhere(
+            (element) => element.type == editor_core.ElementType.table,
+          );
+          if (tableIndex == -1) {
+            return false;
+          }
+          final table = elements[tableIndex];
+          if (table.id == null) {
+            return false;
+          }
+          app.editor.command.executeSetPositionContext(
+            range_model.IRange(
+              startIndex: 0,
+              endIndex: 0,
+              tableId: table.id,
+              startTdIndex: 0,
+              endTdIndex: 0,
+              startTrIndex: 0,
+              endTrIndex: 0,
+            ),
+          );
+          app.editor.command.executeSetRange(0, 0, table.id, 0, 0, 0, 0);
+          app.editor.command.executeDeleteTable();
+          focusInput();
+          return true;
+        }),
+        'focusFirstTableCell': js_util.allowInterop(() {
+          final result = app.editor.command.getValue(
+            draw_model.IGetValueOption(extraPickAttrs: <String>['id']),
+          );
+          final elements = result.data.main;
+          final tableIndex = elements.indexWhere(
+            (element) => element.type == editor_core.ElementType.table,
+          );
+          if (tableIndex == -1) {
+            return false;
+          }
+          final table = elements[tableIndex];
+          final trList = table.trList;
+          if (table.id == null || trList == null || trList.isEmpty) {
+            return false;
+          }
+          final firstTr = trList.first;
+          if (firstTr.tdList.isEmpty) {
+            return false;
+          }
+          app.editor.command.executeSetPositionContext(
+            range_model.IRange(
+              startIndex: 0,
+              endIndex: 0,
+              tableId: table.id,
+              startTdIndex: 0,
+              endTdIndex: 0,
+              startTrIndex: 0,
+              endTrIndex: 0,
+            ),
+          );
+          app.editor.command.executeSetRange(0, 0, table.id, 0, 0, 0, 0);
+          app.editor.getDraw().getTableTool()?.render();
+          focusInput();
+          return true;
         }),
         'insertTextControl': js_util.allowInterop(
           (String placeholder, String value) {
@@ -384,9 +558,31 @@ Future<void> _resetContent(Page page, String text) async {
   await Future<void>.delayed(const Duration(milliseconds: 120));
 }
 
+Future<void> _resetMockContent(Page page) async {
+  await page.evaluate<void>('() => window.__editorTest.resetMockContent()');
+  await Future<void>.delayed(const Duration(milliseconds: 180));
+}
+
+Future<bool> _focusFirstTableCell(Page page) async {
+  final bool? value = await page.evaluate<bool?>(
+    '() => window.__editorTest.focusFirstTableCell()',
+  );
+  await Future<void>.delayed(const Duration(milliseconds: 180));
+  return value ?? false;
+}
+
 Future<void> _setRange(Page page, int start, int end) async {
   await page.evaluate<void>('() => window.__editorTest.setRange($start, $end)');
   await Future<void>.delayed(const Duration(milliseconds: 80));
+}
+
+Future<bool> _setRangeBeforeTextValue(Page page, String text) async {
+  final String encoded = jsonEncode(text);
+  final bool? value = await page.evaluate<bool?>(
+    '() => window.__editorTest.setRangeBeforeTextValue($encoded)',
+  );
+  await Future<void>.delayed(const Duration(milliseconds: 80));
+  return value ?? false;
 }
 
 Future<String> _readMainText(Page page) async {
@@ -402,6 +598,15 @@ Future<List<Map<String, dynamic>>> _readMainElements(Page page) async {
   return (jsonDecode(json) as List<dynamic>)
       .map((entry) => Map<String, dynamic>.from(entry as Map<dynamic, dynamic>))
       .toList(growable: false);
+}
+
+Map<String, dynamic>? _firstTable(List<Map<String, dynamic>> elements) {
+  for (final element in elements) {
+    if (element['type'] == 'table') {
+      return element;
+    }
+  }
+  return null;
 }
 
 Future<void> _insertLatex(Page page, String value) async {
@@ -459,6 +664,36 @@ Future<void> _insertTable(Page page, int row, int col) async {
   await page.evaluate<void>(
     '() => window.__editorTest.insertTable($row, $col)',
   );
+  await Future<void>.delayed(const Duration(milliseconds: 120));
+}
+
+Future<void> _insertTableTopRow(Page page) async {
+  await page.evaluate<void>('() => window.__editorTest.insertTableTopRow()');
+  await Future<void>.delayed(const Duration(milliseconds: 120));
+}
+
+Future<void> _insertTableBottomRow(Page page) async {
+  await page.evaluate<void>('() => window.__editorTest.insertTableBottomRow()');
+  await Future<void>.delayed(const Duration(milliseconds: 120));
+}
+
+Future<void> _insertTableLeftCol(Page page) async {
+  await page.evaluate<void>('() => window.__editorTest.insertTableLeftCol()');
+  await Future<void>.delayed(const Duration(milliseconds: 120));
+}
+
+Future<void> _insertTableRightCol(Page page) async {
+  await page.evaluate<void>('() => window.__editorTest.insertTableRightCol()');
+  await Future<void>.delayed(const Duration(milliseconds: 120));
+}
+
+Future<void> _deleteTableRow(Page page) async {
+  await page.evaluate<void>('() => window.__editorTest.deleteTableRow()');
+  await Future<void>.delayed(const Duration(milliseconds: 120));
+}
+
+Future<void> _deleteTableCol(Page page) async {
+  await page.evaluate<void>('() => window.__editorTest.deleteTableCol()');
   await Future<void>.delayed(const Duration(milliseconds: 120));
 }
 
@@ -848,6 +1083,147 @@ void main() {
       await _redo(page!);
       elements = await _readMainElements(page!);
       expect(elements.any((element) => element['type'] == 'table'), isTrue);
+    });
+
+    test('ships the demo mock with a preloaded table sample', () async {
+      if (skipReason != null) {
+        print('Skipping test: $skipReason');
+        return;
+      }
+
+      await _resetMockContent(page!);
+
+      final elements = await _readMainElements(page!);
+      final tableElement = _firstTable(elements);
+
+      expect(tableElement, isNotNull);
+      expect(tableElement!['tableRowCount'], 3);
+      expect(tableElement['tableColgroupCount'], 4);
+      expect(tableElement['tableTexts'], isA<List<dynamic>>());
+    });
+
+    test('renders table editing controls for the focused table cell', () async {
+      if (skipReason != null) {
+        print('Skipping test: $skipReason');
+        return;
+      }
+
+      await _resetMockContent(page!);
+      expect(await _focusFirstTableCell(page!), isTrue);
+
+      final Map<String, dynamic> metrics = Map<String, dynamic>.from(
+        jsonDecode(
+          await page!.evaluate<String>('''() => JSON.stringify({
+            rowItems: document.querySelectorAll('.ce-table-tool__row__item').length,
+            colItems: document.querySelectorAll('.ce-table-tool__col__item').length,
+            quickAdds: document.querySelectorAll('.ce-table-tool__quick__add').length,
+            hasSelect: !!document.querySelector('.ce-table-tool__select'),
+            hasBorder: !!document.querySelector('.ce-table-tool__border'),
+            rowHeight: document.querySelector('.ce-table-tool__row')?.getBoundingClientRect().height ?? 0,
+            colWidth: document.querySelector('.ce-table-tool__col')?.getBoundingClientRect().width ?? 0
+          })'''),
+        ) as Map<String, dynamic>,
+      );
+      expect(metrics['rowItems'], greaterThan(0));
+      expect(metrics['colItems'], greaterThan(0));
+      expect(metrics['quickAdds'], 2);
+      expect(metrics['hasSelect'], isTrue);
+      expect(metrics['hasBorder'], isTrue);
+      expect((metrics['rowHeight'] as num).toDouble(), greaterThan(0));
+      expect((metrics['colWidth'] as num).toDouble(), greaterThan(0));
+    });
+
+    test('supports public row and column mutations on a simple table', () async {
+      if (skipReason != null) {
+        print('Skipping test: $skipReason');
+        return;
+      }
+
+      await _resetContent(page!, '');
+      await _setRange(page!, 0, 0);
+      await _insertTable(page!, 2, 2);
+      expect(await _focusFirstTableCell(page!), isTrue);
+
+      await _insertTableTopRow(page!);
+      var elements = await _readMainElements(page!);
+      var tableElement = _firstTable(elements);
+      expect(tableElement, isNotNull);
+      expect(tableElement!['tableRowCount'], 3);
+
+      expect(await _focusFirstTableCell(page!), isTrue);
+      await _insertTableLeftCol(page!);
+      elements = await _readMainElements(page!);
+      tableElement = _firstTable(elements);
+      expect(tableElement, isNotNull);
+      expect(tableElement!['tableColgroupCount'], 3);
+
+      expect(await _focusFirstTableCell(page!), isTrue);
+      await _insertTableBottomRow(page!);
+      elements = await _readMainElements(page!);
+      tableElement = _firstTable(elements);
+      expect(tableElement, isNotNull);
+      expect(tableElement!['tableRowCount'], 4);
+
+      expect(await _focusFirstTableCell(page!), isTrue);
+      await _insertTableRightCol(page!);
+      elements = await _readMainElements(page!);
+      tableElement = _firstTable(elements);
+      expect(tableElement, isNotNull);
+      expect(tableElement!['tableColgroupCount'], 4);
+
+      expect(await _focusFirstTableCell(page!), isTrue);
+      await _deleteTableRow(page!);
+      elements = await _readMainElements(page!);
+      tableElement = _firstTable(elements);
+      expect(tableElement, isNotNull);
+      expect(tableElement!['tableRowCount'], 3);
+
+      expect(await _focusFirstTableCell(page!), isTrue);
+      await _deleteTableCol(page!);
+      elements = await _readMainElements(page!);
+      tableElement = _firstTable(elements);
+      expect(tableElement, isNotNull);
+      expect(tableElement!['tableColgroupCount'], 3);
+    });
+
+    test('inserts a new table into a filled document without removing the existing one', () async {
+      if (skipReason != null) {
+        print('Skipping test: $skipReason');
+        return;
+      }
+
+      await _resetMockContent(page!);
+      expect(
+        await _setRangeBeforeTextValue(page!, 'Observações finais: '),
+        isTrue,
+      );
+
+      final beforeElements = await _readMainElements(page!);
+      final beforeTableCount = beforeElements
+          .where((element) => element['type'] == 'table')
+          .length;
+      final beforeControlCount = beforeElements
+          .where((element) => element['type'] == 'control')
+          .length;
+
+      expect(beforeTableCount, 1);
+
+      await _insertTable(page!, 2, 2);
+
+      final afterElements = await _readMainElements(page!);
+      final afterTableCount = afterElements
+          .where((element) => element['type'] == 'table')
+          .length;
+      final afterControlCount = afterElements
+          .where((element) => element['type'] == 'control')
+          .length;
+      final firstTable = _firstTable(afterElements);
+
+      expect(afterTableCount, 2);
+      expect(afterControlCount, beforeControlCount);
+      expect(firstTable, isNotNull);
+      expect(firstTable!['tableRowCount'], 3);
+      expect(firstTable['tableColgroupCount'], 4);
     });
 
     test('supports embedded control insertion scenarios', () async {

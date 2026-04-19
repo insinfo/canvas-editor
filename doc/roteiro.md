@@ -26,6 +26,9 @@ continuar portando o que falta de C:\MyDartProjects\canvas-editor-port\typescrip
 - O fluxo de impressão foi realinhado com o TypeScript original em `print.dart`, removendo o cast inválido de `Window` em iframes cross-frame e restaurando a montagem do documento de impressão por `iframe` oculto.
 - A impressão voltou a funcionar no navegador sem `TypeError`: `print.dart` passou a chamar `contentWindow`, `document`, `focus()` e `print()` via JS interop no iframe real.
 - O pacote de APIs públicas do `Command` avançou mais uma etapa: o Dart agora expõe `executeHideCursor`, `executeDeleteArea`, `executeJumpControl`, `executeComputeElementListHeight` e `getRemainingContentHeight`, reduzindo a defasagem frente ao upstream TypeScript.
+- O mock padrão da demo Dart agora inclui uma tabela de exemplo, aproximando o documento inicial da shell web do material de referência do TypeScript e exercitando melhor o renderer de tabela fora do caso vazio.
+- A serialização pública do editor deixou de corromper o estado vivo ao ler dados: `draw.dart` voltou a compactar o payload de `getValue()` sobre cópias, como no upstream, evitando mutações acidentais em títulos, controles e tabelas durante inspeção/teste.
+- Os controles visuais de edição de tabela da shell web deixaram de depender do vazio: `web/styles.css` agora inclui as regras de `TableTool` portadas do TypeScript, restaurando barras de linha/coluna, botões rápidos de adição, seletor da tabela, guias de resize e áreas de arraste.
 - O seed inicial da demo deixou de exibir `\\n` literal no cabeçalho: `lib/src/editor.dart` agora usa quebras de linha reais no documento de exemplo.
 - O E2E deixou de ser apenas um smoke test de canvas vazio: `test/e2e/editor_smoke_test.dart` agora sobe a shell real, inicializa o editor completo e valida boot, digitação, backspace, setas, expansão de seleção e `Enter`.
 - `.gitignore` foi atualizado para ignorar artefatos locais adicionais, incluindo `build/`.
@@ -42,7 +45,7 @@ continuar portando o que falta de C:\MyDartProjects\canvas-editor-port\typescrip
 ### 2. Bootstrap e demo reorganizados
 - O código antigo de bootstrap concentrado em `lib/src/main.dart` foi removido.
 - O bootstrap real foi extraído e reorganizado em `lib/src/editor.dart`, deixando a aplicação web mais modular e mais alinhada com a demo TypeScript.
-- `mock.dart` foi refeito para servir um documento de demonstração em português, com controles embutidos, comentários, hyperlink, lista, assinatura e data.
+- `mock.dart` foi refeito para servir um documento de demonstração em português, com controles embutidos, comentários, hyperlink, lista, assinatura, data e agora também uma tabela de exemplo carregada por padrão.
 
 ### 3. Localização para português
 - `lib/src/editor/core/i18n/i18n.dart` recebeu `ptBR` e fallback coerente com a nova demo.
@@ -88,6 +91,10 @@ continuar portando o que falta de C:\MyDartProjects\canvas-editor-port\typescrip
 - O E2E passou a validar comportamento real do editor em vez de um canvas de placeholder.
 - A suíte E2E agora também verifica inserção de LaTeX com geração de metadados SVG, cobrindo `laTexSVG`, `width` e `height` no documento resultante.
 - A suíte E2E agora cobre copy/paste e undo/redo de seleção textual, colagem de LaTeX via clipboard interno do editor, importação de tabela HTML, inserção programática de tabela e cenários básicos de controles embutidos.
+- A suíte E2E passou a validar também que a shell real sobe com uma tabela pré-carregada no mock da demo, cobrindo um caso de renderização de tabela fora do fluxo artificial de documento vazio.
+- A suíte E2E agora também verifica que, ao focar uma célula da tabela carregada na demo, os overlays do `TableTool` aparecem no DOM com linhas, colunas, botões rápidos e seletor visíveis.
+- A suíte E2E agora cobre também as mutações públicas simples de tabela em um caso sem merge: inserir linha no topo/rodapé, inserir coluna à esquerda/direita e remover uma linha/coluna via `Command`, confirmando que o fluxo básico desses controles já responde como no upstream.
+- A suíte E2E agora cobre também a inserção de uma nova tabela em documento já preenchido, ancorando a seleção antes de `Observações finais` no mock e verificando que a tabela pré-existente e os controles já carregados permanecem intactos.
 - A suíte E2E também valida aplicação de fonte e cor sobre seleção textual, protegendo o fluxo da toolbar contra regressões de tipagem em runtime.
 - A suíte E2E agora também cobre o caminho da própria toolbar de cor, inclusive o cenário em que o picker nativo faz o editor perder foco antes da aplicação da cor.
 - A suíte E2E passou a cobrir também as APIs públicas recém-expostas para cursor, cálculo utilitário de altura, navegação programática entre controles e exclusão segura de área inexistente.
@@ -101,6 +108,7 @@ continuar portando o que falta de C:\MyDartProjects\canvas-editor-port\typescrip
 - O modo graffiti ainda não foi portado. O changelog e o `CommandAdapt.ts` do TypeScript mostram suporte dedicado e limpeza via API; no Dart não há partículas, eventos nem comando equivalente.
 - Suporte a `label` ainda falta no núcleo Dart. Não encontrei `ElementType.label`, `LabelParticle` nem eventos correlatos, então interações como clique em label associado continuam sem contraparte.
 - A renderização de marcadores de espaço em branco (`whiteSpace`) ainda não foi portada. O upstream ganhou partícula/comportamento específico e o Dart ainda não expõe esse fluxo.
+- Na parte de tabela, o fluxo básico já está coberto no shell Dart para renderização inicial, foco com overlays, mutações públicas simples em tabela sem merge e inserção programática de nova tabela sobre documento preenchido.
 - Ainda faltam validações mais profundas de paridade em cenários avançados de tabela, controles embutidos complexos e fluxos longos de edição contínua.
 - O E2E melhorou bastante, mas ainda não cobre drag-selection real com mouse, contexto de tabela mais profundo, date picker interativo, menu de contexto ponta a ponta e os novos cenários de imagem/preview/crop/caption.
 - A criação/edição rica de áreas ainda precisa de validação funcional mais profunda na shell web; nesta rodada a API pública de exclusão foi portada e coberta apenas no caminho seguro de no-op para área inexistente.
