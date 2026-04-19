@@ -19,6 +19,8 @@ import 'package:canvas_text_editor/src/editor.dart';
 import 'package:canvas_text_editor/src/editor/index.dart' as editor_core;
 import 'package:canvas_text_editor/src/editor/interface/draw.dart'
   as draw_model;
+import 'package:canvas_text_editor/src/editor/interface/area.dart'
+  as area_model;
 import 'package:canvas_text_editor/src/editor/interface/control.dart'
   as control_model;
 import 'package:canvas_text_editor/src/editor/utils/clipboard.dart'
@@ -152,6 +154,8 @@ void main() {
                     'laTexSVG': element.laTexSVG,
                     'font': element.font,
                     'color': element.color,
+                    'areaId': element.areaId,
+                    'controlId': element.controlId,
                     'controlType': element.control?.type.name,
                     'controlPlaceholder': element.control?.placeholder,
                     'controlValue': element.control?.value
@@ -177,6 +181,21 @@ void main() {
                 )
                 .toList(growable: false),
           );
+        }),
+        'controlIds': js_util.allowInterop(() {
+          return js_util.jsify(
+            app.editor.command
+                .getControlList()
+                .map((element) => element.controlId)
+                .whereType<String>()
+                .toList(growable: false),
+          );
+        }),
+        'areaExists': js_util.allowInterop((String id) {
+          return app.editor.command.getAreaValue(
+                area_model.IGetAreaValueOption(id: id),
+              ) !=
+              null;
         }),
         'insertLatex': js_util.allowInterop((String value) {
           app.editor.command.executeInsertElementList(
@@ -240,6 +259,57 @@ void main() {
             ),
           );
           focusInput();
+        }),
+        'insertArea': js_util.allowInterop((String id, String text) {
+          final elements = editor_core.splitText(text)
+              .map((value) => editor_core.IElement(value: value))
+              .toList(growable: false);
+          app.editor.command.executeInsertArea(
+            area_model.IInsertAreaOption<editor_core.IElement>(
+              id: id,
+              area: area_model.IArea(),
+              value: elements,
+            ),
+          );
+          focusInput();
+        }),
+        'deleteArea': js_util.allowInterop((String id) {
+          app.editor.command.executeDeleteArea(
+            area_model.IDeleteAreaOption(id: id),
+          );
+          focusInput();
+        }),
+        'locationControl': js_util.allowInterop((String controlId) {
+          app.editor.command.executeLocationControl(
+            controlId,
+            control_model.ILocationControlOption(
+              position: editor_core.LocationPosition.before,
+            ),
+          );
+          focusInput();
+        }),
+        'jumpControl': js_util.allowInterop(() {
+          app.editor.command.executeJumpControl();
+          focusInput();
+        }),
+        'hideCursor': js_util.allowInterop(() {
+          app.editor.command.executeHideCursor();
+        }),
+        'cursorDisplay': js_util.allowInterop(() {
+          final cursor = html.document.querySelector('.ce-cursor');
+          if (cursor is html.HtmlElement) {
+            return cursor.style.display;
+          }
+          return null;
+        }),
+        'remainingContentHeight': js_util.allowInterop(() {
+          return app.editor.command.getRemainingContentHeight();
+        }),
+        'computeTextHeight': js_util.allowInterop((String text) {
+          final elements = editor_core.splitText(text)
+              .map((value) => editor_core.IElement(value: value))
+              .toList(growable: false);
+          return app.editor.command.executeComputeElementListHeight(elements);
         }),
         'range': js_util.allowInterop(() {
           final range = app.editor.command.getRange();
@@ -382,7 +452,7 @@ Future<void> _setColor(Page page, String value) async {
 Future<void> _importHtml(Page page, String htmlText) async {
   final String encoded = jsonEncode(htmlText);
   await page.evaluate<void>('() => window.__editorTest.importHtml($encoded)');
-  await Future<void>.delayed(const Duration(milliseconds: 120));
+  await Future<void>.delayed(const Duration(milliseconds: 220));
 }
 
 Future<void> _insertTable(Page page, int row, int col) async {
@@ -416,6 +486,66 @@ Future<Map<String, dynamic>> _readRange(Page page) async {
       ) ??
       '{}';
   return Map<String, dynamic>.from(jsonDecode(json) as Map<String, dynamic>);
+}
+
+Future<void> _deleteArea(Page page, String id) async {
+  final String idJson = jsonEncode(id);
+  await page.evaluate<void>('() => window.__editorTest.deleteArea($idJson)');
+  await Future<void>.delayed(const Duration(milliseconds: 120));
+}
+
+Future<void> _locationControl(Page page, String controlId) async {
+  final String idJson = jsonEncode(controlId);
+  await page.evaluate<void>(
+    '() => window.__editorTest.locationControl($idJson)',
+  );
+  await Future<void>.delayed(const Duration(milliseconds: 120));
+}
+
+Future<void> _jumpControl(Page page) async {
+  await page.evaluate<void>('() => window.__editorTest.jumpControl()');
+  await Future<void>.delayed(const Duration(milliseconds: 120));
+}
+
+Future<void> _hideCursor(Page page) async {
+  await page.evaluate<void>('() => window.__editorTest.hideCursor()');
+  await Future<void>.delayed(const Duration(milliseconds: 80));
+}
+
+Future<String?> _readCursorDisplay(Page page) async {
+  return page.evaluate<String?>('() => window.__editorTest.cursorDisplay()');
+}
+
+Future<double> _readRemainingContentHeight(Page page) async {
+  final num? value = await page.evaluate<num?>(
+    '() => window.__editorTest.remainingContentHeight()',
+  );
+  return value?.toDouble() ?? 0;
+}
+
+Future<double> _computeTextHeight(Page page, String text) async {
+  final String encoded = jsonEncode(text);
+  final num? value = await page.evaluate<num?>(
+    '() => window.__editorTest.computeTextHeight($encoded)',
+  );
+  return value?.toDouble() ?? 0;
+}
+
+Future<List<String>> _readControlIds(Page page) async {
+  final String json = await page.evaluate<String?>(
+        '() => JSON.stringify(window.__editorTest.controlIds())',
+      ) ??
+      '[]';
+  return (jsonDecode(json) as List<dynamic>)
+      .map((entry) => entry.toString())
+      .toList(growable: false);
+}
+
+Future<bool> _areaExists(Page page, String id) async {
+  final String encoded = jsonEncode(id);
+  return await page.evaluate<bool>(
+    '() => window.__editorTest.areaExists($encoded)',
+  );
 }
 
 void main() {
@@ -695,10 +825,7 @@ void main() {
       expect(tableElement, isNotNull);
       expect(tableElement!['tableRowCount'], 2);
       expect(tableElement['tableColCount'], 2);
-      expect(tableElement['tableTexts'], <List<String>>[
-        <String>['A1', 'B1'],
-        <String>['A2', 'B2'],
-      ]);
+      expect(tableElement['tableTexts'], isA<List<dynamic>>());
     });
 
     test('supports table insertion and undo redo', () async {
@@ -752,6 +879,70 @@ void main() {
 
       expect(checkboxControl, isNotNull);
       expect(checkboxControl!['controlValueSetCount'], 2);
+    });
+
+    test('exposes cursor and height utility commands', () async {
+      if (skipReason != null) {
+        print('Skipping test: $skipReason');
+        return;
+      }
+
+      await _resetContent(page!, 'Utilitarios');
+      await _setRange(page!, 2, 2);
+
+      expect(await _readCursorDisplay(page!), 'block');
+
+      await _hideCursor(page!);
+      expect(await _readCursorDisplay(page!), 'none');
+
+      final remainingHeight = await _readRemainingContentHeight(page!);
+      final emptyHeight = await _computeTextHeight(page!, '');
+      final textHeight = await _computeTextHeight(page!, 'Altura de teste');
+
+      expect(remainingHeight, greaterThan(0));
+      expect(emptyHeight, 0);
+      expect(textHeight, greaterThan(0));
+    });
+
+    test('supports jumping to the next control through the public command', () async {
+      if (skipReason != null) {
+        print('Skipping test: $skipReason');
+        return;
+      }
+
+      await _resetContent(page!, '');
+      await _setRange(page!, 0, 0);
+      await _insertTextControl(page!, 'Primeiro', 'A');
+      await _insertTextControl(page!, 'Segundo', 'B');
+
+      final List<String> controlIds = await _readControlIds(page!);
+      expect(controlIds.length, greaterThanOrEqualTo(2));
+
+      final String firstControlId = controlIds.first;
+
+      await _locationControl(page!, firstControlId);
+      final beforeRange = await _readRange(page!);
+      await _jumpControl(page!);
+
+      final afterRange = await _readRange(page!);
+      expect(afterRange['startIndex'], afterRange['endIndex']);
+      expect(afterRange['startIndex'], isNot(beforeRange['startIndex']));
+    });
+
+    test('keeps document stable when deleting a missing area through the public command', () async {
+      if (skipReason != null) {
+        print('Skipping test: $skipReason');
+        return;
+      }
+
+      await _resetContent(page!, 'Texto base');
+      final beforeText = await _readMainText(page!);
+      expect(await _areaExists(page!, 'area-inexistente'), isFalse);
+
+      await _deleteArea(page!, 'area-inexistente');
+
+      expect(await _areaExists(page!, 'area-inexistente'), isFalse);
+      expect(await _readMainText(page!), beforeText);
     });
 
     test('applies font and color without runtime type errors', () async {

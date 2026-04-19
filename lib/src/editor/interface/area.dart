@@ -106,3 +106,9 @@ class ILocationAreaOption {
 		this.isAppendLastLineBreak,
 	});
 }
+
+class IDeleteAreaOption {
+	String? id;
+
+	IDeleteAreaOption({this.id});
+}

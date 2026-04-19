@@ -1,0 +1,13 @@
+{
+  // "files.exclude": {
+  //   "**/referencias": true
+  // },
+  // "search.exclude": {
+  //   "**/referencias": true
+  // },
+  // "files.watcherExclude": {
+  //   "**/referencias/**": true
+  // },
+  "js/ts.tsserver.experimental.enableProjectDiagnostics": false
+  
+}

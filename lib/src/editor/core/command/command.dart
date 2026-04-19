@@ -3,6 +3,7 @@ import 'dart:html';
 import '../../dataset/enum/common.dart';
 import '../../dataset/enum/editor.dart';
 import '../../dataset/enum/list.dart';
+import '../../dataset/enum/observer.dart';
 import '../../dataset/enum/row.dart';
 import '../../dataset/enum/table/table.dart';
 import '../../dataset/enum/title.dart';
@@ -32,7 +33,7 @@ class Command {
 
   final CommandAdapt _adapt;
     Future<void> Function([ICopyOption? payload])? _copyOverride;
-      void Function(String markdown)? _insertMarkdownHandler;
+    void Function(String markdown)? _insertMarkdownHandler;
 
   // Global commands -------------------------------------------------------
   void executeMode(EditorMode payload) => _adapt.mode(payload);
@@ -92,6 +93,8 @@ class Command {
       _adapt.forceUpdate(options);
 
   void executeBlur() => _adapt.blur();
+
+    void executeHideCursor() => _adapt.hideCursor();
 
   void executeUndo() => _adapt.undo();
 
@@ -269,6 +272,9 @@ class Command {
   void executeSetAreaProperties(ISetAreaPropertiesOption payload) =>
       _adapt.setAreaProperties(payload);
 
+  void executeDeleteArea([IDeleteAreaOption? options]) =>
+      _adapt.deleteArea(options);
+
   void executeLocationArea(String areaId, [ILocationAreaOption? options]) =>
       _adapt.locationArea(areaId, options);
 
@@ -353,12 +359,20 @@ class Command {
 
   void executeInsertControl(IElement payload) => _adapt.insertControl(payload);
 
+    void executeJumpControl([MoveDirection? direction]) =>
+            _adapt.jumpControl(
+                direction == null ? null : IInitNextControlOption(direction: direction),
+            );
+
   void executeUpdateOptions(IUpdateOption payload) =>
       _adapt.updateOptions(payload);
 
   void executeInsertTitle(IElement payload) => _adapt.insertTitle(payload);
 
   void executeFocus([IFocusOption? options]) => _adapt.focus(options);
+
+    double executeComputeElementListHeight(List<IElement> payload) =>
+            _adapt.computeElementListHeight(payload);
 
   // Fetch operations ------------------------------------------------------
   Future<ICatalog?> getCatalog() => _adapt.getCatalog();
@@ -386,6 +400,8 @@ class Command {
   Future<int> getWordCount() => _adapt.getWordCount();
 
   IElementPosition? getCursorPosition() => _adapt.getCursorPosition();
+
+    double getRemainingContentHeight() => _adapt.getRemainingContentHeight();
 
   IRange getRange() => _adapt.getRange();
 

@@ -25,6 +25,7 @@ continuar portando o que falta de C:\MyDartProjects\canvas-editor-port\typescrip
 - O repaint rápido do editor voltou a refletir mudanças de estilo sem recomputar todo o layout: `draw.dart` agora sincroniza os `IRowElement` em cache antes de `render(isCompute: false)`, corrigindo o caso em que a cor só aparecia depois de outro comando como `bold`.
 - O fluxo de impressão foi realinhado com o TypeScript original em `print.dart`, removendo o cast inválido de `Window` em iframes cross-frame e restaurando a montagem do documento de impressão por `iframe` oculto.
 - A impressão voltou a funcionar no navegador sem `TypeError`: `print.dart` passou a chamar `contentWindow`, `document`, `focus()` e `print()` via JS interop no iframe real.
+- O pacote de APIs públicas do `Command` avançou mais uma etapa: o Dart agora expõe `executeHideCursor`, `executeDeleteArea`, `executeJumpControl`, `executeComputeElementListHeight` e `getRemainingContentHeight`, reduzindo a defasagem frente ao upstream TypeScript.
 - O seed inicial da demo deixou de exibir `\\n` literal no cabeçalho: `lib/src/editor.dart` agora usa quebras de linha reais no documento de exemplo.
 - O E2E deixou de ser apenas um smoke test de canvas vazio: `test/e2e/editor_smoke_test.dart` agora sobe a shell real, inicializa o editor completo e valida boot, digitação, backspace, setas, expansão de seleção e `Enter`.
 - `.gitignore` foi atualizado para ignorar artefatos locais adicionais, incluindo `build/`.
@@ -89,19 +90,20 @@ continuar portando o que falta de C:\MyDartProjects\canvas-editor-port\typescrip
 - A suíte E2E agora cobre copy/paste e undo/redo de seleção textual, colagem de LaTeX via clipboard interno do editor, importação de tabela HTML, inserção programática de tabela e cenários básicos de controles embutidos.
 - A suíte E2E também valida aplicação de fonte e cor sobre seleção textual, protegendo o fluxo da toolbar contra regressões de tipagem em runtime.
 - A suíte E2E agora também cobre o caminho da própria toolbar de cor, inclusive o cenário em que o picker nativo faz o editor perder foco antes da aplicação da cor.
+- A suíte E2E passou a cobrir também as APIs públicas recém-expostas para cursor, cálculo utilitário de altura, navegação programática entre controles e exclusão segura de área inexistente.
 - `pubspec.yaml` mantém as dependências necessárias para esse fluxo de E2E com `puppeteer`, `shelf` e `shelf_static`.
 - `.github/copilot-instructions.md` foi adicionada para registrar convenções operacionais do repositório durante o port.
 
 ## Pendências Atuais Confirmadas
 - A seleção/edição de imagem ainda não está em paridade com o original. O TypeScript já expõe `executeSetImageCrop` e `executeSetImageCaption`, além de renderizar `imgCrop` e `imgCaption` em `ImageParticle`; no Dart, `command.dart`, `command_adapt.dart`, `interface/element.dart` e `image_particle.dart` ainda não expõem nem persistem crop/legenda, então a seleção de imagem segue parcial.
 - O previewer de imagem e a opção `imagePreviewerDisabled` já existem no Dart, mas a parte nova de crop, legenda e edição rica por seleção ainda não foi portada.
-- APIs públicas novas do upstream ainda ausentes no Dart: `executeHideCursor`, `executeDeleteArea`, `executeClearGraffiti`, `executeJumpControl`, `executeComputeElementListHeight` e `getRemainingContentHeight`.
+- Das APIs públicas recentes do upstream, a lacuna principal que ainda resta explicitamente aberta no Dart é `executeClearGraffiti`; `executeHideCursor`, `executeDeleteArea`, `executeJumpControl`, `executeComputeElementListHeight` e `getRemainingContentHeight` já possuem contraparte.
 - O modo graffiti ainda não foi portado. O changelog e o `CommandAdapt.ts` do TypeScript mostram suporte dedicado e limpeza via API; no Dart não há partículas, eventos nem comando equivalente.
 - Suporte a `label` ainda falta no núcleo Dart. Não encontrei `ElementType.label`, `LabelParticle` nem eventos correlatos, então interações como clique em label associado continuam sem contraparte.
 - A renderização de marcadores de espaço em branco (`whiteSpace`) ainda não foi portada. O upstream ganhou partícula/comportamento específico e o Dart ainda não expõe esse fluxo.
-- O cálculo utilitário de altura ainda está atrás do upstream: o TypeScript tem `computeElementListHeight()` e `getRemainingContentHeight()`, úteis para paginação e composição externa, e o Dart ainda não oferece essas entradas.
 - Ainda faltam validações mais profundas de paridade em cenários avançados de tabela, controles embutidos complexos e fluxos longos de edição contínua.
 - O E2E melhorou bastante, mas ainda não cobre drag-selection real com mouse, contexto de tabela mais profundo, date picker interativo, menu de contexto ponta a ponta e os novos cenários de imagem/preview/crop/caption.
+- A criação/edição rica de áreas ainda precisa de validação funcional mais profunda na shell web; nesta rodada a API pública de exclusão foi portada e coberta apenas no caminho seguro de no-op para área inexistente.
 - O port funcional da demo web está bem mais próximo do TypeScript, mas ainda há espaço para acabamento fino de comportamento visual, atalhos e estados ativos da toolbar.
 
 ## Reclassificação das Pendências Antigas
@@ -112,7 +114,7 @@ continuar portando o que falta de C:\MyDartProjects\canvas-editor-port\typescrip
 
 ## Próximas Ações
 - Priorizar a paridade de imagem: portar `imgCrop`, `imgCaption`, comandos de edição e o fluxo visual de seleção/edição de imagem do TypeScript.
-- Portar as APIs públicas mais recentes do `Command`/`CommandAdapt` para reduzir a defasagem funcional do editor Dart perante o upstream.
+- Portar `executeClearGraffiti` e depois revisar se ainda existe alguma API pública recente do `Command`/`CommandAdapt` faltando no Dart.
 - Mapear e portar `graffiti`, `label` e `whiteSpace`, que hoje são os três blocos funcionais mais claros ainda ausentes no núcleo Dart.
 - Expandir o E2E para cobrir seleção real com mouse, menu de contexto e fluxos interativos que ainda dependem mais do DOM.
 - Cobrir preview e importação HTML mais rica de LaTeX, para garantir que a mesma integridade de `laTexSVG`, dimensões e renderização continue válida fora da inserção direta e da colagem interna.

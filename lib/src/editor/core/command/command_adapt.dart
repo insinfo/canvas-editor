@@ -233,6 +233,10 @@ class CommandAdapt {
     draw.getCursor().recoveryCursor();
   }
 
+  void hideCursor() {
+    draw.getCursor().recoveryCursor();
+  }
+
   void undo() {
     if (_isReadonly()) {
       return;
@@ -1803,6 +1807,61 @@ class CommandAdapt {
     return cursorPosition as IElementPosition?;
   }
 
+  double getRemainingContentHeight() {
+    if (draw.getIsPagingMode() != true) {
+      return 0;
+    }
+    final List<dynamic> pageRowList = draw.getPageRowList() as List<dynamic>;
+    if (pageRowList.isEmpty) {
+      return 0;
+    }
+    final List<dynamic> rowList =
+        (pageRowList.last as List<dynamic>? ?? <dynamic>[]).toList();
+    final double usedHeight = rowList.fold<double>(0, (double previous, dynamic row) {
+      final double height = (row?.height as num?)?.toDouble() ?? 0;
+      final double offsetY = (row?.offsetY as num?)?.toDouble() ?? 0;
+      return previous + height + offsetY;
+    });
+    final double remaining =
+        (draw.getHeight() as num).toDouble() -
+        (draw.getMainOuterHeight() as num).toDouble() -
+        usedHeight;
+    return remaining > 0 ? remaining : 0;
+  }
+
+  double computeElementListHeight(List<IElement> elementList) {
+    if (elementList.isEmpty) {
+      return 0;
+    }
+    final double innerWidth = (draw.getInnerWidth() as num).toDouble();
+    if (innerWidth <= 0) {
+      return 0;
+    }
+    final List<IElement> targetElementList =
+        element_utils.cloneElementList(elementList);
+    element_utils.formatElementList(
+      targetElementList,
+      element_utils.FormatElementListOption(
+        editorOptions: options,
+        isHandleFirstElement: false,
+      ),
+    );
+    final List<IElement> surroundElementList =
+        element_utils.pickSurroundElementList(targetElementList);
+    final List<dynamic> rowList = draw.computeRowList(
+          IComputeRowListPayload(
+            innerWidth: innerWidth,
+            elementList: targetElementList,
+            surroundElementList: surroundElementList,
+          ),
+        ) as List<dynamic>;
+    return rowList.fold<double>(0, (double previous, dynamic row) {
+      final double height = (row?.height as num?)?.toDouble() ?? 0;
+      final double offsetY = (row?.offsetY as num?)?.toDouble() ?? 0;
+      return previous + height + offsetY;
+    });
+  }
+
   IRange getRange() {
     return deepClone(range.getRange()) as IRange;
   }
@@ -3161,6 +3220,34 @@ class CommandAdapt {
     draw.getArea().setAreaProperties(payload);
   }
 
+  void deleteArea([IDeleteAreaOption? options]) {
+    final String? areaId = options?.id ?? draw.getArea().getActiveAreaId();
+    if (areaId == null) {
+      return;
+    }
+    final IGetAreaValueResult<IElement>? areaInfo =
+        draw.getArea().getAreaValue(IGetAreaValueOption(id: areaId));
+    if (areaInfo == null || areaInfo.value.isEmpty) {
+      return;
+    }
+    final dynamic context = draw.getArea().getContextByAreaId(areaId);
+    if (context == null) {
+      return;
+    }
+    final IRange areaRange = context['range'] as IRange;
+    final List<IElement> elementList =
+        _castElementList(draw.getOriginalMainElementList());
+    final int deleteCount = areaInfo.value.length;
+    draw.spliceElementList(
+      elementList,
+      areaRange.startIndex,
+      deleteCount,
+      <IElement>[],
+      ISpliceElementListOption(isIgnoreDeletedRule: true),
+    );
+    draw.render(IDrawOption(isSetCursor: false));
+  }
+
   void locationArea(String areaId, [ILocationAreaOption? options]) {
     if (options?.isAppendLastLineBreak == true &&
         options?.position == LocationPosition.outerAfter) {
@@ -3195,6 +3282,10 @@ class CommandAdapt {
           cursorPosition: elementPosition,
           direction: MoveDirection.up,
         );
+  }
+
+  void jumpControl([IInitNextControlOption? option]) {
+    draw.getControl().initNextControl(option);
   }
 
   // ---------------------------------------------------------------------------
