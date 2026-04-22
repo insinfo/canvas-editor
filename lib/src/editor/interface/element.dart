@@ -9,6 +9,7 @@ import './area.dart';
 import './block.dart';
 import './checkbox.dart';
 import './control.dart';
+import './label.dart';
 import './radio.dart';
 import './text.dart';
 import './title.dart';
@@ -18,7 +19,9 @@ import './table/tr.dart';
 export './area.dart';
 export './block.dart';
 export './checkbox.dart';
+export './common.dart';
 export './control.dart';
+export './label.dart';
 export './radio.dart';
 export './text.dart';
 export './title.dart';
@@ -294,6 +297,50 @@ class IDateElement {
   });
 }
 
+class IImageCrop {
+  num x;
+  num y;
+  num width;
+  num height;
+
+  IImageCrop({
+    required this.x,
+    required this.y,
+    required this.width,
+    required this.height,
+  });
+}
+
+class IImageCaption {
+  String value;
+  String? color;
+  String? font;
+  num? size;
+  num? top;
+
+  IImageCaption({
+    required this.value,
+    this.color,
+    this.font,
+    this.size,
+    this.top,
+  });
+}
+
+class IImgCaptionOption {
+  final String? color;
+  final String? font;
+  final num? size;
+  final num? top;
+
+  const IImgCaptionOption({
+    this.color,
+    this.font,
+    this.size,
+    this.top,
+  });
+}
+
 class IImageRule {
   bool? imgToolDisabled;
 
@@ -305,10 +352,14 @@ class IImageRule {
 class IImageBasic {
   ImageDisplay? imgDisplay;
   Map<String, num>? imgFloatPosition;
+  IImageCrop? imgCrop;
+  IImageCaption? imgCaption;
 
   IImageBasic({
     this.imgDisplay,
     this.imgFloatPosition,
+    this.imgCrop,
+    this.imgCaption,
   });
 }
 
@@ -318,6 +369,10 @@ class IImageElement implements IImageBasic, IImageRule {
   ImageDisplay? imgDisplay;
   @override
   Map<String, num>? imgFloatPosition;
+  @override
+  IImageCrop? imgCrop;
+  @override
+  IImageCaption? imgCaption;
 
   // IImageRule
   @override
@@ -326,6 +381,8 @@ class IImageElement implements IImageBasic, IImageRule {
   IImageElement({
     this.imgDisplay,
     this.imgFloatPosition,
+    this.imgCrop,
+    this.imgCaption,
     this.imgToolDisabled,
   });
 }
@@ -352,6 +409,16 @@ class IAreaElement {
   });
 }
 
+class ILabelElement {
+  String? labelId;
+  ILabelStyle? label;
+
+  ILabelElement({
+    this.labelId,
+    this.label,
+  });
+}
+
 class IElement
     implements
         IElementBasic,
@@ -371,7 +438,8 @@ class IElement
         IBlockElement,
         ITitleElement,
         IListElement,
-        IAreaElement {
+        IAreaElement,
+        ILabelElement {
   // IElementBasic
   @override
   String? id;
@@ -500,6 +568,10 @@ class IElement
   @override
   Map<String, num>? imgFloatPosition;
   @override
+  IImageCrop? imgCrop;
+  @override
+  IImageCaption? imgCaption;
+  @override
   bool? imgToolDisabled;
 
   // IBlockElement
@@ -531,6 +603,12 @@ class IElement
   int? areaIndex;
   @override
   IArea? area;
+
+  // ILabelElement
+  @override
+  String? labelId;
+  @override
+  ILabelStyle? label;
 
   IElement({
     // IElementBasic
@@ -597,6 +675,8 @@ class IElement
     // IImageElement
     this.imgDisplay,
     this.imgFloatPosition,
+    this.imgCrop,
+    this.imgCaption,
     this.imgToolDisabled,
     // IBlockElement
     this.block,
@@ -613,6 +693,9 @@ class IElement
     this.areaId,
     this.areaIndex,
     this.area,
+    // ILabelElement
+    this.labelId,
+    this.label,
   });
 }
 

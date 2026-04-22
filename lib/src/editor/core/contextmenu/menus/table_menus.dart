@@ -3,8 +3,27 @@ import '../../../dataset/enum/editor.dart';
 import '../../../dataset/enum/table/table.dart';
 import '../../../dataset/enum/vertical_align.dart';
 import '../../../interface/contextmenu/context_menu.dart';
+import '../../../interface/table/td.dart';
+import '../../../interface/table/tr.dart';
 
 final InternalContextMenuKeyTable _tableKey = InternalContextMenuKey.table;
+
+ITd? _currentTableTd(IContextMenuContext payload) {
+  final int? trIndex = payload.trIndex;
+  final int? tdIndex = payload.tdIndex;
+  final List<ITr>? trList = payload.tableElement?.trList;
+  if (trIndex == null || tdIndex == null || trList == null) {
+    return null;
+  }
+  if (trIndex < 0 || trIndex >= trList.length) {
+    return null;
+  }
+  final List<ITd> tdList = trList[trIndex].tdList;
+  if (tdIndex < 0 || tdIndex >= tdList.length) {
+    return null;
+  }
+  return tdList[tdIndex];
+}
 
 List<IRegisterContextMenu> get tableMenus => <IRegisterContextMenu>[
       IRegisterContextMenu(isDivider: true),
@@ -240,5 +259,35 @@ List<IRegisterContextMenu> get tableMenus => <IRegisterContextMenu>[
             payload.isInTable &&
             payload.options.mode != EditorMode.form,
         callback: (command, _) => command.executeCancelMergeTableCell(),
+      ),
+      IRegisterContextMenu(
+        key: _tableKey.splitVerticalCell,
+        i18nPath: 'contextmenu.table.splitVerticalCell',
+        icon: 'insert-right-col',
+        when: (payload) {
+          if (payload.isReadonly ||
+              !payload.isInTable ||
+              payload.options.mode == EditorMode.form) {
+            return false;
+          }
+          final ITd? td = _currentTableTd(payload);
+          return td != null && td.colspan > 1;
+        },
+        callback: (command, _) => command.executeSplitVerticalTableCell(),
+      ),
+      IRegisterContextMenu(
+        key: _tableKey.splitHorizontalCell,
+        i18nPath: 'contextmenu.table.splitHorizontalCell',
+        icon: 'insert-bottom-row',
+        when: (payload) {
+          if (payload.isReadonly ||
+              !payload.isInTable ||
+              payload.options.mode == EditorMode.form) {
+            return false;
+          }
+          final ITd? td = _currentTableTd(payload);
+          return td != null && td.rowspan > 1;
+        },
+        callback: (command, _) => command.executeSplitHorizontalTableCell(),
       ),
     ];

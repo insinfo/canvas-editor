@@ -5,6 +5,7 @@ import 'dart:html';
 import 'interface/editor.dart';
 import 'interface/element.dart';
 import 'interface/event_bus.dart';
+import 'interface/graffiti.dart';
 import 'interface/plugin.dart';
 import 'utils/element.dart' as element_utils;
 import 'utils/index.dart' as utils;
@@ -40,6 +41,9 @@ export 'dataset/enum/watermark.dart';
 
 export 'interface/element.dart';
 export 'interface/editor.dart';
+export 'interface/graffiti.dart';
+export 'interface/label.dart';
+export 'interface/white_space.dart';
 export 'interface/contextmenu/context_menu.dart';
 export 'interface/watermark.dart';
 export 'interface/block.dart';
@@ -117,25 +121,31 @@ class Editor implements IPluginHost {
     final List<IElement> headerElementList;
     final List<IElement> mainElementList;
     final List<IElement> footerElementList;
+    final List<IGraffitiData> graffitiData;
 
     if (data is List<IElement>) {
       headerElementList = <IElement>[];
       mainElementList = element_utils.cloneElementList(data);
       footerElementList = <IElement>[];
+      graffitiData = <IGraffitiData>[];
     } else if (data is IEditorData) {
       headerElementList = _cloneElementList(data.header);
       mainElementList = element_utils.cloneElementList(data.main);
       footerElementList = _cloneElementList(data.footer);
+      graffitiData = List<IGraffitiData>.from(data.graffiti ?? const <IGraffitiData>[]);
     } else {
       final dynamic cloned = utils.deepClone(data);
       if (cloned is List<IElement>) {
         headerElementList = <IElement>[];
         mainElementList = element_utils.cloneElementList(cloned);
         footerElementList = <IElement>[];
+        graffitiData = <IGraffitiData>[];
       } else if (cloned is IEditorData) {
         headerElementList = _cloneElementList(cloned.header);
         mainElementList = element_utils.cloneElementList(cloned.main);
         footerElementList = _cloneElementList(cloned.footer);
+        graffitiData =
+            List<IGraffitiData>.from(cloned.graffiti ?? const <IGraffitiData>[]);
       } else {
         throw ArgumentError(
             'Editor data must be an IEditorData or List<IElement>.');
@@ -168,6 +178,7 @@ class Editor implements IPluginHost {
         header: headerElementList,
         main: mainElementList,
         footer: footerElementList,
+        graffiti: graffitiData,
       ),
       listener,
       eventBus,

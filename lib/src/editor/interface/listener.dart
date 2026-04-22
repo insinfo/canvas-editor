@@ -116,3 +116,15 @@ class IImageMousedownPayload {
 }
 
 typedef IImageMousedown = void Function(IImageMousedownPayload payload);
+
+class ILabelMousedownPayload {
+  MouseEvent evt;
+  IElement element;
+
+  ILabelMousedownPayload({
+    required this.evt,
+    required this.element,
+  });
+}
+
+typedef ILabelMousedown = void Function(ILabelMousedownPayload payload);

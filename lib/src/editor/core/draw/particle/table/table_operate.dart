@@ -928,52 +928,28 @@ class TableOperate {
 			return;
 		}
 		final ITd td = tr.tdList[tdIndex];
-
-		colgroup.insert(
-			tdIndex + 1,
-			IColgroup(width: (_options.table?.defaultColMinWidth ?? 0).toDouble()),
-		);
-
-		for (int t = 0; t < trList.length; t++) {
-			final ITr currentTr = trList[t];
-			int d = 0;
-			while (d < currentTr.tdList.length) {
-				final ITd currentTd = currentTr.tdList[d];
-				if (currentTd.rowIndex != td.rowIndex) {
-					final int? colIndex = currentTd.colIndex;
-					if (colIndex != null && td.colIndex != null &&
-							colIndex <= td.colIndex! &&
-							colIndex + currentTd.colspan > td.colIndex!) {
-						currentTd.colspan += 1;
-					}
-					d++;
-					continue;
-				}
-				if (currentTd.id == td.id) {
-					final String tdId = getUUID();
-					currentTr.tdList.insert(
-						d + td.colspan,
-						ITd(
-							id: tdId,
-							rowspan: td.rowspan,
-							colspan: 1,
-							value: <IElement>[
-								IElement(
-									value: ZERO,
-									size: 16,
-									tableId: element.id,
-									trId: currentTr.id,
-									tdId: tdId,
-								),
-							],
-						),
-					);
-					d += td.colspan + 1;
-				} else {
-					d++;
-				}
-			}
+		if (td.colspan <= 1) {
+			return;
 		}
+		final String tdId = getUUID();
+		tr.tdList.insert(
+			tdIndex + 1,
+			ITd(
+				id: tdId,
+				rowspan: td.rowspan,
+				colspan: 1,
+				value: <IElement>[
+					IElement(
+						value: ZERO,
+						size: 16,
+						tableId: element.id,
+						trId: tr.id,
+						tdId: tdId,
+					),
+				],
+			),
+		);
+		td.colspan -= 1;
 
 		_draw.render();
 		_tableTool?.render();
@@ -1012,55 +988,34 @@ class TableOperate {
 			return;
 		}
 		final ITd td = tr.tdList[tdIndex];
-
-		int appendTrIndex = -1;
-		int t = 0;
-		while (t < trList.length) {
-			if (t == appendTrIndex) {
-				t++;
-				continue;
-			}
-			final ITr currentTr = trList[t];
-			int d = 0;
-			while (d < currentTr.tdList.length) {
-				final ITd currentTd = currentTr.tdList[d];
-				if (currentTd.id == td.id) {
-					final String trId = getUUID();
-					final String tdId = getUUID();
-					trList.insert(
-						t + td.rowspan,
-						ITr(
-							id: trId,
-							height: (_options.table?.defaultTrMinHeight ?? 0).toDouble(),
-							tdList: <ITd>[
-								ITd(
-									id: tdId,
-									rowspan: 1,
-									colspan: td.colspan,
-									value: <IElement>[
-										IElement(
-											value: ZERO,
-											size: 16,
-											tableId: element.id,
-											trId: trId,
-											tdId: tdId,
-										),
-									],
-								),
-							],
-						),
-					);
-					appendTrIndex = t + td.rowspan;
-				} else if (currentTd.rowIndex != null && currentTd.rowIndex! >= td.rowIndex! &&
-						currentTd.rowIndex! < td.rowIndex! + td.rowspan &&
-						currentTd.rowIndex! + currentTd.rowspan >=
-								td.rowIndex! + td.rowspan) {
-					currentTd.rowspan += 1;
-				}
-				d++;
-			}
-			t++;
+		if (td.rowspan <= 1) {
+			return;
 		}
+		final int originalRowspan = td.rowspan;
+		final int targetTrIndex = trIndex + originalRowspan - 1;
+		if (targetTrIndex < 0 || targetTrIndex >= trList.length) {
+			return;
+		}
+		final ITr targetTr = trList[targetTrIndex];
+		final String tdId = getUUID();
+		targetTr.tdList.insert(
+			td.colIndex ?? 0,
+			ITd(
+				id: tdId,
+				rowspan: 1,
+				colspan: td.colspan,
+				value: <IElement>[
+					IElement(
+						value: ZERO,
+						size: 16,
+						tableId: element.id,
+						trId: targetTr.id,
+						tdId: tdId,
+					),
+				],
+			),
+		);
+		td.rowspan -= 1;
 
 		_draw.render();
 		_tableTool?.render();

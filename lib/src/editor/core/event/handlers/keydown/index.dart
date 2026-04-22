@@ -5,7 +5,9 @@ import '../../../../dataset/enum/key_map.dart';
 import '../../../../utils/hotkey.dart';
 import 'backspace.dart';
 import 'delete.dart';
+import 'end.dart';
 import 'enter.dart';
+import 'home.dart';
 import 'left.dart';
 import 'right.dart';
 import 'tab.dart';
@@ -27,11 +29,23 @@ void keydown(KeyboardEvent evt, dynamic host) {
   } else if (key == KeyMap.enter.value) {
     enter(evt, host);
   } else if (key == KeyMap.left.value) {
-    left(evt, host);
+    if (isMod(evt)) {
+      home(evt, host);
+    } else {
+      left(evt, host);
+    }
   } else if (key == KeyMap.right.value) {
-    right(evt, host);
+    if (isMod(evt)) {
+      end(evt, host);
+    } else {
+      right(evt, host);
+    }
   } else if (key == KeyMap.up.value || key == KeyMap.down.value) {
     updown(evt, host);
+  } else if (key == KeyMap.home.value) {
+    home(evt, host);
+  } else if (key == KeyMap.end.value) {
+    end(evt, host);
   } else if (isMod(evt) && lowerKey == KeyMap.z.value) {
     if (draw.isReadonly() == true && draw.getMode() != EditorMode.form) {
       return;

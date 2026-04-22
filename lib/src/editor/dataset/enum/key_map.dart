@@ -6,6 +6,8 @@ enum KeyMap {
   right('ArrowRight'),
   up('ArrowUp'),
   down('ArrowDown'),
+  home('Home'),
+  end('End'),
   esc('Escape'),
   tab('Tab'),
   meta('Meta'),

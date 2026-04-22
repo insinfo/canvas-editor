@@ -101,6 +101,8 @@ class Control {
 
   List<IElement> filterAssistElement(List<IElement> elementList) {
     final List<IElement> filtered = <IElement>[];
+    final bool filterEmptyControl =
+        _options.modeRule?.print?.filterEmptyControl ?? true;
     for (int index = 0; index < elementList.length; index++) {
       final IElement element = elementList[index];
       if (element.type == ElementType.table && element.trList != null) {
@@ -164,8 +166,9 @@ class Control {
         }
       }
       if (element.controlComponent == ControlComponent.prefix ||
-             element.controlComponent == ControlComponent.postfix ||
-             element.controlComponent == ControlComponent.placeholder) {
+          element.controlComponent == ControlComponent.postfix ||
+          (filterEmptyControl &&
+              element.controlComponent == ControlComponent.placeholder)) {
         continue;
       }
       filtered.add(element);

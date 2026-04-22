@@ -10,10 +10,10 @@ import '../../dataset/enum/control.dart';
 import '../../dataset/enum/editor.dart';
 import '../../dataset/enum/element.dart';
 import '../../dataset/enum/row.dart';
-import '../../interface/common.dart';
 import '../../interface/draw.dart';
 import '../../interface/editor.dart';
 import '../../interface/element.dart';
+import '../../interface/graffiti.dart';
 import '../../interface/group.dart';
 import '../../interface/margin.dart';
 import '../../interface/position.dart';
@@ -42,6 +42,7 @@ import 'control/control.dart';
 import 'frame/background.dart';
 import 'frame/badge.dart';
 import 'frame/footer.dart';
+import 'graffiti/graffiti.dart';
 import 'frame/header.dart';
 import 'frame/line_number.dart';
 import 'frame/margin.dart';
@@ -57,6 +58,7 @@ import 'particle/checkbox_particle.dart';
 import 'particle/date/date_particle.dart';
 import 'particle/hyperlink_particle.dart';
 import 'particle/image_particle.dart';
+import 'particle/label_particle.dart';
 import 'particle/list_particle.dart';
 import 'particle/previewer/previewer.dart';
 import 'particle/latex/la_tex_particle.dart';
@@ -70,6 +72,7 @@ import 'particle/table/table_particle.dart';
 import 'particle/table/table_tool.dart';
 import 'particle/text_particle.dart';
 import 'particle/superscript_particle.dart';
+import 'particle/white_space_particle.dart';
 import '../observer/image_observer.dart';
 import 'richtext/highlight.dart';
 import 'richtext/strikeout.dart';
@@ -123,6 +126,7 @@ class Draw {
         _pageRowList = <List<IRow>>[],
         _badge = null,
         _area = null,
+        _graffiti = null,
         _workerManager = null {
     _initializeContainers();
     _position = Position(this);
@@ -138,8 +142,10 @@ class Draw {
     _search = Search(this);
     _control = Control(this);
     _textParticle = TextParticle(this);
+    _whiteSpaceParticle = WhiteSpaceParticle(this);
     _tableParticle = TableParticle(this);
     _imageParticle = ImageParticle(this);
+    _labelParticle = LabelParticle(this);
     _laTexParticle = LaTexParticle(this);
     _superscriptParticle = SuperscriptParticle();
     _subscriptParticle = SubscriptParticle();
@@ -158,6 +164,7 @@ class Draw {
     _placeholder = Placeholder(this);
     _badge = Badge(this);
     _area = Area(this);
+    _graffiti = Graffiti(this, data.graffiti);
     _previewer = Previewer(this);
     _imageObserver = ImageObserver();
     _tableTool = TableTool(this);
@@ -248,12 +255,14 @@ class Draw {
   dynamic _dateParticle;
   dynamic _imageObserver;
   dynamic _imageParticle;
+  dynamic _labelParticle;
   dynamic _checkboxParticle;
   dynamic _listParticle;
   dynamic _radioParticle;
   dynamic _separatorParticle;
   dynamic _pageBreakParticle;
   dynamic _textParticle;
+  dynamic _whiteSpaceParticle;
   dynamic _laTexParticle;
   dynamic _superscriptParticle;
   dynamic _subscriptParticle;
@@ -274,6 +283,7 @@ class Draw {
   final List<List<IRow>> _pageRowList;
   dynamic _badge;
   dynamic _area;
+  dynamic _graffiti;
   WorkerManager? _workerManager;
   Zone? _zone;
   IntersectionObserver? _lazyRenderObserver;
@@ -300,6 +310,7 @@ class Draw {
     _selectionObserver?.dispose();
     _mouseObserver?.dispose();
     (_tableTool as TableTool?)?.dispose();
+    (_graffiti as Graffiti?)?.dispose();
     _pageContainer.children.clear();
     _pageList.clear();
     _ctxList.clear();
@@ -470,7 +481,9 @@ class Draw {
   }
 
   bool isReadonly() {
-    return _mode == EditorMode.readonly || _mode == EditorMode.print;
+    return _mode == EditorMode.readonly ||
+      _mode == EditorMode.print ||
+      _mode == EditorMode.graffiti;
   }
 
   bool isDisabled() {
@@ -480,6 +493,8 @@ class Draw {
   bool isDesignMode() => _mode == EditorMode.design;
 
   bool isPrintMode() => _mode == EditorMode.print;
+
+  bool isGraffitiMode() => _mode == EditorMode.graffiti;
 
   Zone getZone() {
     _zone ??= Zone(this);
@@ -720,6 +735,8 @@ class Draw {
 
   Footer getFooter() => _footer;
 
+  Graffiti? getGraffiti() => _graffiti as Graffiti?;
+
   int getRowCount() => getRowList().length;
 
   IEditorData getOriginValue([dynamic options]) {
@@ -740,6 +757,7 @@ class Draw {
       header: List<IElement>.from(getHeaderElementList()),
       main: List<IElement>.from(mainElementList),
       footer: List<IElement>.from(getFooterElementList()),
+      graffiti: getGraffiti()?.getValue(),
     );
   }
 
@@ -766,6 +784,7 @@ class Draw {
         List<IElement>.from(originData.footer ?? const <IElement>[]),
         options: commonOption,
       ),
+      graffiti: originData.graffiti,
     );
     return IEditorResult(
       version: _packageVersion,
@@ -880,6 +899,15 @@ class Draw {
         ..addAll(footer);
       _footer.setElementList(List<IElement>.from(_footerElementList));
     }
+    if (payload is IEditorData) {
+      getGraffiti()?.setValue(payload.graffiti);
+    } else {
+      final dynamic rawGraffiti =
+          payload is Map ? payload['graffiti'] : payload?.graffiti;
+      if (rawGraffiti is List<IGraffitiData>) {
+        getGraffiti()?.setValue(rawGraffiti);
+      }
+    }
 
     (_historyManager as HistoryManager?)?.recovery();
     int? curIndex;
@@ -906,6 +934,9 @@ class Draw {
     _footerElementList
       ..clear()
       ..addAll(payload.footer ?? const <IElement>[]);
+    if (payload.graffiti != null) {
+      getGraffiti()?.setValue(payload.graffiti);
+    }
     _header.setElementList(List<IElement>.from(_headerElementList));
     _footer.setElementList(List<IElement>.from(_footerElementList));
   }
@@ -1530,6 +1561,7 @@ class Draw {
             prevRowElement?.metrics.boundingBoxDescent ?? 0;
       } else if (element.type == ElementType.image ||
           element.type == ElementType.latex) {
+        metrics.boundingBoxAscent = 0;
         if (element.imgDisplay == ImageDisplay.surround ||
             element.imgDisplay == ImageDisplay.floatTop ||
             element.imgDisplay == ImageDisplay.floatBottom) {
@@ -1555,8 +1587,29 @@ class Draw {
           metrics.width = elementWidth;
           metrics.height = elementHeight;
           metrics.boundingBoxDescent = elementHeight;
+          if (element.imgCaption?.value.isNotEmpty == true) {
+            final IImgCaptionOption imgCaptionOption =
+                _options.imgCaption ?? const IImgCaptionOption();
+            final double captionSize =
+                (element.imgCaption?.size ?? imgCaptionOption.size ?? 12)
+                    .toDouble();
+            final double captionTop =
+                (element.imgCaption?.top ?? imgCaptionOption.top ?? 5)
+                    .toDouble();
+            metrics.boundingBoxAscent = (captionSize + captionTop) * scale;
+          }
         }
-        metrics.boundingBoxAscent = 0;
+        } else if (element.type == ElementType.label) {
+        final IPadding padding = _options.label?.defaultPadding ??
+          IPadding(top: 4, right: 4, bottom: 4, left: 4);
+        ctx.font = getElementFont(element);
+        final ITextMetrics fontMetrics = textParticle!.measureText(ctx, element);
+        metrics.width =
+          fontMetrics.width + (padding.right + padding.left) * scale;
+        metrics.height = ((element.size ?? defaultSize).toDouble()) * scale;
+        metrics.boundingBoxDescent = 0;
+        metrics.boundingBoxAscent =
+          (padding.top + fontMetrics.actualBoundingBoxAscent) * scale;
       } else if (element.type == ElementType.table) {
         if (element.pagingId != null) {
           int tableIndex = i + 1;
@@ -2074,7 +2127,11 @@ class Draw {
       dateId: source.dateId,
       imgDisplay: source.imgDisplay,
       imgFloatPosition: source.imgFloatPosition,
+      imgCrop: source.imgCrop,
+      imgCaption: source.imgCaption,
       imgToolDisabled: source.imgToolDisabled,
+      labelId: source.labelId,
+      label: source.label,
       block: source.block,
       level: source.level,
       titleId: source.titleId,
@@ -2267,6 +2324,8 @@ class Draw {
     final bool groupDisabled = groupOption.disabled == true;
     final bool isDrawLineBreak =
         payload.isDrawLineBreak ?? (_options.lineBreak?.disabled != true);
+    final bool isDrawWhiteSpace =
+      payload.isDrawWhiteSpace ?? (_options.whiteSpace?.disabled != true);
     final List<IRow> rowList = payload.rowList;
     final List<IElementPosition> positionList = payload.positionList;
     final List<IElement> elementList = payload.elementList;
@@ -2282,6 +2341,7 @@ class Draw {
     final HyperlinkParticle? hyperlinkParticle =
         _hyperlinkParticle as HyperlinkParticle?;
     final ImageParticle? imageParticle = _imageParticle as ImageParticle?;
+    final LabelParticle? labelParticle = _labelParticle as LabelParticle?;
     final LaTexParticle? laTexParticle = _laTexParticle as LaTexParticle?;
     final TableParticle? tableParticle = _tableParticle as TableParticle?;
     final SuperscriptParticle? superscriptParticle =
@@ -2297,6 +2357,8 @@ class Draw {
     final RadioParticle? radioParticle = _radioParticle as RadioParticle?;
     final LineBreakParticle? lineBreakParticle =
         _lineBreakParticle as LineBreakParticle?;
+    final WhiteSpaceParticle? whiteSpaceParticle =
+      _whiteSpaceParticle as WhiteSpaceParticle?;
     final Control? control = _control as Control?;
     final Underline? underline = _underline as Underline?;
     final Strikeout? strikeout = _strikeout as Strikeout?;
@@ -2355,6 +2417,9 @@ class Draw {
         } else if (element.type == ElementType.hyperlink) {
           textParticle?.complete();
           hyperlinkParticle?.render(ctx, element, x, y + baselineOffset);
+        } else if (element.type == ElementType.label) {
+          textParticle?.complete();
+          labelParticle?.render(ctx, element, x, y + baselineOffset);
         } else if (element.type == ElementType.date) {
           if (preElement == null || preElement.dateId != element.dateId) {
             textParticle?.complete();
@@ -2427,6 +2492,10 @@ class Draw {
             curRow.isWidthNotEnough != true &&
             j == curRow.elementList.length - 1) {
           lineBreakParticle?.render(ctx, element, x, y + curRow.height / 2);
+        }
+
+        if (isDrawWhiteSpace && regular.whiteSpaceReg.hasMatch(element.value)) {
+          whiteSpaceParticle?.render(ctx, element, x, y + curRow.height / 2);
         }
 
         final bool hasCurrentBorder = element.control?.border == true;
@@ -2700,7 +2769,9 @@ class Draw {
     ctx.globalAlpha = zone.isMainActive() ? 1 : inactiveAlpha;
 
     _clearPage(pageNo);
-    background?.render(ctx, pageNo);
+    if (!isPrintMode || _options.modeRule?.print?.backgroundDisabled != true) {
+      background?.render(ctx, pageNo);
+    }
 
     if (!isPrintMode) {
       area?.render(ctx, pageNo);
@@ -2782,6 +2853,9 @@ class Draw {
     lineNumber?.render(ctx, pageNo);
     pageBorder?.render(ctx);
     badge?.render(ctx, pageNo);
+    if (isGraffitiMode()) {
+      getGraffiti()?.render(ctx, pageNo);
+    }
     ctx.globalAlpha = 1;
   }
 
@@ -2928,6 +3002,9 @@ class Draw {
         ..addAll(pageRows);
       position?.computePositionList();
       area?.compute();
+      if (isGraffitiMode()) {
+        getGraffiti()?.compute();
+      }
       if (_mode != EditorMode.print) {
         final String? keyword = search?.getSearchKeyword();
         if (keyword != null && keyword.isNotEmpty) {
@@ -3207,6 +3284,9 @@ class Draw {
   dynamic getTableParticle() => _tableParticle;
   dynamic getTableOperate() => _tableOperate;
   dynamic getTextParticle() => _textParticle;
+
+  dynamic getWhiteSpaceParticle() => _whiteSpaceParticle;
+  dynamic getLabelParticle() => _labelParticle;
   dynamic getLineBreakParticle() => _lineBreakParticle;
   dynamic getHyperlinkParticle() => _hyperlinkParticle;
   dynamic getSearch() => _search;

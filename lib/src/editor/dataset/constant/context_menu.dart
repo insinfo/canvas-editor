@@ -82,4 +82,6 @@ class InternalContextMenuKeyTable {
 	final String deleteTable = 'tableDeleteTable';
 	final String mergeCell = 'tableMergeCell';
 	final String cancelMergeCell = 'tableCancelMergeCell';
+	final String splitVerticalCell = 'tableSplitVerticalCell';
+	final String splitHorizontalCell = 'tableSplitHorizontalCell';
 }

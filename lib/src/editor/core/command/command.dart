@@ -96,6 +96,8 @@ class Command {
 
     void executeHideCursor() => _adapt.hideCursor();
 
+    void executeClearGraffiti() => _adapt.clearGraffiti();
+
   void executeUndo() => _adapt.undo();
 
   void executeRedo() => _adapt.redo();
@@ -218,6 +220,11 @@ class Command {
       _adapt.replaceImageElement(payload);
 
   void executeSaveAsImageElement() => _adapt.saveAsImageElement();
+
+  void executeSetImageCrop(IImageCrop crop) => _adapt.setImageCrop(crop);
+
+  void executeSetImageCaption(IImageCaption imgCaption) =>
+      _adapt.setImageCaption(imgCaption);
 
   void executeChangeImageDisplay(IElement element, ImageDisplay display) =>
       _adapt.changeImageDisplay(element, display);

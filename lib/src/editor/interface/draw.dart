@@ -66,6 +66,7 @@ class IDrawRowPayload {
   double innerWidth;
   EditorZone? zone;
   bool? isDrawLineBreak;
+  bool? isDrawWhiteSpace;
 
   IDrawRowPayload({
     required this.elementList,
@@ -76,6 +77,7 @@ class IDrawRowPayload {
     required this.innerWidth,
     this.zone,
     this.isDrawLineBreak,
+    this.isDrawWhiteSpace,
   });
 }
 

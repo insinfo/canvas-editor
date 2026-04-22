@@ -14,6 +14,7 @@ enum ElementType {
   latex,
   tab,
   date,
+  label,
   block,
   title,
   list

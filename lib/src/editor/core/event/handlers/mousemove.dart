@@ -2,6 +2,7 @@ import 'dart:html' as html;
 
 import '../../../dataset/enum/common.dart';
 import '../../../dataset/enum/control.dart';
+import '../../../dataset/enum/editor.dart';
 import '../../../dataset/enum/element.dart';
 import '../../../interface/draw.dart';
 import '../../../interface/element.dart';
@@ -11,6 +12,10 @@ import 'mouse_offset.dart';
 
 void mousemove(dynamic evt, dynamic host) {
   final dynamic draw = host.getDraw();
+  if (draw.getMode() == EditorMode.graffiti) {
+    host.isAllowSelection = false;
+    return;
+  }
   final offset = getMouseOffset(evt);
   final double offsetX = offset.x;
   final double offsetY = offset.y;

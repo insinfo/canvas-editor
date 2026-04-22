@@ -13,6 +13,7 @@ class ICurrentPosition {
   bool? isRadio;
   bool? isControl;
   bool? isImage;
+  bool? isLabel;
   bool? isTable;
   bool? isDirectHit;
   int? trIndex;
@@ -32,6 +33,7 @@ class ICurrentPosition {
     this.isRadio,
     this.isControl,
     this.isImage,
+    this.isLabel,
     this.isTable,
     this.isDirectHit,
     this.trIndex,
@@ -98,6 +100,7 @@ class IPositionContext {
   bool? isRadio;
   bool? isControl;
   bool? isImage;
+  bool? isLabel;
   bool? isDirectHit;
   int? index;
   int? trIndex;
@@ -112,6 +115,7 @@ class IPositionContext {
     this.isRadio,
     this.isControl,
     this.isImage,
+    this.isLabel,
     this.isDirectHit,
     this.index,
     this.trIndex,

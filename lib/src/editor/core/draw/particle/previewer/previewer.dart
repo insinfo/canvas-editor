@@ -318,6 +318,31 @@ class Previewer {
 			..src = _curElementSrc
 			..draggable = false;
 		imgContainer.append(img);
+		final DivElement cropLayer = DivElement()
+			..classes.add('$editorPrefix-image-crop-layer')
+			..style.display = 'none';
+		final DivElement cropSelection = DivElement()
+			..classes.add('$editorPrefix-image-crop-selection')
+			..style.display = 'none';
+		const List<String> cropHandleNames = <String>[
+			'n',
+			'ne',
+			'e',
+			'se',
+			's',
+			'sw',
+			'w',
+			'nw',
+		];
+		for (final String handleName in cropHandleNames) {
+			cropSelection.append(
+				DivElement()
+					..classes.add('$editorPrefix-image-crop-handle')
+					..dataset['handle'] = handleName,
+			);
+		}
+		cropLayer.append(cropSelection);
+		imgContainer.append(cropLayer);
 		_previewerImage = img;
 		previewerContainer.append(imgContainer);
 
@@ -325,14 +350,238 @@ class Previewer {
 		double translateY = 0;
 		double scaleSize = 1;
 		double rotateQuarter = 0;
+		bool cropMode = false;
+		bool cropDragging = false;
+		String? cropDragMode;
+		String? cropResizeHandle;
+		double cropPointerStartX = 0;
+		double cropPointerStartY = 0;
+		double cropInitialLeft = 0;
+		double cropInitialTop = 0;
+		double cropInitialWidth = 0;
+		double cropInitialHeight = 0;
+		double cropLeft = 0;
+		double cropTop = 0;
+		double cropWidth = 0;
+		double cropHeight = 0;
+		const double cropMinSize = 12;
 
 		final DivElement menuContainer = DivElement()
 			..classes.add('$editorPrefix-image-menu');
+		final ButtonElement cropToggle = ButtonElement()
+			..classes.addAll(<String>['image-crop-action', 'crop-toggle'])
+			..text = 'Recortar';
+		final ButtonElement cropApply = ButtonElement()
+			..classes.addAll(<String>['image-crop-action', 'crop-apply'])
+			..text = 'Aplicar'
+			..style.display = 'none';
+		final ButtonElement cropCancel = ButtonElement()
+			..classes.addAll(<String>['image-crop-action', 'crop-cancel'])
+			..text = 'Cancelar'
+			..style.display = 'none';
+
+		void updateCropSelection(
+			double left,
+			double top,
+			double width,
+			double height,
+		) {
+			cropLeft = left;
+			cropTop = top;
+			cropWidth = width;
+			cropHeight = height;
+			cropSelection
+				..style.display = 'block'
+				..style.left = '${left}px'
+				..style.top = '${top}px'
+				..style.width = '${width}px'
+				..style.height = '${height}px';
+		}
+
+		double clampCropValue(double value, double min, double max) {
+			if (max <= min) {
+				return min;
+			}
+			return math.max(min, math.min(max, value));
+		}
+
+		Point<double> getCropPointer(MouseEvent evt) {
+			final Rectangle<num> rect = cropLayer.getBoundingClientRect();
+			return Point<double>(
+				clampCropValue(
+					evt.client.x.toDouble() - rect.left,
+					0,
+					rect.width.toDouble(),
+				),
+				clampCropValue(
+					evt.client.y.toDouble() - rect.top,
+					0,
+					rect.height.toDouble(),
+				),
+			);
+		}
+
+		String cropCursorForHandle(String? handle) {
+			switch (handle) {
+				case 'n':
+				case 's':
+					return 'ns-resize';
+				case 'e':
+				case 'w':
+					return 'ew-resize';
+				case 'ne':
+				case 'sw':
+					return 'nesw-resize';
+				case 'nw':
+				case 'se':
+					return 'nwse-resize';
+				default:
+					return 'crosshair';
+			}
+		}
+
+		void beginCropInteraction(
+			String mode,
+			MouseEvent evt, {
+			String? handle,
+		}) {
+			final Point<double> pointer = getCropPointer(evt);
+			cropDragging = true;
+			cropDragMode = mode;
+			cropResizeHandle = handle;
+			cropPointerStartX = pointer.x;
+			cropPointerStartY = pointer.y;
+			cropInitialLeft = cropLeft;
+			cropInitialTop = cropTop;
+			cropInitialWidth = cropWidth;
+			cropInitialHeight = cropHeight;
+			if (mode == 'create') {
+				updateCropSelection(pointer.x, pointer.y, 1, 1);
+			}
+			previewerContainer.style.cursor =
+					mode == 'move' ? 'move' : cropCursorForHandle(handle);
+			evt.preventDefault();
+			evt.stopPropagation();
+		}
+
+		void syncCropLayer() {
+			final Rectangle<num> rect = img.getBoundingClientRect();
+			cropLayer
+				..style.width = '${rect.width.toDouble()}px'
+				..style.height = '${rect.height.toDouble()}px';
+		}
+
+		void syncCropSelectionFromElement() {
+			syncCropLayer();
+			final Rectangle<num> rect = img.getBoundingClientRect();
+			final double displayWidth = rect.width.toDouble();
+			final double displayHeight = rect.height.toDouble();
+			if (displayWidth <= 0 || displayHeight <= 0) {
+				return;
+			}
+			final IImageCrop? crop = _curShowElement?.imgCrop;
+			if (crop == null) {
+				updateCropSelection(0, 0, displayWidth, displayHeight);
+				return;
+			}
+			final double naturalWidth =
+					img.naturalWidth > 0 ? img.naturalWidth.toDouble() : displayWidth;
+			final double naturalHeight =
+					img.naturalHeight > 0 ? img.naturalHeight.toDouble() : displayHeight;
+			final double left = math.max(
+					0,
+					math.min(
+						displayWidth,
+						(crop.x.toDouble() / naturalWidth) * displayWidth,
+					),
+			);
+			final double top = math.max(
+					0,
+					math.min(
+						displayHeight,
+						(crop.y.toDouble() / naturalHeight) * displayHeight,
+					),
+			);
+			final double width = math.max(
+					1,
+					math.min(
+						displayWidth - left,
+						(crop.width.toDouble() / naturalWidth) * displayWidth,
+					),
+			);
+			final double height = math.max(
+					1,
+					math.min(
+						displayHeight - top,
+						(crop.height.toDouble() / naturalHeight) * displayHeight,
+					),
+			);
+			updateCropSelection(left, top, width, height);
+		}
+
+		void setCropMode(bool enabled) {
+			cropMode = enabled;
+			cropDragging = false;
+			cropDragMode = null;
+			cropResizeHandle = null;
+			previewerContainer.classes.toggle('crop-mode', enabled);
+			cropLayer.style.display = enabled ? 'block' : 'none';
+			cropSelection.style.display = enabled ? cropSelection.style.display : 'none';
+			cropToggle.style.display = enabled ? 'none' : 'inline-flex';
+			cropApply.style.display = enabled ? 'inline-flex' : 'none';
+			cropCancel.style.display = enabled ? 'inline-flex' : 'none';
+			previewerContainer.style.cursor = enabled ? 'crosshair' : 'auto';
+			if (enabled) {
+				translateX = 0;
+				translateY = 0;
+				scaleSize = 1;
+				rotateQuarter = 0;
+				_setPreviewerTransform(scaleSize, rotateQuarter, translateX, translateY);
+				syncCropSelectionFromElement();
+			}
+		}
+
+		void applyCropSelection() {
+			final Rectangle<num> rect = img.getBoundingClientRect();
+			final double displayWidth = rect.width.toDouble();
+			final double displayHeight = rect.height.toDouble();
+			if (displayWidth <= 0 || displayHeight <= 0) {
+				return;
+			}
+			final double selectionLeft = cropWidth <= 1 ? 0 : cropLeft;
+			final double selectionTop = cropHeight <= 1 ? 0 : cropTop;
+			final double selectionWidth = cropWidth <= 1 ? displayWidth : cropWidth;
+			final double selectionHeight = cropHeight <= 1 ? displayHeight : cropHeight;
+			final double naturalWidth =
+					img.naturalWidth > 0 ? img.naturalWidth.toDouble() : displayWidth;
+			final double naturalHeight =
+					img.naturalHeight > 0 ? img.naturalHeight.toDouble() : displayHeight;
+			final IImageCrop crop = IImageCrop(
+				x: ((selectionLeft / displayWidth) * naturalWidth).round(),
+				y: ((selectionTop / displayHeight) * naturalHeight).round(),
+				width: ((selectionWidth / displayWidth) * naturalWidth).round(),
+				height: ((selectionHeight / displayHeight) * naturalHeight).round(),
+			);
+			_curShowElement?.imgCrop = crop;
+			if (_curElement?.id == _curShowElement?.id) {
+				_curElement?.imgCrop = crop;
+			}
+			_draw.render(
+				IDrawOption(
+					isSetCursor: false,
+					isCompute: false,
+				),
+			);
+			_clearPreviewer();
+		}
 
 		final DivElement navigateContainer = DivElement()
 			..classes.add('image-navigate');
 		final Element imagePre = Element.tag('i')..classes.add('image-pre');
 		imagePre.onClick.listen((_) {
+			if (cropMode) {
+				setCropMode(false);
+			}
 			final int currentIndex = _imageList
 					.indexWhere((IElement el) => el.id == _curShowElement?.id);
 			if (currentIndex <= 0) {
@@ -355,6 +604,9 @@ class Previewer {
 
 		final Element imageNext = Element.tag('i')..classes.add('image-next');
 		imageNext.onClick.listen((_) {
+			if (cropMode) {
+				setCropMode(false);
+			}
 			final int currentIndex = _imageList
 					.indexWhere((IElement el) => el.id == _curShowElement?.id);
 			if (currentIndex < 0 || currentIndex >= _imageList.length - 1) {
@@ -418,6 +670,19 @@ class Previewer {
 					downloadFile(src, '$name.$extension');
 		});
 		menuContainer.append(imageDownload);
+		cropToggle.onClick.listen((_) {
+			setCropMode(true);
+		});
+		cropApply.onClick.listen((_) {
+			applyCropSelection();
+		});
+		cropCancel.onClick.listen((_) {
+			setCropMode(false);
+		});
+		menuContainer
+			..append(cropToggle)
+			..append(cropApply)
+			..append(cropCancel);
 
 		previewerContainer.append(menuContainer);
 		_previewerContainer = previewerContainer;
@@ -428,6 +693,9 @@ class Previewer {
 		bool allowDrag = false;
 
 		img.onMouseDown.listen((MouseEvent evt) {
+			if (cropMode) {
+				return;
+			}
 			allowDrag = true;
 			startX = evt.client.x.toDouble();
 			startY = evt.client.y.toDouble();
@@ -435,7 +703,108 @@ class Previewer {
 			evt.preventDefault();
 		});
 
+		cropSelection.onMouseDown.listen((MouseEvent evt) {
+			if (!cropMode) {
+				return;
+			}
+			final Element? target = evt.target as Element?;
+			final String? handle = target?.dataset['handle'];
+			if (handle != null) {
+				beginCropInteraction('resize', evt, handle: handle);
+				return;
+			}
+			beginCropInteraction('move', evt);
+		});
+
+		cropLayer.onMouseDown.listen((MouseEvent evt) {
+			if (!cropMode) {
+				return;
+			}
+			if (evt.target != cropLayer) {
+				return;
+			}
+			beginCropInteraction('create', evt);
+		});
+
 		previewerContainer.onMouseMove.listen((MouseEvent evt) {
+			if (cropMode && cropDragging) {
+				final Rectangle<num> rect = cropLayer.getBoundingClientRect();
+				final Point<double> pointer = getCropPointer(evt);
+				final double currentX = pointer.x;
+				final double currentY = pointer.y;
+				final double layerWidth = rect.width.toDouble();
+				final double layerHeight = rect.height.toDouble();
+				if (cropDragMode == 'move') {
+					final double maxLeft = math.max(0, layerWidth - cropInitialWidth);
+					final double maxTop = math.max(0, layerHeight - cropInitialHeight);
+					updateCropSelection(
+						clampCropValue(
+							cropInitialLeft + (currentX - cropPointerStartX),
+							0,
+							maxLeft,
+						),
+						clampCropValue(
+							cropInitialTop + (currentY - cropPointerStartY),
+							0,
+							maxTop,
+						),
+						cropInitialWidth,
+						cropInitialHeight,
+					);
+				} else if (cropDragMode == 'resize') {
+					double nextLeft = cropInitialLeft;
+					double nextTop = cropInitialTop;
+					double nextRight = cropInitialLeft + cropInitialWidth;
+					double nextBottom = cropInitialTop + cropInitialHeight;
+					final String handle = cropResizeHandle ?? 'se';
+					if (handle.contains('w')) {
+						nextLeft = clampCropValue(
+							cropInitialLeft + (currentX - cropPointerStartX),
+							0,
+							nextRight - cropMinSize,
+						);
+					}
+					if (handle.contains('e')) {
+						nextRight = clampCropValue(
+							cropInitialLeft +
+									cropInitialWidth +
+									(currentX - cropPointerStartX),
+							nextLeft + cropMinSize,
+							layerWidth,
+						);
+					}
+					if (handle.contains('n')) {
+						nextTop = clampCropValue(
+							cropInitialTop + (currentY - cropPointerStartY),
+							0,
+							nextBottom - cropMinSize,
+						);
+					}
+					if (handle.contains('s')) {
+						nextBottom = clampCropValue(
+							cropInitialTop +
+									cropInitialHeight +
+									(currentY - cropPointerStartY),
+							nextTop + cropMinSize,
+							layerHeight,
+						);
+					}
+					updateCropSelection(
+						nextLeft,
+						nextTop,
+						nextRight - nextLeft,
+						nextBottom - nextTop,
+					);
+				} else {
+					final double left = math.min(cropPointerStartX, currentX);
+					final double top = math.min(cropPointerStartY, currentY);
+					final double width = math.max(1, (cropPointerStartX - currentX).abs());
+					final double height = math.max(1, (cropPointerStartY - currentY).abs());
+					updateCropSelection(left, top, width, height);
+				}
+				evt.preventDefault();
+				return;
+			}
 			if (!allowDrag) {
 				return;
 			}
@@ -447,11 +816,21 @@ class Previewer {
 		});
 
 		previewerContainer.onMouseUp.listen((MouseEvent _) {
+			if (cropMode) {
+				cropDragging = false;
+				cropDragMode = null;
+				cropResizeHandle = null;
+				previewerContainer.style.cursor = 'crosshair';
+				return;
+			}
 			allowDrag = false;
 			previewerContainer.style.cursor = 'auto';
 		});
 
 		previewerContainer.onWheel.listen((WheelEvent evt) {
+			if (cropMode) {
+				return;
+			}
 			evt.preventDefault();
 			evt.stopPropagation();
 			if (evt.deltaY < 0) {

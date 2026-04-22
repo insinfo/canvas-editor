@@ -86,7 +86,11 @@ IElement _cloneElement(
     imgFloatPosition: source.imgFloatPosition == null
         ? null
         : Map<String, num>.from(source.imgFloatPosition!),
+    imgCrop: _cloneImageCrop(source.imgCrop),
+    imgCaption: _cloneImageCaption(source.imgCaption),
     imgToolDisabled: source.imgToolDisabled,
+    labelId: source.labelId,
+    label: _cloneLabelStyle(source.label),
     block: _cloneBlock(source.block),
     level: source.level,
     titleId: source.titleId,
@@ -320,6 +324,50 @@ IRadio? _cloneRadio(IRadio? source) {
     value: source.value,
     code: source.code,
     disabled: source.disabled,
+  );
+}
+
+IImageCrop? _cloneImageCrop(IImageCrop? source) {
+  if (source == null) {
+    return null;
+  }
+  return IImageCrop(
+    x: source.x,
+    y: source.y,
+    width: source.width,
+    height: source.height,
+  );
+}
+
+IImageCaption? _cloneImageCaption(IImageCaption? source) {
+  if (source == null) {
+    return null;
+  }
+  return IImageCaption(
+    value: source.value,
+    color: source.color,
+    font: source.font,
+    size: source.size,
+    top: source.top,
+  );
+}
+
+ILabelStyle? _cloneLabelStyle(ILabelStyle? source) {
+  if (source == null) {
+    return null;
+  }
+  return ILabelStyle(
+    color: source.color,
+    backgroundColor: source.backgroundColor,
+    borderRadius: source.borderRadius,
+    padding: source.padding == null
+        ? null
+        : IPadding(
+            top: source.padding!.top,
+            right: source.padding!.right,
+            bottom: source.padding!.bottom,
+            left: source.padding!.left,
+          ),
   );
 }
 
@@ -719,8 +767,16 @@ dynamic _getElementAttr(IElement element, String attr) {
       return element.imgDisplay;
     case 'imgFloatPosition':
       return element.imgFloatPosition;
+    case 'imgCrop':
+      return element.imgCrop;
+    case 'imgCaption':
+      return element.imgCaption;
     case 'imgToolDisabled':
       return element.imgToolDisabled;
+    case 'labelId':
+      return element.labelId;
+    case 'label':
+      return element.label;
     case 'block':
       return element.block;
     case 'level':
@@ -909,8 +965,20 @@ void _setElementAttr(IElement element, String attr, dynamic value) {
           ? null
           : Map<String, num>.from(value as Map<String, num>);
       break;
+    case 'imgCrop':
+      element.imgCrop = value as IImageCrop?;
+      break;
+    case 'imgCaption':
+      element.imgCaption = value as IImageCaption?;
+      break;
     case 'imgToolDisabled':
       element.imgToolDisabled = value as bool?;
+      break;
+    case 'labelId':
+      element.labelId = value as String?;
+      break;
+    case 'label':
+      element.label = value as ILabelStyle?;
       break;
     case 'block':
       element.block = value as IBlock?;

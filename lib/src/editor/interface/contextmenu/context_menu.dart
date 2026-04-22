@@ -141,6 +141,8 @@ class ContextmenuTableLang {
   String deleteTable;
   String mergeCell;
   String mergeCancelCell;
+  String splitVerticalCell;
+  String splitHorizontalCell;
   String verticalAlign;
   String verticalAlignTop;
   String verticalAlignMiddle;
@@ -171,6 +173,8 @@ class ContextmenuTableLang {
     required this.deleteTable,
     required this.mergeCell,
     required this.mergeCancelCell,
+    required this.splitVerticalCell,
+    required this.splitHorizontalCell,
     required this.verticalAlign,
     required this.verticalAlignTop,
     required this.verticalAlignMiddle,

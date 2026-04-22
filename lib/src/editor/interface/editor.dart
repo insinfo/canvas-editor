@@ -5,6 +5,7 @@ import './badge.dart';
 import './cursor.dart';
 import './element.dart';
 import './footer.dart';
+import './graffiti.dart';
 import './group.dart';
 import './header.dart';
 import './line_break.dart';
@@ -18,17 +19,20 @@ import './range.dart';
 import './separator.dart';
 import './table/table.dart';
 import './watermark.dart';
+import './white_space.dart';
 import './zone.dart';
 
 class IEditorData {
   List<IElement>? header;
   List<IElement> main;
   List<IElement>? footer;
+  List<IGraffitiData>? graffiti;
 
   IEditorData({
     this.header,
     required this.main,
     this.footer,
+    this.graffiti,
   });
 }
 
@@ -95,8 +99,12 @@ class IEditorOption {
   ILineBreakOption? lineBreak;
   ISeparatorOption? separator;
   ILineNumberOption? lineNumber;
+  ILabelOption? label;
   IPageBorderOption? pageBorder;
   IBadgeOption? badge;
+  IGraffitiOption? graffiti;
+  IWhiteSpaceOption? whiteSpace;
+  IImgCaptionOption? imgCaption;
   IModeRule? modeRule;
 
   IEditorOption({
@@ -162,8 +170,12 @@ class IEditorOption {
     this.lineBreak,
     this.separator,
     this.lineNumber,
+    this.label,
     this.pageBorder,
     this.badge,
+    this.graffiti,
+    this.whiteSpace,
+    this.imgCaption,
     this.modeRule,
   });
 }
@@ -205,6 +217,7 @@ class IUpdateOption {
   int? maxSize;
   double? defaultBasicRowMarginHeight;
   double? defaultRowMargin;
+  IGraffitiOption? graffiti;
   double? defaultTabWidth;
   String? underlineColor;
   String? strikeoutColor;
@@ -249,8 +262,10 @@ class IUpdateOption {
   ILineBreakOption? lineBreak;
   ISeparatorOption? separator;
   ILineNumberOption? lineNumber;
+  ILabelOption? label;
   IPageBorderOption? pageBorder;
   IBadgeOption? badge;
+  IWhiteSpaceOption? whiteSpace;
   IModeRule? modeRule;
 }
 
@@ -278,9 +293,13 @@ class IFocusOption {
 
 class IPrintModeRule {
   bool? imagePreviewerDisabled;
+  bool? backgroundDisabled;
+  bool? filterEmptyControl;
 
   IPrintModeRule({
     this.imagePreviewerDisabled,
+    this.backgroundDisabled,
+    this.filterEmptyControl,
   });
 }
 

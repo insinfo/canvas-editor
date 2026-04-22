@@ -67,6 +67,8 @@ class IRowElement extends IElement {
     String? dateId,
     ImageDisplay? imgDisplay,
     Map<String, num>? imgFloatPosition,
+    IImageCrop? imgCrop,
+    IImageCaption? imgCaption,
     bool? imgToolDisabled,
     IBlock? block,
     TitleLevel? level,
@@ -79,6 +81,8 @@ class IRowElement extends IElement {
     String? areaId,
     int? areaIndex,
     IArea? area,
+    String? labelId,
+    ILabelStyle? label,
   }) : super(
           id: id,
           type: type,
@@ -130,6 +134,8 @@ class IRowElement extends IElement {
           dateId: dateId,
           imgDisplay: imgDisplay,
           imgFloatPosition: imgFloatPosition,
+          imgCrop: imgCrop,
+          imgCaption: imgCaption,
           imgToolDisabled: imgToolDisabled,
           block: block,
           level: level,
@@ -142,6 +148,8 @@ class IRowElement extends IElement {
           areaId: areaId,
           areaIndex: areaIndex,
           area: area,
+          labelId: labelId,
+          label: label,
         );
 }
 

@@ -6,8 +6,11 @@ import '../dataset/constant/control.dart';
 import '../dataset/constant/cursor.dart';
 import '../dataset/constant/editor.dart';
 import '../dataset/constant/footer.dart';
+import '../dataset/constant/graffiti.dart';
 import '../dataset/constant/group.dart';
 import '../dataset/constant/header.dart';
+import '../dataset/constant/img_caption.dart';
+import '../dataset/constant/label.dart';
 import '../dataset/constant/line_break.dart';
 import '../dataset/constant/line_number.dart';
 import '../dataset/constant/page_border.dart';
@@ -19,16 +22,16 @@ import '../dataset/constant/separator.dart';
 import '../dataset/constant/table.dart';
 import '../dataset/constant/title.dart';
 import '../dataset/constant/watermark.dart';
+import '../dataset/constant/white_space.dart';
 import '../dataset/constant/zone.dart';
 import '../dataset/enum/editor.dart';
 import '../interface/background.dart';
 import '../interface/badge.dart';
-import '../interface/checkbox.dart';
-import '../interface/common.dart';
-import '../interface/control.dart';
 import '../interface/cursor.dart';
 import '../interface/editor.dart';
+import '../interface/element.dart';
 import '../interface/footer.dart';
+import '../interface/graffiti.dart';
 import '../interface/group.dart';
 import '../interface/header.dart';
 import '../interface/line_break.dart';
@@ -37,11 +40,10 @@ import '../interface/page_border.dart';
 import '../interface/page_break.dart';
 import '../interface/page_number.dart';
 import '../interface/placeholder.dart';
-import '../interface/radio.dart';
 import '../interface/separator.dart';
 import '../interface/table/table.dart';
-import '../interface/title.dart';
 import '../interface/watermark.dart';
+import '../interface/white_space.dart';
 import '../interface/zone.dart';
 
 IEditorOption mergeOption([IEditorOption? options]) {
@@ -70,9 +72,16 @@ IEditorOption mergeOption([IEditorOption? options]) {
       _mergeSeparatorOption(options?.separator);
   final ILineNumberOption lineNumberOptions =
       _mergeLineNumberOption(options?.lineNumber);
+    final ILabelOption labelOptions = _mergeLabelOption(options?.label);
   final IPageBorderOption pageBorderOptions =
       _mergePageBorderOption(options?.pageBorder);
   final IBadgeOption badgeOptions = _mergeBadgeOption(options?.badge);
+  final IGraffitiOption graffitiOptions =
+      _mergeGraffitiOption(options?.graffiti);
+    final IWhiteSpaceOption whiteSpaceOptions =
+      _mergeWhiteSpaceOption(options?.whiteSpace);
+  final IImgCaptionOption imgCaptionOptions =
+      _mergeImgCaptionOption(options?.imgCaption);
   final IModeRule modeRuleOption = _mergeModeRule(options?.modeRule);
 
   return IEditorOption(
@@ -141,9 +150,50 @@ IEditorOption mergeOption([IEditorOption? options]) {
     lineBreak: lineBreakOptions,
     separator: separatorOptions,
     lineNumber: lineNumberOptions,
+    label: labelOptions,
     pageBorder: pageBorderOptions,
     badge: badgeOptions,
+    graffiti: graffitiOptions,
+    whiteSpace: whiteSpaceOptions,
+    imgCaption: imgCaptionOptions,
     modeRule: modeRuleOption,
+  );
+}
+
+IGraffitiOption _mergeGraffitiOption(IGraffitiOption? option) {
+  return IGraffitiOption(
+    defaultLineColor:
+        option?.defaultLineColor ?? defaultGraffitiOption.defaultLineColor,
+    defaultLineWidth:
+        option?.defaultLineWidth ?? defaultGraffitiOption.defaultLineWidth,
+  );
+}
+
+IWhiteSpaceOption _mergeWhiteSpaceOption(IWhiteSpaceOption? option) {
+  return IWhiteSpaceOption(
+    disabled: option?.disabled ?? defaultWhiteSpaceOption.disabled,
+    color: option?.color ?? defaultWhiteSpaceOption.color,
+    radius: option?.radius ?? defaultWhiteSpaceOption.radius,
+  );
+}
+
+ILabelOption _mergeLabelOption(ILabelOption? option) {
+  return ILabelOption(
+    defaultColor: option?.defaultColor ?? defaultLabelOption.defaultColor,
+    defaultBackgroundColor: option?.defaultBackgroundColor ??
+        defaultLabelOption.defaultBackgroundColor,
+    defaultBorderRadius: option?.defaultBorderRadius ??
+        defaultLabelOption.defaultBorderRadius,
+    defaultPadding: option?.defaultPadding ?? defaultLabelOption.defaultPadding,
+  );
+}
+
+IImgCaptionOption _mergeImgCaptionOption(IImgCaptionOption? option) {
+  return IImgCaptionOption(
+    color: option?.color ?? defaultImgCaptionOption.color,
+    font: option?.font ?? defaultImgCaptionOption.font,
+    size: option?.size ?? defaultImgCaptionOption.size,
+    top: option?.top ?? defaultImgCaptionOption.top,
   );
 }
 
@@ -383,6 +433,12 @@ IModeRule _mergeModeRule(IModeRule? option) {
       imagePreviewerDisabled: option?.print?.imagePreviewerDisabled ??
           defaultModeRuleOption.print?.imagePreviewerDisabled ??
           false,
+      backgroundDisabled: option?.print?.backgroundDisabled ??
+          defaultModeRuleOption.print?.backgroundDisabled ??
+          false,
+      filterEmptyControl: option?.print?.filterEmptyControl ??
+          defaultModeRuleOption.print?.filterEmptyControl ??
+          true,
     ),
     readonly: IReadonlyModeRule(
       imagePreviewerDisabled: option?.readonly?.imagePreviewerDisabled ??

@@ -237,6 +237,19 @@ class CommandAdapt {
     draw.getCursor().recoveryCursor();
   }
 
+  void clearGraffiti() {
+    draw.getGraffiti()?.clear();
+    if (draw.isGraffitiMode() == true) {
+      draw.render(
+        IDrawOption(
+          isCompute: false,
+          isSetCursor: false,
+          isSubmitHistory: false,
+        ),
+      );
+    }
+  }
+
   void undo() {
     if (_isReadonly()) {
       return;
@@ -1688,6 +1701,39 @@ class CommandAdapt {
     downloadFile(element.value, '${element.id ?? getUUID()}.png');
   }
 
+  void setImageCrop(IImageCrop crop) {
+    final int startIndex = range.getRange().startIndex;
+    final List<IElement> elementList = _castElementList(draw.getElementList());
+    if (startIndex < 0 || startIndex >= elementList.length) {
+      return;
+    }
+    final IElement element = elementList[startIndex];
+    if (element.type != ElementType.image) {
+      return;
+    }
+    element.imgCrop = crop;
+    draw.render(
+      IDrawOption(
+        isSetCursor: false,
+        isCompute: false,
+      ),
+    );
+  }
+
+  void setImageCaption(IImageCaption imgCaption) {
+    final int startIndex = range.getRange().startIndex;
+    final List<IElement> elementList = _castElementList(draw.getElementList());
+    if (startIndex < 0 || startIndex >= elementList.length) {
+      return;
+    }
+    final IElement element = elementList[startIndex];
+    if (element.type != ElementType.image) {
+      return;
+    }
+    element.imgCaption = imgCaption;
+    draw.render(IDrawOption(isSetCursor: false));
+  }
+
   void changeImageDisplay(IElement element, ImageDisplay display) {
     if (element.imgDisplay == display) {
       return;
@@ -1707,8 +1753,9 @@ class CommandAdapt {
       if (currentPosition != null) {
         final dynamic pageNo = currentPosition.pageNo;
         final dynamic coordinate = currentPosition.coordinate;
-        final List<dynamic>? leftTop =
-            coordinate != null ? (coordinate.leftTop as List<dynamic>?) : null;
+        final List<dynamic>? leftTop = coordinate is Map
+            ? (coordinate['leftTop'] as List<dynamic>?)
+            : null;
         if (leftTop != null) {
           element.imgFloatPosition = <String, num>{
             'pageNo': _asNum(pageNo),

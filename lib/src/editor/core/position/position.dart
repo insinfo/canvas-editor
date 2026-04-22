@@ -6,7 +6,6 @@ import '../../dataset/enum/element.dart';
 import '../../dataset/enum/list.dart';
 import '../../dataset/enum/row.dart';
 import '../../dataset/enum/vertical_align.dart';
-import '../../interface/common.dart';
 import '../../interface/editor.dart';
 import '../../interface/element.dart';
 import '../../interface/position.dart';
@@ -45,6 +44,9 @@ class Position {
     final int? trIndex = positionContext.trIndex;
     final int? tdIndex = positionContext.tdIndex;
     if (index == null || trIndex == null || tdIndex == null) {
+      return <IElementPosition>[];
+    }
+    if (index < 0 || index >= sourceElementList.length) {
       return <IElementPosition>[];
     }
     final IElement tableElement = sourceElementList[index];
@@ -500,6 +502,7 @@ class Position {
                             ControlComponent.radio,
                     isControl: tdValueElement.controlId != null,
                     isImage: tablePosition.isImage,
+                    isLabel: tablePosition.isLabel,
                     isDirectHit: tablePosition.isDirectHit,
                     isTable: true,
                     tdIndex: d,
@@ -529,6 +532,13 @@ class Position {
             index: curPositionIndex,
             isDirectHit: true,
             isCheckbox: true,
+          );
+        }
+        if (element.type == ElementType.label) {
+          return ICurrentPosition(
+            index: curPositionIndex,
+            isDirectHit: true,
+            isLabel: true,
           );
         }
         if (element.type == ElementType.tab &&
@@ -862,6 +872,7 @@ class Position {
         isRadio: positionResult.isRadio ?? false,
         isControl: positionResult.isControl ?? false,
         isImage: positionResult.isImage ?? false,
+        isLabel: positionResult.isLabel ?? false,
         isDirectHit: positionResult.isDirectHit ?? false,
         index: positionResult.index,
         trIndex: positionResult.trIndex,

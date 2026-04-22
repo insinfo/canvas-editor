@@ -43,4 +43,6 @@ final RegExp punctuationReg = RegExp(
 	r'''[、，。？！；：……「」“”‘’*（）【】〔〕〖〗〘〙〚〛《》———﹝﹞–—\/·.,!?;:`~<>()[\]{}'"|]''',
 );
 
+final RegExp whiteSpaceReg = RegExp(r'\s');
+
 final RegExp startLineBreakReg = RegExp('^[$ZERO\n]');

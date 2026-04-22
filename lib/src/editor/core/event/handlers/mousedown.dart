@@ -81,6 +81,11 @@ void hitRadio(IElement element, dynamic draw) {
 
 void mousedown(dynamic evt, dynamic host) {
   final dynamic draw = host.getDraw();
+  if (draw.getMode() == EditorMode.graffiti) {
+    host.isAllowSelection = false;
+    host.isAllowDrag = false;
+    return;
+  }
   final bool isReadonly = draw.isReadonly() == true;
   final dynamic rangeManager = draw.getRange();
   final dynamic position = draw.getPosition();
@@ -132,6 +137,7 @@ void mousedown(dynamic evt, dynamic host) {
   final bool isCheckbox = positionResult.isCheckbox == true;
   final bool isRadio = positionResult.isRadio == true;
   final bool isImage = positionResult.isImage == true;
+  final bool isLabel = positionResult.isLabel == true;
   final bool isTable = positionResult.isTable == true;
   final int? tdValueIndex = positionResult.tdValueIndex;
   final int? hitLineStartIndex = positionResult.hitLineStartIndex;
@@ -156,6 +162,7 @@ void mousedown(dynamic evt, dynamic host) {
   final bool isDirectHitImage = isDirectHit && isImage;
   final bool isDirectHitCheckbox = isDirectHit && isCheckbox;
   final bool isDirectHitRadio = isDirectHit && isRadio;
+  final bool isDirectHitLabel = isDirectHit && isLabel;
 
   if (index >= 0) {
     int startIndex = curIndex;
@@ -254,6 +261,16 @@ void mousedown(dynamic evt, dynamic host) {
     }
   }
 
+  if (isDirectHitLabel) {
+    final dynamic eventBus = draw.getEventBus();
+    if (eventBus?.isSubscribe('labelMousedown') == true) {
+      eventBus.emit('labelMousedown', <String, dynamic>{
+        'evt': evt,
+        'element': curElement,
+      });
+    }
+  }
+
   final dynamic tableTool = draw.getTableTool();
   tableTool?.dispose();
   if (isTable && !isReadonly && draw.getMode() != EditorMode.form) {
@@ -309,6 +326,7 @@ IPositionContext _clonePositionContext(IPositionContext source) {
     isRadio: source.isRadio,
     isControl: source.isControl,
     isImage: source.isImage,
+    isLabel: source.isLabel,
     isDirectHit: source.isDirectHit,
     index: source.index,
     trIndex: source.trIndex,
@@ -333,6 +351,7 @@ ICurrentPosition _cloneCurrentPosition(
     isRadio: source.isRadio,
     isControl: source.isControl,
     isImage: source.isImage,
+    isLabel: source.isLabel,
     isTable: source.isTable,
     isDirectHit: source.isDirectHit,
     trIndex: source.trIndex,

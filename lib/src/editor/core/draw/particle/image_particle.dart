@@ -148,6 +148,102 @@ class ImageParticle {
 		return fallback;
 	}
 
+	void _drawImageWithCrop(
+		CanvasRenderingContext2D ctx,
+		ImageElement image,
+		IElement element,
+		double x,
+		double y,
+		double width,
+		double height,
+	) {
+		final IImageCrop? crop = element.imgCrop;
+		if (crop == null) {
+			ctx.drawImageScaled(image, x, y, width, height);
+			return;
+		}
+		ctx.drawImageScaledFromSource(
+			image,
+			crop.x.toDouble(),
+			crop.y.toDouble(),
+			crop.width.toDouble(),
+			crop.height.toDouble(),
+			x,
+			y,
+			width,
+			height,
+		);
+	}
+
+	int _countImagesBeforeTarget(List<IElement> imageList, IElement target) {
+		for (var index = 0; index < imageList.length; index += 1) {
+			if (identical(imageList[index], target)) {
+				return index;
+			}
+		}
+		return imageList.indexOf(target);
+	}
+
+	void _renderCaption(
+		CanvasRenderingContext2D ctx,
+		IElement element,
+		double x,
+		double y,
+		double width,
+		double height,
+	) {
+		final IImageCaption? caption = element.imgCaption;
+		if (caption == null || caption.value.isEmpty) {
+			return;
+		}
+		final double scale = _scale();
+		final IImgCaptionOption option =
+				options.imgCaption ?? const IImgCaptionOption();
+		String captionText = caption.value;
+		if (captionText.contains('{imageNo}')) {
+			final imageNo =
+					_countImagesBeforeTarget(getOriginalMainImageList(), element) + 1;
+			captionText = captionText.replaceAll('{imageNo}', '$imageNo');
+		}
+		final double fontSize =
+				(caption.size ?? option.size ?? 12).toDouble() * scale;
+		final String fontFamily = caption.font ?? option.font ?? 'Microsoft YaHei';
+		final String color = caption.color ?? option.color ?? '#666666';
+		ctx.save();
+		ctx
+			..font = '${fontSize}px $fontFamily'
+			..fillStyle = color
+			..textAlign = 'center';
+
+		String displayText = captionText;
+		final TextMetrics fullMetrics = ctx.measureText(captionText);
+		if ((fullMetrics.width ?? 0) > width) {
+			var left = 0;
+			var right = captionText.length;
+			while (left < right) {
+				final mid = ((left + right + 1) / 2).floor();
+				final String truncated = captionText.substring(0, mid);
+				if ((ctx.measureText('$truncated...').width ?? 0) <= width) {
+					left = mid;
+				} else {
+					right = mid - 1;
+				}
+			}
+			displayText = '${captionText.substring(0, left)}...';
+		}
+		final TextMetrics displayMetrics = ctx.measureText(displayText);
+		final double captionTop =
+				(caption.top ?? option.top ?? 5).toDouble() * scale;
+		final double ascent = displayMetrics.actualBoundingBoxAscent == null ||
+				displayMetrics.actualBoundingBoxAscent!.isNaN
+			? fontSize
+			: displayMetrics.actualBoundingBoxAscent!.toDouble();
+		final double captionY = y + height + captionTop + ascent;
+		final double captionX = x + width / 2;
+		ctx.fillText(displayText, captionX, captionY);
+		ctx.restore();
+	}
+
 	String _normalizeImageSource(String rawSource) {
 		final String trimmed = rawSource.trim();
 		if (!trimmed.startsWith('data:image/')) {
@@ -181,7 +277,8 @@ class ImageParticle {
 		final String cacheKey = source;
 		final ImageElement? cached = _imageCache[cacheKey];
 		if (cached != null) {
-			ctx.drawImageScaled(cached, x, y, width, height);
+			_drawImageWithCrop(ctx, cached, element, x, y, width, height);
+			_renderCaption(ctx, element, x, y, width, height);
 			return;
 		}
 
@@ -208,14 +305,16 @@ class ImageParticle {
 					),
 				);
 			} else {
-				ctx.drawImageScaled(image, x, y, width, height);
+				_drawImageWithCrop(ctx, image, element, x, y, width, height);
+				_renderCaption(ctx, element, x, y, width, height);
 			}
 		});
 
 		image.onError.first.then((dynamic error) {
 			final ImageElement fallback = _buildFallbackImage(width, height);
 			fallback.onLoad.first.then((_) {
-				ctx.drawImageScaled(fallback, x, y, width, height);
+				_drawImageWithCrop(ctx, fallback, element, x, y, width, height);
+				_renderCaption(ctx, element, x, y, width, height);
 				_imageCache[cacheKey] = fallback;
 				if (!completer.isCompleted) {
 					completer.complete(element);

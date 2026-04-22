@@ -22,6 +22,7 @@ class EventBusMap {
   IPositionContextChange? positionContextChange;
   IImageSizeChange? imageSizeChange;
   IImageMousedown? imageMousedown;
+  ILabelMousedown? labelMousedown;
 
   EventBusMap({
     this.rangeStyleChange,
@@ -45,5 +46,6 @@ class EventBusMap {
     this.positionContextChange,
     this.imageSizeChange,
     this.imageMousedown,
+    this.labelMousedown,
   });
 }

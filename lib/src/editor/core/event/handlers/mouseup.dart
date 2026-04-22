@@ -1,6 +1,7 @@
 import '../../../dataset/constant/element.dart' as element_constants;
 import '../../../dataset/enum/common.dart';
 import '../../../dataset/enum/control.dart';
+import '../../../dataset/enum/editor.dart';
 import '../../../dataset/enum/element.dart';
 import '../../../interface/draw.dart';
 import '../../../interface/editor.dart';
@@ -15,6 +16,11 @@ import 'mouse_offset.dart';
 final Expando<String> _dragIdExpando = Expando<String>('dragId');
 
 void mouseup(dynamic evt, dynamic host) {
+	if (host.getDraw().getMode() == EditorMode.graffiti) {
+		host.isAllowDrag = false;
+		host.isAllowDrop = false;
+		return;
+	}
 	if (host.isAllowDrop == true) {
 		_finalizeDrag(evt, host);
 	} else if (host.isAllowDrag == true) {

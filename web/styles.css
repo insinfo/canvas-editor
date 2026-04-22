@@ -261,6 +261,316 @@ ul {
   background-image: url('./assets/images/line-wavy.svg');
 }
 
+.ce-image-previewer {
+  position: fixed;
+  left: 0;
+  top: 0;
+  z-index: 1000;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  background: #f2f4f7;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  animation: previewerAnimation .3s;
+}
+
+@keyframes previewerAnimation {
+  0% {
+    opacity: 0.1;
+  }
+
+  100% {
+    opacity: 1;
+  }
+}
+
+.ce-image-previewer .image-close {
+  width: 24px;
+  height: 24px;
+  display: inline-block;
+  position: absolute;
+  right: 50px;
+  top: 30px;
+  z-index: 99;
+  cursor: pointer;
+  background: url('./assets/images/close.svg') no-repeat;
+  background-size: 100% 100%;
+  transition: all .3s;
+  border-radius: 50%;
+}
+
+.ce-image-previewer .image-close:hover {
+  background-color: #e2e6ed;
+}
+
+.ce-image-previewer .ce-image-container {
+  position: relative;
+}
+
+.ce-image-previewer .ce-image-container img {
+  cursor: move;
+  position: relative;
+}
+
+.ce-image-previewer .ce-image-crop-layer {
+  position: absolute;
+  left: 0;
+  top: 0;
+  cursor: crosshair;
+  pointer-events: auto;
+}
+
+.ce-image-previewer .ce-image-crop-selection {
+  position: absolute;
+  border: 2px solid #3b76f0;
+  box-shadow: 0 0 0 9999px rgb(17 24 39 / 38%);
+  background: rgb(255 255 255 / 12%);
+  box-sizing: border-box;
+  cursor: move;
+}
+
+.ce-image-previewer .ce-image-crop-handle {
+  width: 10px;
+  height: 10px;
+  border: 2px solid #3b76f0;
+  border-radius: 50%;
+  position: absolute;
+  box-sizing: border-box;
+  background: #ffffff;
+}
+
+.ce-image-previewer .ce-image-crop-handle[data-handle='n'] {
+  top: -6px;
+  left: 50%;
+  transform: translateX(-50%);
+  cursor: ns-resize;
+}
+
+.ce-image-previewer .ce-image-crop-handle[data-handle='ne'] {
+  top: -6px;
+  right: -6px;
+  cursor: nesw-resize;
+}
+
+.ce-image-previewer .ce-image-crop-handle[data-handle='e'] {
+  top: 50%;
+  right: -6px;
+  transform: translateY(-50%);
+  cursor: ew-resize;
+}
+
+.ce-image-previewer .ce-image-crop-handle[data-handle='se'] {
+  right: -6px;
+  bottom: -6px;
+  cursor: nwse-resize;
+}
+
+.ce-image-previewer .ce-image-crop-handle[data-handle='s'] {
+  left: 50%;
+  bottom: -6px;
+  transform: translateX(-50%);
+  cursor: ns-resize;
+}
+
+.ce-image-previewer .ce-image-crop-handle[data-handle='sw'] {
+  left: -6px;
+  bottom: -6px;
+  cursor: nesw-resize;
+}
+
+.ce-image-previewer .ce-image-crop-handle[data-handle='w'] {
+  top: 50%;
+  left: -6px;
+  transform: translateY(-50%);
+  cursor: ew-resize;
+}
+
+.ce-image-previewer .ce-image-crop-handle[data-handle='nw'] {
+  top: -6px;
+  left: -6px;
+  cursor: nwse-resize;
+}
+
+.ce-image-previewer .ce-image-menu {
+  height: 50px;
+  position: absolute;
+  bottom: 50px;
+  z-index: 99;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.ce-image-previewer .ce-image-menu i {
+  width: 32px;
+  height: 32px;
+  margin: 0 8px;
+  cursor: pointer;
+  display: inline-block;
+  background-repeat: no-repeat;
+  background-size: 100% 100%;
+  transition: all .3s;
+  border-radius: 50%;
+}
+
+.ce-image-previewer .ce-image-menu i:hover {
+  background-color: #e2e6ed;
+}
+
+.ce-image-previewer .ce-image-menu i.zoom-in {
+  background-image: url('./assets/images/zoom-in.svg');
+}
+
+.ce-image-previewer .ce-image-menu i.zoom-out {
+  background-image: url('./assets/images/zoom-out.svg');
+}
+
+.ce-image-previewer .ce-image-menu i.rotate {
+  background-image: url('./assets/images/rotate.svg');
+}
+
+.ce-image-previewer .ce-image-menu i.original-size {
+  background-image: url('./assets/images/original-size.svg');
+}
+
+.ce-image-previewer .ce-image-menu i.image-download {
+  background-image: url('./assets/images/image-download.svg');
+}
+
+.ce-image-previewer .ce-image-menu .image-navigate {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.ce-image-previewer .ce-image-menu i.image-pre {
+  background-image: url('./assets/images/image-pre.svg');
+}
+
+.ce-image-previewer .ce-image-menu i.image-next {
+  background-image: url('./assets/images/image-next.svg');
+}
+
+.ce-image-previewer .ce-image-menu .image-count {
+  color: #000000;
+  font-size: 20px;
+}
+
+.ce-image-previewer .ce-image-menu .image-crop-action {
+  border: 1px solid #c8d2df;
+  background: rgb(255 255 255 / 88%);
+  color: #233247;
+  height: 32px;
+  padding: 0 12px;
+  margin-left: 10px;
+  border-radius: 16px;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font: inherit;
+}
+
+.ce-image-previewer .ce-image-menu .image-crop-action:hover {
+  background: #ffffff;
+}
+
+.ce-image-previewer .ce-image-menu .crop-apply {
+  border-color: #3b76f0;
+  color: #ffffff;
+  background: #3b76f0;
+}
+
+.ce-image-previewer .ce-image-menu .crop-apply:hover {
+  background: #2f68dc;
+}
+
+.ce-image-previewer.crop-mode .ce-image-container img {
+  cursor: crosshair;
+}
+
+.ce-image-previewer .ce-image-menu i.disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+
+.ce-resizer-selection {
+  position: absolute;
+  border: 1px solid;
+  pointer-events: none;
+}
+
+.ce-resizer-selection .resizer-handle {
+  position: absolute;
+  z-index: 9;
+  width: 10px;
+  height: 10px;
+  box-shadow: 0 1px 4px 0 rgb(0 0 0 / 30%);
+  border-radius: 5px;
+  border: 2px solid #ffffff;
+  box-sizing: border-box;
+  pointer-events: initial;
+}
+
+.ce-resizer-selection .handle-0 {
+  cursor: nw-resize;
+}
+
+.ce-resizer-selection .handle-1 {
+  cursor: n-resize;
+}
+
+.ce-resizer-selection .handle-2 {
+  cursor: ne-resize;
+}
+
+.ce-resizer-selection .handle-3 {
+  cursor: e-resize;
+}
+
+.ce-resizer-selection .handle-4 {
+  cursor: se-resize;
+}
+
+.ce-resizer-selection .handle-5 {
+  cursor: s-resize;
+}
+
+.ce-resizer-selection .handle-6 {
+  cursor: sw-resize;
+}
+
+.ce-resizer-selection .handle-7 {
+  cursor: w-resize;
+}
+
+.ce-resizer-size-view {
+  display: flex;
+  align-items: center;
+  height: 20px;
+  white-space: nowrap;
+  position: absolute;
+  z-index: 9;
+  top: -30px;
+  left: 0;
+  opacity: .9;
+  background-color: #000000;
+  padding: 0 5px;
+  border-radius: 4px;
+}
+
+.ce-resizer-size-view span {
+  color: #ffffff;
+  font-size: 12px;
+}
+
+.ce-resizer-image {
+  position: absolute;
+  opacity: 0.5;
+}
+
 .menu-item__strikeout i {
   background-image: url('./assets/images/strikeout.svg');
 }
