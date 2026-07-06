@@ -1,0 +1,9 @@
+# Analysis options compartilhado pelos packages ce_* (roteiro_editor_profissional F0.1).
+# Cada package inclui este arquivo via `include: ../analysis_options.yaml`.
+
+include: package:lints/recommended.yaml
+
+linter:
+  rules:
+    use_super_parameters: false
+    constant_identifier_names: false

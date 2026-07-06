@@ -1,0 +1,20 @@
+name: ce_opc
+description: >-
+  Open Packaging Conventions em Dart puro: [Content_Types].xml, _rels e
+  resolução de partes sobre ce_zip + ce_xml. Adaptado de docx_dart/opc.
+version: 0.1.0
+publish_to: none
+
+environment:
+  sdk: ^3.6.0
+
+# G7: apenas packages irmãos puros por path (nenhuma dependência de pub).
+dependencies:
+  ce_xml:
+    path: ../ce_xml
+  ce_zip:
+    path: ../ce_zip
+
+dev_dependencies:
+  lints: ^5.1.1
+  test: ^1.26.3

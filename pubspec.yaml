@@ -1,6 +1,7 @@
 name: canvas_text_editor
 description: An canvas text editor web app like Google Docs port from ts.
 version: 1.0.0
+publish_to: none
 # repository: https://github.com/my_org/my_repo
 
 environment:
@@ -9,6 +10,16 @@ environment:
 # Add regular dependencies here.
 dependencies:
   web: ^1.1.1
+  # Packages Dart puro do roteiro_editor_profissional (D5), referenciados
+  # por path. Usados por tool/ (inventário) e futuramente por lib/src/word.
+  ce_xml:
+    path: packages/ce_xml
+  ce_zip:
+    path: packages/ce_zip
+  ce_opc:
+    path: packages/ce_opc
+  ce_docx:
+    path: packages/ce_docx
 
 
 dev_dependencies:

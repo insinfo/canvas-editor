@@ -2,6 +2,9 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:html';
 import 'dart:js_util' as js_util;
+import 'dart:typed_data';
+
+import 'package:ce_docx/ce_docx.dart';
 
 import 'components/dialog/dialog.dart';
 import 'editor/index.dart';
@@ -10,6 +13,7 @@ import 'editor/utils/index.dart' as editor_utils;
 import 'mock.dart';
 import 'utils/index.dart' as app_utils;
 import 'utils/prism.dart';
+import 'word/docx_to_element.dart';
 
 class EditorApp {
   EditorApp({required this.isApple});
@@ -95,6 +99,7 @@ class EditorApp {
     _setupSeparatorAndPageBreakControls();
     _setupTableControls();
     _setupImageControl();
+    _setupDocxControl();
     _setupHyperlinkControl();
     _setupWatermarkControl();
     _setupCodeblockControl();
@@ -2372,5 +2377,83 @@ class EditorApp {
         });
       });
     });
+  }
+
+  /// Abrir DOCX (roteiro_editor_profissional, F2.4): botão da toolbar +
+  /// drag-drop no container do editor.
+  void _setupDocxControl() {
+    final docxDom = _requireElement<DivElement>('.menu-item__docx');
+    final docxFileDom = _requireElement<InputElement>('#docx');
+    docxDom.onClick.listen((_) => docxFileDom.click());
+    docxFileDom.onChange.listen((_) {
+      final files = docxFileDom.files;
+      if (files == null || files.isEmpty) {
+        return;
+      }
+      _readDocxFile(files.first);
+      docxFileDom.value = '';
+    });
+
+    final container = _requireElement<DivElement>('.editor');
+    container.onDragOver.listen((event) {
+      if (event.dataTransfer.types?.contains('Files') ?? false) {
+        event.preventDefault();
+      }
+    });
+    container.onDrop.listen((event) {
+      final files = event.dataTransfer.files;
+      if (files == null || files.isEmpty) {
+        return;
+      }
+      final file = files.first;
+      if (!file.name.toLowerCase().endsWith('.docx')) {
+        return;
+      }
+      event.preventDefault();
+      _readDocxFile(file);
+    });
+  }
+
+  void _readDocxFile(File file) {
+    final reader = FileReader();
+    reader.readAsArrayBuffer(file);
+    reader.onLoad.listen((_) {
+      final result = reader.result;
+      final Uint8List? bytes = switch (result) {
+        Uint8List value => value,
+        ByteBuffer value => value.asUint8List(),
+        _ => null,
+      };
+      if (bytes == null) {
+        window.alert('Falha ao ler o arquivo ${file.name}.');
+        return;
+      }
+      _openDocxBytes(file.name, bytes);
+    });
+  }
+
+  void _openDocxBytes(String name, Uint8List bytes) {
+    try {
+      final docx = DocxReader.read(bytes);
+      final converted = DocxToElementConverter.convert(docx);
+      command.executePaperSize(converted.pageWidthPx, converted.pageHeightPx);
+      command.executeSetPaperMargin(converted.marginsPx);
+      command.executeSetValue(IEditorData(
+        header: converted.header,
+        main: converted.main,
+        footer: converted.footer,
+      ));
+      final notes = converted.notes.toSet();
+      if (notes.isNotEmpty) {
+        window.console.group('Notas de fidelidade — $name');
+        for (final note in notes) {
+          window.console.info(note);
+        }
+        window.console.groupEnd();
+      }
+    } catch (error, stackTrace) {
+      window.console.error('Erro ao abrir DOCX: $error\n$stackTrace');
+      window.alert('Não foi possível abrir "$name": $error');
+    }
   }
 }
