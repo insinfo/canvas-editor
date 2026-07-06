@@ -1,0 +1,14 @@
+name: ce_zip
+description: >-
+  ZIP container (deflate/inflate/crc32) em Dart puro para os DOCX do editor.
+  Copiado/adaptado de docx_dart lib/src/internal/archive (sem dependências).
+version: 0.1.0
+publish_to: none
+
+environment:
+  sdk: ^3.6.0
+
+# G7: zero dependências de pub no runtime (apenas dart: core).
+dev_dependencies:
+  lints: ^5.1.1
+  test: ^1.26.3

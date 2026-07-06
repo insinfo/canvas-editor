@@ -1,0 +1,16 @@
+name: ce_xml
+description: >-
+  Parser/serializer XML 1.0 namespace-aware em Dart puro: SAX streaming para
+  partes grandes (document.xml) + DOM leve para partes pequenas.
+version: 0.1.0
+publish_to: none
+
+environment:
+  sdk: ^3.6.0
+
+# G7: zero dependências de pub no runtime (apenas dart: core).
+dev_dependencies:
+  ce_zip:
+    path: ../ce_zip
+  lints: ^5.1.1
+  test: ^1.26.3

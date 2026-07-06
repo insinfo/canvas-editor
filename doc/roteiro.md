@@ -1,6 +1,11 @@
 # Roteiro de Tradução
 port from C:\MyDartProjects\canvas-editor-port\typescript\src to C:\MyDartProjects\canvas-editor-port\lib
 
+> **Novo escopo:** o plano para transformar o port em um editor profissional compatível com Word
+> (abrir/salvar DOCX sem perda, shell estilo Word, exportação PDF fiel) está em
+> [roteiro_editor_profissional.md](roteiro_editor_profissional.md). Este arquivo continua como
+> tracker da paridade TS→Dart.
+
 continuar portando o que falta de C:\MyDartProjects\canvas-editor-port\typescript para dart C:\MyDartProjects\canvas-editor-port\lib\src e testando e atualizando o roteiro
 
 ## Estado Atual

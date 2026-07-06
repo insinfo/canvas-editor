@@ -18,6 +18,7 @@ part 'editor_e2e_annotations.dart';
 part 'editor_e2e_controls.dart';
 part 'editor_e2e_toolbar.dart';
 part 'editor_e2e_misc.dart';
+part 'editor_e2e_docx.dart';
 
 void main() {
   group('Canvas editor app E2E', () {
@@ -27,5 +28,6 @@ void main() {
     _registerImageE2ETests();
     _registerTableE2ETests();
     _registerMiscE2ETests();
+    _registerDocxE2ETests();
   });
 }

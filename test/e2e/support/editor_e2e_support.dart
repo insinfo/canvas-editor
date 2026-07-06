@@ -1111,7 +1111,7 @@ void _registerHarnessLifecycle() {
         <String>[
           'compile',
           'js',
-          '-O1',
+          '-O1',//mudar para -O2 ou -03 que é mais estavel e menos bugado
           '-o',
           p.join(buildDir!.path, 'main.dart.js'),
           mainPath,

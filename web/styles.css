@@ -693,6 +693,14 @@ ul {
   display: none;
 }
 
+.menu-item__docx i {
+  background-image: url('./assets/images/word.svg');
+}
+
+.menu-item__docx input {
+  display: none;
+}
+
 .menu-item__table {
   position: relative;
 }
