@@ -13,6 +13,9 @@ class WpStyle {
   final WpParagraphProperties? paragraphProperties;
   final WpRunProperties? runProperties;
 
+  /// `w:tblPr` de estilos de tabela (bordas do "Grid Table Light" etc.).
+  final WpTableProperties? tableProperties;
+
   const WpStyle({
     required this.id,
     required this.type,
@@ -22,6 +25,7 @@ class WpStyle {
     this.isDefault = false,
     this.paragraphProperties,
     this.runProperties,
+    this.tableProperties,
   });
 }
 
@@ -66,6 +70,8 @@ class WpStyleSheet {
         paragraphProperties:
             WpParagraphProperties.fromXml(styleEl.firstChild('w:pPr')),
         runProperties: WpRunProperties.fromXml(styleEl.firstChild('w:rPr')),
+        tableProperties:
+            WpTableProperties.fromXml(styleEl.firstChild('w:tblPr')),
       );
     }
 

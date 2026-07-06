@@ -27,6 +27,19 @@ class DocxConversionResult {
   /// Margens em px na ordem do editor: [top, right, bottom, left].
   final List<double> marginsPx;
 
+  /// Distâncias de header/footer do `w:pgMar` (px).
+  final double headerDistancePx;
+  final double footerDistancePx;
+
+  /// Campos PAGE/NUMPAGES do rodapé (F4.7): formato no padrão do editor
+  /// (`Página {pageNo} | {pageCount}`) + estilo do parágrafo do campo.
+  /// `null` quando o rodapé não tem campos de página.
+  final String? pageNumberFormat;
+  final RowFlex? pageNumberRowFlex;
+  final int? pageNumberSize;
+  final String? pageNumberFont;
+  final String? pageNumberColor;
+
   /// Notas de fidelidade (o que foi substituído/só preservado).
   final List<String> notes;
 
@@ -37,6 +50,13 @@ class DocxConversionResult {
     required this.pageWidthPx,
     required this.pageHeightPx,
     required this.marginsPx,
+    required this.headerDistancePx,
+    required this.footerDistancePx,
+    this.pageNumberFormat,
+    this.pageNumberRowFlex,
+    this.pageNumberSize,
+    this.pageNumberFont,
+    this.pageNumberColor,
     required this.notes,
   });
 }
@@ -84,9 +104,21 @@ class DocxToElementConverter {
     final header = headerBlocks == null
         ? <IElement>[]
         : _convertBlocks(headerBlocks.blocks, fromPart: headerBlocks.partName);
+
+    // F4.7: parágrafos do rodapé com campos PAGE/NUMPAGES viram o formato
+    // dinâmico do pageNumber do editor (em vez do resultado em cache).
+    final pageNumber =
+        footerBlocks == null ? null : _extractPageNumber(footerBlocks);
     final footer = footerBlocks == null
         ? <IElement>[]
-        : _convertBlocks(footerBlocks.blocks, fromPart: footerBlocks.partName);
+        : _convertBlocks(
+            pageNumber == null
+                ? footerBlocks.blocks
+                : [
+                    for (final block in footerBlocks.blocks)
+                      if (!pageNumber.paragraphs.contains(block)) block
+                  ],
+            fromPart: footerBlocks.partName);
     if (file.headersByType.length > 1) {
       _notes.add('headers first/even convertidos apenas como default '
           '(seleção por tipo na Fase 4.6)');
@@ -105,8 +137,80 @@ class DocxToElementConverter {
         Units.twipToPx(section?.marginBottomTwips ?? 1440),
         Units.twipToPx(section?.marginLeftTwips ?? 1800),
       ],
+      headerDistancePx: Units.twipToPx(section?.headerDistanceTwips ?? 708),
+      footerDistancePx: Units.twipToPx(section?.footerDistanceTwips ?? 708),
+      pageNumberFormat: pageNumber?.format,
+      pageNumberRowFlex: pageNumber?.rowFlex,
+      pageNumberSize: pageNumber?.size,
+      pageNumberFont: pageNumber?.font,
+      pageNumberColor: pageNumber?.color,
       notes: _notes,
     );
+  }
+
+  /// Extrai dos parágrafos do rodapé o formato de numeração de página
+  /// (`PAGE` → `{pageNo}`, `NUMPAGES` → `{pageCount}`).
+  _PageNumberSpec? _extractPageNumber(WpHeaderFooter footer) {
+    for (final block in footer.blocks) {
+      if (block is! WpParagraph) continue;
+      var hasField = false;
+      final format = StringBuffer();
+      var state = _FieldState.none;
+      String instruction = '';
+      WpRunProperties? styleRun;
+
+      for (final run in block.allRuns) {
+        for (final content in run.content) {
+          switch (content) {
+            case WpFieldChar fieldChar:
+              switch (fieldChar.fldCharType) {
+                case 'begin':
+                  state = _FieldState.instruction;
+                  instruction = '';
+                case 'separate':
+                  state = _FieldState.result;
+                case _: // end
+                  if (instruction.contains('NUMPAGES')) {
+                    format.write('{pageCount}');
+                    hasField = true;
+                  } else if (instruction.contains('PAGE')) {
+                    format.write('{pageNo}');
+                    hasField = true;
+                  }
+                  state = _FieldState.none;
+              }
+            case WpInstrText instr:
+              if (state == _FieldState.instruction) {
+                instruction += instr.text;
+              }
+            case WpText text:
+              if (state == _FieldState.none) {
+                format.write(text.text);
+                styleRun ??= _resolver.resolveRun(block, run.properties);
+              }
+            case _:
+              break;
+          }
+        }
+      }
+
+      if (!hasField) continue;
+      final pPr = _resolver.resolveParagraph(block);
+      final style = styleRun ?? _resolver.resolveRun(block, null);
+      _notes.add('campos PAGE/NUMPAGES do rodapé renderizados '
+          'dinamicamente (formato "${format.toString()}")');
+      return _PageNumberSpec(
+        format: format.toString(),
+        rowFlex: _rowFlex(pPr.jc),
+        size: style.sizeHalfPoints == null
+            ? null
+            : Units.halfPointToPx(style.sizeHalfPoints!).round(),
+        font: style.fontAscii ?? style.fontHAnsi,
+        color: _hexColor(style.color),
+        paragraphs: {block},
+      );
+    }
+    return null;
   }
 
   // ---- Blocos ----
@@ -451,12 +555,35 @@ class DocxToElementConverter {
     }
     if (trList.isEmpty) return null;
 
+    // F4.5: bordas efetivas — tblBorders direto ou do estilo de tabela
+    // (Grid Table Light etc.); sem bordas de tabela, as células desenham
+    // as próprias bordas via borderTypes (TableBorder.empty).
+    final effectiveBorders = _resolver.resolveTableBorders(table);
+    bool visible(WpBorder? side) =>
+        side != null && side.val != null && side.val != 'none' &&
+        side.val != 'nil';
+    final hasTableBorders = effectiveBorders != null &&
+        (visible(effectiveBorders.top) ||
+            visible(effectiveBorders.bottom) ||
+            visible(effectiveBorders.left) ||
+            visible(effectiveBorders.right) ||
+            visible(effectiveBorders.insideH) ||
+            visible(effectiveBorders.insideV));
+    String? borderColor;
+    if (hasTableBorders) {
+      final sample = effectiveBorders.insideH ??
+          effectiveBorders.top ??
+          effectiveBorders.left;
+      borderColor = _hexColor(sample?.color);
+    }
+
     return IElement(
       type: ElementType.table,
       value: '',
       colgroup: colgroup,
       trList: trList,
-      borderType: TableBorder.all,
+      borderType: hasTableBorders ? TableBorder.all : TableBorder.empty,
+      borderColor: borderColor,
     );
   }
 
@@ -558,3 +685,25 @@ class DocxToElementConverter {
 }
 
 enum _FieldState { none, instruction, result }
+
+/// Especificação extraída do rodapé para o pageNumber do editor (F4.7).
+class _PageNumberSpec {
+  final String format;
+  final RowFlex? rowFlex;
+  final int? size;
+  final String? font;
+  final String? color;
+
+  /// Parágrafos do rodapé representados pelo campo dinâmico (excluídos da
+  /// conversão estática para não duplicar).
+  final Set<WpParagraph> paragraphs;
+
+  _PageNumberSpec({
+    required this.format,
+    this.rowFlex,
+    this.size,
+    this.font,
+    this.color,
+    required this.paragraphs,
+  });
+}

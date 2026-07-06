@@ -42,4 +42,17 @@ class FormatResolver {
     if (direct != null) result = result.mergedWith(direct);
     return result;
   }
+
+  /// Bordas efetivas de uma tabela: `tblBorders` direto, senão o da cadeia
+  /// basedOn do `tblStyle` (o mais derivado vence).
+  WpBorders? resolveTableBorders(WpTable table) {
+    final direct = table.properties?.borders;
+    if (direct != null) return direct;
+    WpBorders? result;
+    for (final style in styles.chainOf(table.properties?.styleId)) {
+      final borders = style.tableProperties?.borders;
+      if (borders != null) result = borders;
+    }
+    return result;
+  }
 }

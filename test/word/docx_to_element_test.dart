@@ -3,6 +3,7 @@ import 'dart:typed_data';
 
 import 'package:canvas_text_editor/src/editor/dataset/enum/element.dart';
 import 'package:canvas_text_editor/src/editor/dataset/enum/row.dart';
+import 'package:canvas_text_editor/src/editor/dataset/enum/table/table.dart';
 import 'package:canvas_text_editor/src/editor/interface/element.dart';
 import 'package:canvas_text_editor/src/word/docx_to_element.dart';
 import 'package:ce_docx/ce_docx.dart';
@@ -170,14 +171,54 @@ void main() {
       expect(image!.height, greaterThan(1));
     });
 
-    test('footer default: campos PAGE/NUMPAGES viram resultado em cache '
-        '+ nota de fidelidade', () {
-      final footerText = _plainText(etp.footer);
-      expect(footerText, contains('Página'));
-      expect(
-          etp.notes.any((note) =>
-              note.contains('PAGE') || note.contains('campo')),
-          isTrue);
+    test('footer: campos PAGE/NUMPAGES viram formato dinâmico (F4.7)', () {
+      for (final result in [etp, tr]) {
+        expect(result.pageNumberFormat, 'Página {pageNo} | {pageCount}');
+        expect(result.pageNumberSize, isNotNull);
+        // O parágrafo do campo sai do rodapé estático (sem duplicação).
+        expect(_plainText(result.footer), isNot(contains('Página')));
+      }
+      expect(etp.pageNumberRowFlex, isNull); // parágrafo do campo é jc left
+      expect(tr.pageNumberRowFlex, RowFlex.center);
+    });
+
+    test('distâncias de header/footer vêm do pgMar (F4.6)', () {
+      expect(etp.headerDistancePx, closeTo(28.4, 0.1)); // 426 twips
+      expect(etp.footerDistancePx, closeTo(30.3, 0.1)); // 454 twips
+      expect(tr.headerDistancePx, closeTo(37.8, 0.1)); // 567 twips
+      expect(tr.footerDistancePx, closeTo(15.3, 0.1)); // 230 twips
+    });
+
+    test('bordas efetivas: estilo de tabela e tcBorders (F4.5)', () {
+      final etpTables = [
+        for (final e in etp.main)
+          if (e.type == ElementType.table) e
+      ];
+      // ETP: bordas vêm do estilo "TabeladeGradeClara" (Grid Table Light).
+      for (final table in etpTables) {
+        expect(table.borderType, TableBorder.all);
+      }
+      expect(etpTables.map((t) => t.borderColor), contains('#BFBFBF'));
+
+      final trTables = [
+        for (final e in tr.main)
+          if (e.type == ElementType.table) e
+      ];
+      // TR: toda tabela tem bordas de tabela OU células com borderTypes.
+      for (final table in trTables) {
+        if (table.borderType == TableBorder.all) continue;
+        var bordered = 0;
+        var total = 0;
+        for (final row in table.trList!) {
+          for (final td in row.tdList) {
+            total++;
+            if (td.borderTypes?.isNotEmpty == true) bordered++;
+          }
+        }
+        expect(bordered / total, greaterThan(0.8),
+            reason: 'tabela sem bordas de tabela deve ter células com '
+                'bordas próprias');
+      }
     });
 
     test('justificação both → RowFlex.alignment presente no TR', () {
