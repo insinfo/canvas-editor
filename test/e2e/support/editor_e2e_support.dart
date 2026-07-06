@@ -418,6 +418,10 @@ void main() {
           final result = app.editor.command.getValue();
           return result.data.main.map((element) => element.value).join('');
         }),
+        'saveDocxLength': js_util.allowInterop(() {
+          final bytes = app.saveOpenedDocxBytes();
+          return bytes?.length ?? -1;
+        }),
         'mainValues': js_util.allowInterop(() {
           final result = app.editor.command.getValue();
           return js_util.jsify(

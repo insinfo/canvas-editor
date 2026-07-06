@@ -76,7 +76,8 @@ class DocxToElementConverter {
 
   DocxConversionResult _convert() {
     final mainPart = file.package.mainDocumentPartName;
-    final main = _convertBlocks(file.document.body, fromPart: mainPart);
+    final main = _convertBlocks(file.document.body,
+        fromPart: mainPart, stampBlocks: true);
 
     final headerBlocks = file.headersByType['default'];
     final footerBlocks = file.footersByType['default'];
@@ -111,10 +112,12 @@ class DocxToElementConverter {
   // ---- Blocos ----
 
   List<IElement> _convertBlocks(List<WpBlock> blocks,
-      {required String fromPart}) {
+      {required String fromPart, bool stampBlocks = false}) {
     final elements = <IElement>[];
     var first = true;
-    for (final block in blocks) {
+    for (var index = 0; index < blocks.length; index++) {
+      final block = blocks[index];
+      final startLength = elements.length;
       switch (block) {
         case WpParagraph paragraph:
           final pPr = _resolver.resolveParagraph(paragraph);
@@ -131,8 +134,35 @@ class DocxToElementConverter {
         case WpPreservedBlock preserved:
           _notes.add('bloco preservado não renderizado: ${preserved.qname}');
       }
+      if (stampBlocks) {
+        for (var i = startLength; i < elements.length; i++) {
+          _stampBlockIndex(elements[i], index);
+        }
+      }
     }
     return elements;
+  }
+
+  /// Marca o elemento (e descendentes) com o índice do bloco de origem no
+  /// body — usado pelo bridge editor→docx para o passthrough D1 no save.
+  static void _stampBlockIndex(IElement element, int index) {
+    element.externalId ??= 'wp:$index';
+    final children = element.valueList;
+    if (children != null) {
+      for (final child in children) {
+        _stampBlockIndex(child, index);
+      }
+    }
+    final trList = element.trList;
+    if (trList != null) {
+      for (final tr in trList) {
+        for (final td in tr.tdList) {
+          for (final child in td.value) {
+            _stampBlockIndex(child, index);
+          }
+        }
+      }
+    }
   }
 
   /// Elemento '\n' que inicia a linha do parágrafo, carregando o alinhamento.
@@ -156,7 +186,8 @@ class DocxToElementConverter {
       final marker = _counters.next(numPr.numId!, numPr.ilvl);
       if (marker != null && marker.isNotEmpty) {
         final markerStyle = _resolver.resolveRun(paragraph, null);
-        elements.add(_styledText('$marker ', markerStyle, rowFlex, rowMargin));
+        elements.add(_styledText('$marker ', markerStyle, rowFlex, rowMargin)
+          ..extension = const {'wpMarker': true});
       }
     }
 
@@ -261,7 +292,10 @@ class DocxToElementConverter {
           if (brk.breakType == 'page') {
             into.add(IElement(type: ElementType.pageBreak, value: ''));
           } else {
-            into.add(IElement(value: '\n'));
+            // Quebra de linha (w:br) ≠ fim de parágrafo: marcada para o
+            // bridge editor→docx não dividir o parágrafo no save.
+            into.add(IElement(value: '\n')
+              ..extension = const {'wpBr': true});
           }
         case WpNoBreakHyphen _:
           into.add(_styledText('‑', rPr, rowFlex, rowMargin));
@@ -334,7 +368,7 @@ class DocxToElementConverter {
       height: drawing.heightEmu == null
           ? 100
           : Units.emuToPx(drawing.heightEmu!),
-    );
+    )..extension = {'wpDrawing': drawing.rawXml};
   }
 
   // ---- Tabela ----

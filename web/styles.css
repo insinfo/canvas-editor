@@ -701,6 +701,10 @@ ul {
   display: none;
 }
 
+.menu-item__docx-save i {
+  background-image: url('./assets/images/word_save.svg');
+}
+
 .menu-item__table {
   position: relative;
 }

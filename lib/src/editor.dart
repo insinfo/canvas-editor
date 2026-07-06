@@ -14,6 +14,7 @@ import 'mock.dart';
 import 'utils/index.dart' as app_utils;
 import 'utils/prism.dart';
 import 'word/docx_to_element.dart';
+import 'word/element_to_docx.dart';
 
 class EditorApp {
   EditorApp({required this.isApple});
@@ -81,6 +82,11 @@ class EditorApp {
   final List<List<TableCellElement>> _tableCellList =
       <List<TableCellElement>>[];
 
+  // Documento DOCX aberto (roteiro_editor_profissional, F2.4/F3.3).
+  DocxFile? _openedDocx;
+  String? _openedDocxName;
+  List<IElement>? _openedOriginalMain;
+
   bool _isCatalogVisible = true;
   bool _awaitingPainterSecondClick = false;
   Timer? _painterTimer;
@@ -100,6 +106,7 @@ class EditorApp {
     _setupTableControls();
     _setupImageControl();
     _setupDocxControl();
+    _setupDocxSaveControl();
     _setupHyperlinkControl();
     _setupWatermarkControl();
     _setupCodeblockControl();
@@ -2443,6 +2450,11 @@ class EditorApp {
         main: converted.main,
         footer: converted.footer,
       ));
+      _openedDocx = docx;
+      _openedDocxName = name;
+      // Referência de "intocado" para o save: o próprio getValue, para que
+      // corrente e original passem pela mesma normalização (zip) do editor.
+      _openedOriginalMain = command.getValue().data.main;
       final notes = converted.notes.toSet();
       if (notes.isNotEmpty) {
         window.console.group('Notas de fidelidade — $name');
@@ -2455,5 +2467,51 @@ class EditorApp {
       window.console.error('Erro ao abrir DOCX: $error\n$stackTrace');
       window.alert('Não foi possível abrir "$name": $error');
     }
+  }
+
+  /// Salvar DOCX (roteiro_editor_profissional, F3.3): sincroniza o conteúdo
+  /// atual com o modelo aberto e serializa com passthrough D1.
+  /// Retorna `null` se nenhum DOCX foi aberto.
+  Uint8List? saveOpenedDocxBytes() {
+    final docx = _openedDocx;
+    final originalMain = _openedOriginalMain;
+    if (docx == null || originalMain == null) return null;
+    final currentMain = command.getValue().data.main;
+    final notes = EditorToDocx.apply(docx, currentMain, originalMain);
+    final bytes = DocxWriter.write(docx);
+    if (notes.isNotEmpty) {
+      window.console.group('Notas do save — $_openedDocxName');
+      for (final note in notes.toSet()) {
+        window.console.info(note);
+      }
+      window.console.groupEnd();
+    }
+    // Reancora o modelo no arquivo salvo para saves subsequentes.
+    _openedDocx = DocxReader.read(bytes);
+    _openedOriginalMain = currentMain;
+    return bytes;
+  }
+
+  void _setupDocxSaveControl() {
+    final saveDom = _requireElement<DivElement>('.menu-item__docx-save');
+    saveDom.onClick.listen((_) {
+      try {
+        final bytes = saveOpenedDocxBytes();
+        if (bytes == null) {
+          window.alert('Abra um DOCX antes de salvar.');
+          return;
+        }
+        final blob = Blob([bytes],
+            'application/vnd.openxmlformats-officedocument.wordprocessingml.document');
+        final url = Url.createObjectUrlFromBlob(blob);
+        AnchorElement(href: url)
+          ..download = _openedDocxName ?? 'documento.docx'
+          ..click();
+        Url.revokeObjectUrl(url);
+      } catch (error, stackTrace) {
+        window.console.error('Erro ao salvar DOCX: $error\n$stackTrace');
+        window.alert('Não foi possível salvar: $error');
+      }
+    });
   }
 }

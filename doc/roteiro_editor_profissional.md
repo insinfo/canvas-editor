@@ -18,8 +18,8 @@
 | F0 fundações | ✅ concluída (2026-07-05) | 6 packages em `packages/` (pubspecs puros, `analysis_options` compartilhado); `tool/docx_inventory.dart` com `--verify` batendo com a seção 2.2; CI local `tool/ci.dart` |
 | F1 ce_xml/ce_zip/ce_opc | ✅ concluída (2026-07-05) | `ce_zip`: re-zip **byte-idêntico ao arquivo inteiro** nos 2 DOCX (14 testes); `ce_xml`: SAX 4,45 MB em **92 ms** (orçamento 500 ms), DOM round-trip estável (16 testes); `ce_opc`: rels/content-types dos 2 DOCX, targets 100% resolvidos (15 testes). Falta só a validação manual no Word (checklist G2) |
 | F2 reader | ✅ concluída (2026-07-05) | `ce_docx`: modelo WordprocessingML tipado + `DocxReader` + cascata de estilos + numeração multinível (18 testes; inventário do modelo = seção 2.2); conversor `lib/src/word/docx_to_element.dart` (11 testes VM: tabelas com merges, imagens base64, hyperlinks, títulos, marcadores de numeração, geometria da página do `sectPr`); UI: botão "Abrir DOCX" + drag-drop na shell (`menu-item__docx`), E2E dedicado em `test/e2e/editor_e2e_docx.dart`. Limitações registradas p/ F4: numeração como marcador textual inline, campos com resultado em cache, carimbo preservado sem render, só header/footer default |
-| F3 writer | ⬜ próxima | — |
-| F4–F8 | ⬜ | — |
+| F3 writer | ✅ concluída (2026-07-06) | `ce_docx` writer com passthrough D1 por bloco (`sourceXml`; serializer em ordem de schema p/ blocos editados) + `DocxValidator` estrutural (29 testes); bridge editor→docx (`lib/src/word/element_to_docx.dart`: stamps `wp:<i>` + comparação vs. abertura, regen de parágrafo/tabela com reconstrução de vMerge, rels de hyperlink, embed de imagem nova) — **pipeline completo abrir→editor→salvar sem edição = byte-idêntico nos 2 DOCX** (18 testes VM em `test/word/`); UI "Salvar DOCX" (download) + hook E2E `saveDocxLength`. Pendências p/ F4+: headers/footers editados não sincronizam, estilos/numbering nunca regenerados, checklist manual no Word (F3.4d) |
+| F4–F8 | ⬜ próxima: F4 layout Word-parity | — |
 
 CI local: `dart run tool/ci.dart` (packages + raiz + inventário; `--e2e` opcional).
 
@@ -35,7 +35,7 @@ CI local: `dart run tool/ci.dart` (packages + raiz + inventário; `--e2e` opcion
 | G4 | Desempenho | abrir o TR em < 3 s; digitação com frame < 16 ms; scroll fluido nas 140 páginas; memória estável |
 | G5 | Shell estilo Word | ribbon com abas, régua, barra de status com página/palavras/zoom, painel de estilos e navegação |
 | G6 | PDF fiel | exportação com **texto vetorial** (selecionável), fontes TTF embutidas com subsetting, paginação idêntica à tela, imagens e tabelas corretas |
-| G7 | Dart puro | `packages/*` com **zero dependências de pub** no runtime (apenas `dart:` core); código copiado/adaptado das bibliotecas locais é permitido |
+| G7 | Dart puro | `packages/*` com **zero dependências de pub** no runtime (apenas `dart:` core); código copiado/adaptado das bibliotecas locais ou online do github é permitido |
 
 ---
 
@@ -380,7 +380,7 @@ paralelo do TS:
 | Regenerar `document.xml` corromper algo sutil | Word mostra repair | D1: passthrough por parte + por parágrafo intocado + validador estrutural + suíte round-trip |
 | Custo do parser XML próprio | atraso na F1 | escopo restrito a XML 1.0 sem DTD; SAX primeiro; corpus real como teste desde o dia 1 |
 | Desempenho do TR (1.642 trs, 3.650 tds) | editor inutilizável | F5 é fase própria com orçamentos; layout incremental desde F4 (não deixar para o fim) |
-| AGPL do EuroOffice | contaminação de licença | somente leitura conceitual; nenhuma cópia de código |
+|  EuroOffice | contaminação de licença | somente leitura conceitual; nenhuma cópia de código Ctrl +C Ctrl +v  mais pode se ispirar bastante nele pois ele ja resolveu bastante coisas complexas do editor em javascript web com canvas e entendimento do docx so que ele tem muitas dependencias e é super  inchado o que dificulta compilar e depurar e fazer manutenção |
 | Table paging complexo (POC upstream) | quebra de tabela errada no TR | portar o algoritmo já validado do POC + E2E dedicado com tabelas de 100+ linhas |
 | Escopo do ribbon crescer demais | F6 vira buraco | itens sem backend ficam ocultos; checklist fechado por aba |
 
@@ -403,16 +403,15 @@ F0 fundações ──► F1 ce_xml/ce_zip/ce_opc ──► F2 reader ──► F
 
 Esforço relativo estimado: F0 ▪ | F1 ▪▪ | F2 ▪▪▪ | F3 ▪▪▪ | F4 ▪▪▪▪▪ (a maior) | F5 ▪▪▪ | F6 ▪▪▪ | F7 ▪▪▪ | F8 ▪▪.
 
-**Primeiros passos concretos (próxima sessão)** — F0, F1 e F2 concluídas em 2026-07-05 (ver
-seção 0); próxima é a **Fase 3 (writer `ce_docx` → round-trip G2)**:
-1. F3.1: serializer WordprocessingML (modelo → `document.xml`) com passthrough inline (D1) e
-   passthrough por parágrafo intocado (hash do XML original — o campo `sourceXml` de
-   `WpParagraph` já está previsto no modelo).
-2. F3.2: reescrita OPC — já coberta pelo `ce_zip`/`ce_opc` (partes intocadas byte a byte);
-   falta media de imagens novas + content types/rels.
-3. F3.3: UI salvar/salvar como (download do .docx) + F3.4: suíte de round-trip.
-4. Em paralelo, itens F4 com maior retorno visual: motor de numeração real (substituir o
-   marcador textual inline do conversor F2), campos PAGE/NUMPAGES dinâmicos, tcBorders por
-   célula no render.
-5. Validação manual pendente da F1/F2: abrir no Word o output de `OpcPackage.save()`
-   (build/roundtrip/) — deve abrir sem repair (output byte-idêntico, testes garantem).
+**Primeiros passos concretos (próxima sessão)** — F0–F3 concluídas (ver seção 0); próxima é a
+**Fase 4 (motor de layout/render em paridade com o Word — G1+G3)**, priorizando o que muda o
+visual dos 2 DOCX:
+1. F4.2: motor de numeração multinível REAL no layout (substituir o marcador textual inline que
+   o conversor F2 injeta; os contadores de `NumberingCounters` já existem no `ce_docx`).
+2. F4.7: campos `PAGE`/`NUMPAGES` dinâmicos no rodapé + port do table paging do POC
+   (`referencias/canvas-editor-poc-table-paging`) — o TR tem tabelas de centenas de linhas.
+3. F4.5: `tcBorders` por célula no render (3.158 no TR) + shading por célula já convertido.
+4. F4.3/F4.4: parágrafo Word-completo (spacing exato, widow/orphan, keepNext) e tab stops.
+5. F3 follow-ups em paralelo: sincronizar headers/footers editados no save; checklist manual no
+   Word (F3.4d) — abrir DOCX salvos pela shell (sem edição = byte-idêntico; com edição =
+   validador estrutural verde).
