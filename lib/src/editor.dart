@@ -9,6 +9,9 @@ import 'package:ce_docx/ce_docx.dart';
 import 'components/dialog/dialog.dart';
 import 'editor/index.dart';
 import 'editor/interface/draw.dart';
+import 'editor/interface/footer.dart';
+import 'editor/interface/header.dart' as header_model;
+import 'editor/interface/page_number.dart';
 import 'editor/utils/index.dart' as editor_utils;
 import 'mock.dart';
 import 'utils/index.dart' as app_utils;
@@ -2455,6 +2458,29 @@ class EditorApp {
       // Referência de "intocado" para o save: o próprio getValue, para que
       // corrente e original passem pela mesma normalização (zip) do editor.
       _openedOriginalMain = command.getValue().data.main;
+
+      // F4.7: campos PAGE/NUMPAGES do rodapé viram numeração dinâmica;
+      // sem campos, desliga o pageNumber da demo (evita número espúrio).
+      final drawOptions = editor.getDraw().getOptions();
+      if (converted.pageNumberFormat != null) {
+        drawOptions.pageNumber = IPageNumber(
+          format: converted.pageNumberFormat,
+          // jc ausente no Word = esquerda (painter usa center por default).
+          rowFlex: converted.pageNumberRowFlex ?? RowFlex.left,
+          size: converted.pageNumberSize?.toDouble(),
+          font: converted.pageNumberFont,
+          color: converted.pageNumberColor,
+          bottom: converted.footerDistancePx + 2,
+        );
+      } else {
+        drawOptions.pageNumber = IPageNumber(disabled: true);
+      }
+      // F4.6 (parcial): distâncias de header/footer do sectPr.
+      (drawOptions.header ??= header_model.IHeader()).top =
+          converted.headerDistancePx;
+      (drawOptions.footer ??= IFooter()).bottom =
+          converted.footerDistancePx;
+      command.executeForceUpdate();
       final notes = converted.notes.toSet();
       if (notes.isNotEmpty) {
         window.console.group('Notas de fidelidade — $name');
