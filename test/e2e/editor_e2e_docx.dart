@@ -46,6 +46,16 @@ void _registerDocxE2ETests() {
     final hadError = await page!.evaluate<bool?>(
         '() => window.__lastPageError !== undefined');
     expect(hadError ?? false, isFalse);
+
+    // F3.3: salvar sem edição no browser = mesmo tamanho do arquivo
+    // original (byte-identidade coberta pelos testes VM).
+    final savedLength = await page!
+        .evaluate<int?>('() => window.__editorTest.saveDocxLength()');
+    final fixtureLength =
+        File('resources/PGCTIC1_-_ETP_-_Sistema_de_Gestão_Pública.docx')
+            .lengthSync();
+    expect(savedLength, fixtureLength,
+        reason: 'save via pipeline do editor deve ser byte-idêntico');
   }, timeout: const Timeout(Duration(minutes: 3)));
 
   test('abre o TR DOCX (140 páginas) sem exceção e com tabelas', () async {
