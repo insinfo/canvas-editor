@@ -15,3 +15,5 @@ export 'src/numbering.dart'
 export 'src/reader.dart' show DocxFile, DocxReader;
 export 'src/styles.dart' show WpStyle, WpStyleSheet;
 export 'src/units.dart' show Units;
+export 'src/validator.dart' show DocxValidator;
+export 'src/writer.dart' show DocxWriter;

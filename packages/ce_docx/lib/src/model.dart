@@ -585,7 +585,15 @@ class WpTable extends WpBlock {
   final List<int> gridColumnsTwips;
   final List<WpTableRow> rows;
 
-  WpTable({this.properties, required this.gridColumnsTwips, required this.rows});
+  /// XML original da tabela (passthrough D1 quando intocada; `null` para
+  /// tabelas novas/regeneradas).
+  final String? sourceXml;
+
+  WpTable(
+      {this.properties,
+      required this.gridColumnsTwips,
+      required this.rows,
+      this.sourceXml});
 }
 
 /// Bloco não mapeado — preservado como XML bruto (D1).
@@ -621,6 +629,9 @@ class WpSectionProperties {
   final List<WpHeaderFooterReference> headerReferences;
   final List<WpHeaderFooterReference> footerReferences;
 
+  /// XML original do `<w:sectPr>` (re-emitido byte a byte no save).
+  final String? sourceXml;
+
   const WpSectionProperties({
     this.pageWidthTwips,
     this.pageHeightTwips,
@@ -635,6 +646,7 @@ class WpSectionProperties {
     this.titlePage = false,
     this.headerReferences = const [],
     this.footerReferences = const [],
+    this.sourceXml,
   });
 
   static WpSectionProperties? fromXml(XmlElement? el) {
@@ -662,6 +674,7 @@ class WpSectionProperties {
       titlePage: _onOff(el.firstChild('w:titlePg')) ?? false,
       headerReferences: refs('w:headerReference'),
       footerReferences: refs('w:footerReference'),
+      sourceXml: el.toXmlString(),
     );
   }
 }
