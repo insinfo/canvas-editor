@@ -15,6 +15,16 @@ class DocxFile {
   final WpNumbering numbering;
   final WpSettings settings;
 
+  /// Nome da parte principal (normalmente `word/document.xml`).
+  final String mainPartName;
+
+  /// document.xml original até (e incluindo) `<w:body>` — re-emitido
+  /// byte a byte no save (D1).
+  final String documentBodyPrefix;
+
+  /// document.xml original a partir de `</w:body>`.
+  final String documentBodySuffix;
+
   /// Headers/footers da seção única do corpus, por tipo (default/first/even).
   final Map<String, WpHeaderFooter> headersByType;
   final Map<String, WpHeaderFooter> footersByType;
@@ -28,6 +38,9 @@ class DocxFile {
     required this.styles,
     required this.numbering,
     required this.settings,
+    required this.mainPartName,
+    required this.documentBodyPrefix,
+    required this.documentBodySuffix,
     required this.headersByType,
     required this.footersByType,
     required this.fidelityNotes,
@@ -76,6 +89,18 @@ class DocxReader {
     if (bodyEl == null) {
       throw const FormatException('document.xml sem <w:body>.');
     }
+
+    // Prefixo/sufixo do body para o writer (passthrough D1): tudo antes do
+    // conteúdo do body e tudo a partir de </w:body> são re-emitidos como no
+    // original. O corpus usa <w:body> sem atributos.
+    final bodyOpen = documentXml.indexOf('<w:body>');
+    final bodyClose = documentXml.lastIndexOf('</w:body>');
+    if (bodyOpen < 0 || bodyClose < 0) {
+      throw const FormatException(
+          'document.xml com <w:body> em formato não suportado.');
+    }
+    final bodyPrefix = documentXml.substring(0, bodyOpen + '<w:body>'.length);
+    final bodySuffix = documentXml.substring(bodyClose);
 
     final section =
         WpSectionProperties.fromXml(bodyEl.firstChild('w:sectPr'));
@@ -128,6 +153,9 @@ class DocxReader {
       styles: styles,
       numbering: numbering,
       settings: settings,
+      mainPartName: mainPart,
+      documentBodyPrefix: bodyPrefix,
+      documentBodySuffix: bodySuffix,
       headersByType: headers,
       footersByType: footers,
       fidelityNotes: _notes,
@@ -188,7 +216,10 @@ class DocxReader {
           inlines.add(WpPreservedInline(child.qname, child.toXmlString()));
       }
     }
-    return WpParagraph(properties: properties, inlines: inlines);
+    return WpParagraph(
+        properties: properties,
+        inlines: inlines,
+        sourceXml: el.toXmlString());
   }
 
   WpRun _parseRun(XmlElement el) {
@@ -274,7 +305,11 @@ class DocxReader {
           _notes.add('filho de tabela ignorado: ${child.qname}');
       }
     }
-    return WpTable(properties: properties, gridColumnsTwips: grid, rows: rows);
+    return WpTable(
+        properties: properties,
+        gridColumnsTwips: grid,
+        rows: rows,
+        sourceXml: el.toXmlString());
   }
 
   WpTableRow _parseRow(XmlElement el) {
