@@ -56,6 +56,8 @@ IElement _cloneElement(
     lineSpacingValue: source.lineSpacingValue,
     paraSpacingBefore: source.paraSpacingBefore,
     paraSpacingAfter: source.paraSpacingAfter,
+    paraIndentLeft: source.paraIndentLeft,
+    paraIndentFirstLine: source.paraIndentFirstLine,
     textDecoration: _cloneTextDecoration(source.textDecoration),
     hide: source.hide,
     groupIds: source.groupIds?.toList(),
@@ -308,6 +310,14 @@ List<ITr>? _cloneTrList(List<ITr>? source) {
   }
   return source.map(_cloneTr).toList();
 }
+
+/// Clone profundo de uma lista de `tr` (usado pelo table paging para repetir
+/// o cabeçalho `pagingRepeat` nas partes seguintes da tabela).
+List<ITr> cloneTrList(List<ITr> source) => source.map(_cloneTr).toList();
+
+/// Clone profundo de um único elemento (table paging: parte seguinte da
+/// tabela dividida).
+IElement cloneElement(IElement source) => _cloneElement(source);
 
 ICheckbox? _cloneCheckbox(ICheckbox? source) {
   if (source == null) {
@@ -713,6 +723,10 @@ dynamic _getElementAttr(IElement element, String attr) {
       return element.paraSpacingBefore;
     case 'paraSpacingAfter':
       return element.paraSpacingAfter;
+    case 'paraIndentLeft':
+      return element.paraIndentLeft;
+    case 'paraIndentFirstLine':
+      return element.paraIndentFirstLine;
     case 'letterSpacing':
       return element.letterSpacing;
     case 'textDecoration':
@@ -880,6 +894,12 @@ void _setElementAttr(IElement element, String attr, dynamic value) {
       break;
     case 'paraSpacingAfter':
       element.paraSpacingAfter = value as double?;
+      break;
+    case 'paraIndentLeft':
+      element.paraIndentLeft = value as double?;
+      break;
+    case 'paraIndentFirstLine':
+      element.paraIndentFirstLine = value as double?;
       break;
     case 'letterSpacing':
       element.letterSpacing = value as double?;

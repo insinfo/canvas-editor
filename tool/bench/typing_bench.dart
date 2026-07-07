@@ -98,6 +98,40 @@ void main() {
         'pageCount': js_util.allowInterop(() {
           return app.editor.getDraw().getPageList().length;
         }),
+        // Depuração F4.5: visão agregada das tabelas no documento aberto.
+        'tableStats': js_util.allowInterop(() {
+          final draw = app.editor.getDraw();
+          final els = draw.getOriginalMainElementList();
+          var tables = 0, parts = 0, trsTotal = 0;
+          double hTotal = 0;
+          final tallest = <Map<String, Object?>>[];
+          for (final el in els) {
+            if (el.type?.name != 'table') continue;
+            tables++;
+            if (el.pagingId != null) parts++;
+            trsTotal += el.trList?.length ?? 0;
+            hTotal += el.height ?? 0;
+            tallest.add({
+              'h': (el.height ?? 0).round(),
+              'trs': el.trList?.length ?? 0,
+              'tds0': el.trList?.isNotEmpty == true
+                  ? el.trList!.first.tdList.length
+                  : 0,
+              'chars': el.trList?.fold<int>(
+                  0,
+                  (p, tr) => p! +
+                      tr.tdList.fold<int>(
+                          0,
+                          (q, td) => q +
+                              td.value.fold<int>(
+                                  0, (r, e) => r + e.value.length))),
+            });
+          }
+          tallest.sort((a, b) => (b['h']! as int).compareTo(a['h']! as int));
+          return 'tables=$tables parts=$parts trsTotal=$trsTotal '
+              'hTotal=${hTotal.round()} innerW=${draw.getInnerWidth()} '
+              'pageH=${draw.getHeight()} top3=${tallest.take(3).toList()}';
+        }),
         // Depuração F4.3: primeiras rows (altura/offset) + elementos com os
         // campos de espaçamento, como JSON.
         'rowStats': js_util.allowInterop(() {
@@ -290,6 +324,8 @@ Future<void> main(List<String> args) async {
           'tr_pages',
           (await page.evaluate<num?>('() => window.__perf.pageCount()'))
               ?.toInt());
+      stdout.writeln('[tableStats] '
+          '${await page.evaluate<String?>('() => window.__perf.tableStats()')}');
       final trChars = chars < 10 ? chars : 10;
       stdout.writeln('[bench] digitando $trChars teclas no TR...');
       report('typing_tr_ms_per_key', await _typeChars(page, trChars));

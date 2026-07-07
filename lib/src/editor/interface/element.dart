@@ -494,6 +494,11 @@ class IElement
   double? paraSpacingBefore;
   double? paraSpacingAfter;
 
+  /// `w:ind` do parágrafo em px (F4.2): recuo à esquerda de todas as linhas
+  /// e delta da primeira linha (firstLine positivo, hanging negativo).
+  double? paraIndentLeft;
+  double? paraIndentFirstLine;
+
   // IElementRule
   @override
   bool? hide;
@@ -648,6 +653,8 @@ class IElement
     this.lineSpacingValue,
     this.paraSpacingBefore,
     this.paraSpacingAfter,
+    this.paraIndentLeft,
+    this.paraIndentFirstLine,
     // IElementRule
     this.hide,
     // IElementGroup

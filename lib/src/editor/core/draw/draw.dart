@@ -1599,6 +1599,15 @@ class Draw {
         if (paraSpacingBefore > 0) {
           curRow.offsetY = (curRow.offsetY ?? 0) + paraSpacingBefore;
         }
+        // F4.2: indent da 1ª linha do parágrafo inicial do recorte/doc.
+        if (element.listId == null) {
+          final double indent = ((element.paraIndentLeft ?? 0) +
+                  (element.paraIndentFirstLine ?? 0)) *
+              scale;
+          if (indent > 0) {
+            curRow.offsetX = indent;
+          }
+        }
       }
       if ((element.hide == true ||
               element.control?.hide == true ||
@@ -1713,9 +1722,12 @@ class Draw {
                   isPagingMode: isPagingMode,
                 ),
               );
+              // offsetY carrega o before/after dos parágrafos da célula
+              // (F4.3) — sem ele a altura do TD ignora o espaçamento.
               final double rowHeight = tdRowList.fold<double>(
                 0,
-                (double prev, IRow cur) => prev + cur.height,
+                (double prev, IRow cur) =>
+                    prev + cur.height + (cur.offsetY ?? 0),
               );
               td.rowList = tdRowList;
               final double curTdHeight = rowHeight / scale + tdPaddingHeight;
@@ -1793,6 +1805,228 @@ class Draw {
         if (i + 1 < elementList.length &&
             elementList[i + 1].type == ElementType.table) {
           metrics.boundingBoxAscent -= rowMargin;
+        }
+        // Table paging (F4.5/roteiro F4.7): tabela que cruza o limite da
+        // página é DIVIDIDA em partes com o mesmo pagingId (o merge no início
+        // deste branch reconstitui antes de re-dividir), repetindo os tr com
+        // pagingRepeat como cabeçalho. Port do Draw.ts original (~1618-1737).
+        if (isPagingMode && !isFromTable) {
+          final double pageContentHeight = pageHeight;
+          final double marginHeight = mainOuterHeight;
+          double curPagePreHeight = marginHeight;
+          for (int r = 0; r < rowList.length; r++) {
+            final IRow row = rowList[r];
+            final double rowOffsetY = row.offsetY ?? 0;
+            if (row.height + curPagePreHeight + rowOffsetY >
+                    pageContentHeight ||
+                (r > 0 && rowList[r - 1].isPageBreak == true)) {
+              curPagePreHeight = marginHeight + row.height + rowOffsetY;
+            } else {
+              curPagePreHeight += row.height + rowOffsetY;
+            }
+          }
+          final List<ITr> trList = element.trList ?? <ITr>[];
+          if (trList.isNotEmpty) {
+            // A altura restante da página comporta a 1ª linha divisível?
+            final double rowMarginHeight = rowMargin * 2 * scale;
+            final double firstTrHeight = trList.first.height * scale;
+            if (curPagePreHeight + firstTrHeight + rowMarginHeight >
+                    pageContentHeight ||
+                ((element.pagingIndex ?? 0) != 0 &&
+                    trList.first.pagingRepeat == true) ||
+                (i > 0 &&
+                    elementList[i - 1].type == ElementType.pageBreak)) {
+              // Sem linha divisível: tabela começa em página nova.
+              curPagePreHeight = marginHeight;
+            }
+            // Tabela estoura a página: truncar linhas para a próxima parte.
+            if (curPagePreHeight + rowMarginHeight + elementHeight >
+                pageContentHeight) {
+              int deleteStart = 0;
+              int deleteCount = 0;
+              double preTrHeight = 0;
+              if (trList.length > 1) {
+                for (int r = 0; r < trList.length; r++) {
+                  final ITr tr = trList[r];
+                  final double trHeight = tr.height * scale;
+                  if (curPagePreHeight +
+                          rowMarginHeight +
+                          preTrHeight +
+                          trHeight >
+                      pageContentHeight) {
+                    break;
+                  } else {
+                    deleteStart = r + 1;
+                    deleteCount = trList.length - deleteStart;
+                    preTrHeight += trHeight;
+                  }
+                }
+              }
+              if (deleteCount > 0) {
+                final List<ITr> cloneTrList =
+                    trList.sublist(deleteStart, deleteStart + deleteCount);
+                trList.removeRange(deleteStart, deleteStart + deleteCount);
+                // Rowspan cruzando o corte (o original desistia da divisão —
+                // as tabelas gigantes do TR mesclam a 1ª coluna o tempo
+                // todo): trunca o rowspan na parte 1 e insere célula de
+                // continuação vazia na parte 2, como o `vMerge continue` do
+                // Word (F4.5).
+                final int gridCols = element.colgroup?.length ?? 0;
+                if (gridCols > 0 && cloneTrList.isNotEmpty) {
+                  final int part1Rows = trList.length;
+                  final List<List<ITd?>> owners = List<List<ITd?>>.generate(
+                    part1Rows,
+                    (_) => List<ITd?>.filled(gridCols, null),
+                  );
+                  // (coluna, td, linhas restantes) das células cruzantes.
+                  final List<List<Object>> crossing = <List<Object>>[];
+                  for (int r0 = 0; r0 < part1Rows; r0++) {
+                    int col = 0;
+                    for (final ITd td in trList[r0].tdList) {
+                      while (col < gridCols && owners[r0][col] != null) {
+                        col += 1;
+                      }
+                      if (col >= gridCols) {
+                        break;
+                      }
+                      final int spanEnd = r0 + td.rowspan;
+                      for (int rr = r0;
+                          rr < (spanEnd < part1Rows ? spanEnd : part1Rows);
+                          rr++) {
+                        for (int cc = col;
+                            cc < col + td.colspan && cc < gridCols;
+                            cc++) {
+                          owners[rr][cc] = td;
+                        }
+                      }
+                      if (spanEnd > part1Rows) {
+                        crossing.add(<Object>[col, td, spanEnd - part1Rows]);
+                        td.rowspan = part1Rows - r0;
+                      }
+                      col += td.colspan;
+                    }
+                  }
+                  if (crossing.isNotEmpty) {
+                    crossing.sort((a, b) =>
+                        (a[0] as int).compareTo(b[0] as int));
+                    final ITr firstCloneTr = cloneTrList.first;
+                    // Colunas ocupadas pelas continuações.
+                    final Set<int> phantomCols = <int>{};
+                    for (final List<Object> cross in crossing) {
+                      final ITd td = cross[1] as ITd;
+                      for (int k = cross[0] as int;
+                          k < (cross[0] as int) + td.colspan;
+                          k++) {
+                        phantomCols.add(k);
+                      }
+                    }
+                    // Colunas dos tds reais da 1ª linha da parte 2.
+                    final List<int> realCols = <int>[];
+                    int col = 0;
+                    for (final ITd td in firstCloneTr.tdList) {
+                      while (phantomCols.contains(col)) {
+                        col += 1;
+                      }
+                      realCols.add(col);
+                      col += td.colspan;
+                    }
+                    int inserted = 0;
+                    for (final List<Object> cross in crossing) {
+                      final int crossCol = cross[0] as int;
+                      final ITd ownerTd = cross[1] as ITd;
+                      final int remaining = cross[2] as int;
+                      int insertAt = inserted;
+                      for (final int realCol in realCols) {
+                        if (realCol < crossCol) {
+                          insertAt += 1;
+                        }
+                      }
+                      firstCloneTr.tdList.insert(
+                        insertAt,
+                        ITd(
+                          id: utils.getUUID(),
+                          colspan: ownerTd.colspan,
+                          rowspan: remaining,
+                          value: <IElement>[IElement(value: '')],
+                          backgroundColor: ownerTd.backgroundColor,
+                          borderTypes: ownerTd.borderTypes?.toList(),
+                          verticalAlign: ownerTd.verticalAlign,
+                        ),
+                      );
+                      inserted += 1;
+                    }
+                  }
+                }
+                final double cloneTrHeight = cloneTrList.fold<double>(
+                  0,
+                  (double pre, ITr cur) => pre + cur.height,
+                );
+                final double cloneTrRealHeight = cloneTrHeight * scale;
+                final String pagingId = element.pagingId ?? utils.getUUID();
+                element.pagingId = pagingId;
+                element.height = (element.height ?? 0) - cloneTrHeight;
+                metrics.height -= cloneTrRealHeight;
+                metrics.boundingBoxDescent -= cloneTrRealHeight;
+                // Parte seguinte da tabela.
+                final IElement cloneElement =
+                    element_utils.cloneElement(element);
+                cloneElement.pagingId = pagingId;
+                cloneElement.pagingIndex = (element.pagingIndex ?? 0) + 1;
+                // Cabeçalho repetido por página (w:tblHeader/pagingRepeat).
+                final List<ITr> repeatTrList = trList
+                    .where((ITr tr) => tr.pagingRepeat == true)
+                    .toList();
+                final List<ITr> nextTrList = cloneTrList;
+                if (repeatTrList.isNotEmpty) {
+                  final List<ITr> cloneRepeatTrList =
+                      element_utils.cloneTrList(repeatTrList);
+                  for (final ITr tr in cloneRepeatTrList) {
+                    tr.id = utils.getUUID();
+                  }
+                  nextTrList.insertAll(0, cloneRepeatTrList);
+                }
+                cloneElement.trList = nextTrList;
+                cloneElement.id = utils.getUUID();
+                spliceElementList(
+                  elementList,
+                  i + 1,
+                  0,
+                  <IElement>[cloneElement],
+                );
+              }
+            }
+          }
+          // Cursor dentro de tabela dividida: reencontrar o tr pelo id.
+          if (element.pagingId != null && position != null) {
+            final IPositionContext positionContext =
+                position.getPositionContext();
+            if (positionContext.isTable) {
+              int newPositionContextIndex = -1;
+              int newPositionContextTrIndex = -1;
+              int tableIndex = i;
+              while (tableIndex < elementList.length) {
+                final IElement curElement = elementList[tableIndex];
+                if (curElement.pagingId != element.pagingId) {
+                  break;
+                }
+                final int trIndex = curElement.trList?.indexWhere(
+                      (ITr r) => r.id == positionContext.trId,
+                    ) ??
+                    -1;
+                if (trIndex >= 0) {
+                  newPositionContextIndex = tableIndex;
+                  newPositionContextTrIndex = trIndex;
+                  break;
+                }
+                tableIndex += 1;
+              }
+              if (newPositionContextIndex >= 0) {
+                positionContext.index = newPositionContextIndex;
+                positionContext.trIndex = newPositionContextTrIndex;
+                position.setPositionContext(positionContext);
+              }
+            }
+          }
         }
       } else if (element.type == ElementType.separator) {
         final double lineWidth =
@@ -2086,6 +2320,19 @@ class Draw {
           newRow.isList = true;
           newRow.offsetX = listStyleMap[element.listId!] ?? 0;
           newRow.listIndex = listIndex;
+        } else if (element.paraIndentLeft != null ||
+            element.paraIndentFirstLine != null) {
+          // F4.2 (w:ind): 1ª linha do parágrafo = left + firstLine (hanging
+          // entra negativo); linhas de continuação (wrap) = left.
+          final bool isParagraphStart = element.value == ZERO;
+          final double indent = ((element.paraIndentLeft ?? 0) +
+                  (isParagraphStart
+                      ? (element.paraIndentFirstLine ?? 0)
+                      : 0)) *
+              scale;
+          if (indent > 0) {
+            newRow.offsetX = indent;
+          }
         }
         if (!isFromTable &&
             element.area?.top != null &&
