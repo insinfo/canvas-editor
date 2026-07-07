@@ -2424,6 +2424,29 @@ class EditorApp {
     });
   }
 
+  DivElement? _loadingOverlay;
+
+  /// Overlay de carregamento (plano de otimização A6): feedback visual para
+  /// operações síncronas longas (abrir/salvar DOCX). O chamador deve ceder o
+  /// event loop (2× `window.animationFrame`) após exibir, para o browser
+  /// pintar o overlay antes do trabalho pesado.
+  void _showLoading(String message) {
+    _loadingOverlay?.remove();
+    final overlay = DivElement()
+      ..classes.add('ce-loading-overlay')
+      ..append(DivElement()..classes.add('ce-loading-overlay__spinner'))
+      ..append(DivElement()
+        ..classes.add('ce-loading-overlay__label')
+        ..text = message);
+    document.body?.append(overlay);
+    _loadingOverlay = overlay;
+  }
+
+  void _hideLoading() {
+    _loadingOverlay?.remove();
+    _loadingOverlay = null;
+  }
+
   void _readDocxFile(File file) {
     final reader = FileReader();
     reader.readAsArrayBuffer(file);
@@ -2438,30 +2461,37 @@ class EditorApp {
         window.alert('Falha ao ler o arquivo ${file.name}.');
         return;
       }
-      _openDocxBytes(file.name, bytes);
+      unawaited(openDocxBytes(file.name, bytes));
     });
   }
 
-  void _openDocxBytes(String name, Uint8List bytes) {
+  /// Abre um DOCX já lido em memória. Público para a shell (file picker,
+  /// drag-drop) e para os benchmarks/E2E (`openDocxFromUrl`).
+  ///
+  /// Otimização A5 (doc/plano_otimizacao_performance.md): toda a configuração
+  /// (geometria da página, pageNumber, distâncias de header/footer) é aplicada
+  /// ANTES do `executeSetValue`, que faz o ÚNICO render da abertura — o fluxo
+  /// antigo (`executePaperSize` → `executeSetPaperMargin` → `executeSetValue`
+  /// → `executeForceUpdate`) disparava 4 relayouts completos do documento.
+  Future<void> openDocxBytes(String name, Uint8List bytes) async {
+    _showLoading('Abrindo $name…');
     try {
+      // Yield para o browser pintar o overlay antes do trabalho síncrono.
+      await window.animationFrame;
+      await window.animationFrame;
       final docx = DocxReader.read(bytes);
       final converted = DocxToElementConverter.convert(docx);
-      command.executePaperSize(converted.pageWidthPx, converted.pageHeightPx);
-      command.executeSetPaperMargin(converted.marginsPx);
-      command.executeSetValue(IEditorData(
-        header: converted.header,
-        main: converted.main,
-        footer: converted.footer,
-      ));
-      _openedDocx = docx;
-      _openedDocxName = name;
-      // Referência de "intocado" para o save: o próprio getValue, para que
-      // corrente e original passem pela mesma normalização (zip) do editor.
-      _openedOriginalMain = command.getValue().data.main;
+
+      final draw = editor.getDraw();
+      draw.setPaperOptionsSilently(
+        width: converted.pageWidthPx.toDouble(),
+        height: converted.pageHeightPx.toDouble(),
+        margins: converted.marginsPx,
+      );
 
       // F4.7: campos PAGE/NUMPAGES do rodapé viram numeração dinâmica;
       // sem campos, desliga o pageNumber da demo (evita número espúrio).
-      final drawOptions = editor.getDraw().getOptions();
+      final drawOptions = draw.getOptions();
       if (converted.pageNumberFormat != null) {
         drawOptions.pageNumber = IPageNumber(
           format: converted.pageNumberFormat,
@@ -2480,7 +2510,21 @@ class EditorApp {
           converted.headerDistancePx;
       (drawOptions.footer ??= IFooter()).bottom =
           converted.footerDistancePx;
-      command.executeForceUpdate();
+
+      // O forceUpdate antigo limpava o range antes de renderizar; preserva o
+      // comportamento sem pagar outro render.
+      draw.getRange().clearRange();
+      command.executeSetValue(IEditorData(
+        header: converted.header,
+        main: converted.main,
+        footer: converted.footer,
+      ));
+      _openedDocx = docx;
+      _openedDocxName = name;
+      // Referência de "intocado" para o save: o próprio getValue, para que
+      // corrente e original passem pela mesma normalização (zip) do editor.
+      _openedOriginalMain = command.getValue().data.main;
+
       final notes = converted.notes.toSet();
       if (notes.isNotEmpty) {
         window.console.group('Notas de fidelidade — $name');
@@ -2492,6 +2536,8 @@ class EditorApp {
     } catch (error, stackTrace) {
       window.console.error('Erro ao abrir DOCX: $error\n$stackTrace');
       window.alert('Não foi possível abrir "$name": $error');
+    } finally {
+      _hideLoading();
     }
   }
 
@@ -2520,8 +2566,11 @@ class EditorApp {
 
   void _setupDocxSaveControl() {
     final saveDom = _requireElement<DivElement>('.menu-item__docx-save');
-    saveDom.onClick.listen((_) {
+    saveDom.onClick.listen((_) async {
+      _showLoading('Salvando ${_openedDocxName ?? 'documento.docx'}…');
       try {
+        await window.animationFrame;
+        await window.animationFrame;
         final bytes = saveOpenedDocxBytes();
         if (bytes == null) {
           window.alert('Abra um DOCX antes de salvar.');
@@ -2537,6 +2586,8 @@ class EditorApp {
       } catch (error, stackTrace) {
         window.console.error('Erro ao salvar DOCX: $error\n$stackTrace');
         window.alert('Não foi possível salvar: $error');
+      } finally {
+        _hideLoading();
       }
     });
   }

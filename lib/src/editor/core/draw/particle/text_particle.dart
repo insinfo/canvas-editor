@@ -37,6 +37,26 @@ class TextParticle {
 	String? curColor;
 	final Map<String, ITextMetrics> cacheMeasureText;
 
+	// Estado do ctx de medição (plano de otimização A2): setar/ler `ctx.font`
+	// é uma chamada de interop DOM; com dezenas de milhares de elementos por
+	// render isso domina o custo do layout. Rastreamos o último font aplicado
+	// e só tocamos o DOM quando ele muda de fato (e nunca em cache hit).
+	CanvasRenderingContext2D? _measureCtx;
+	String _measureFont = '';
+
+	static final RegExp _fallbackLetterReg = RegExp('[A-Za-z]');
+
+	void _applyMeasureFont(CanvasRenderingContext2D ctx, String font) {
+		if (font.isEmpty) {
+			return;
+		}
+		if (!identical(ctx, _measureCtx) || font != _measureFont) {
+			ctx.font = font;
+			_measureCtx = ctx;
+			_measureFont = font;
+		}
+	}
+
 	ITextMetrics measureBasisWord(CanvasRenderingContext2D ctx, String font) {
 		ctx.save();
 		ctx.font = font;
@@ -45,16 +65,19 @@ class TextParticle {
 			IElement(value: METRICS_BASIS_TEXT),
 		);
 		ctx.restore();
+		// O restore reverte o font do ctx por fora do rastreador.
+		_measureCtx = null;
 		return metrics;
 	}
 
 	IMeasureWordResult measureWord(
 		CanvasRenderingContext2D ctx,
 		List<IElement> elementList,
-		int curIndex,
-	) {
+		int curIndex, [
+		String? font,
+	]) {
 		final RegExp effectiveLetterReg =
-				draw.getLetterReg() ?? RegExp('[A-Za-z]');
+				draw.getLetterReg() ?? _fallbackLetterReg;
 		double width = 0;
 		IElement? endElement;
 		int index = curIndex;
@@ -69,7 +92,10 @@ class TextParticle {
 				endElement = element;
 				break;
 			}
-			width += measureText(ctx, element).width;
+			width += (font != null
+							? measureTextWithFont(ctx, element, font)
+							: measureText(ctx, element))
+					.width;
 			index += 1;
 		}
 		return IMeasureWordResult(width: width, endElement: endElement);
@@ -82,8 +108,8 @@ class TextParticle {
 		if (element == null || !PUNCTUATION_LIST.contains(element.value)) {
 			return 0;
 		}
-		ctx.font = draw.getElementFont(element);
-		return measureText(ctx, element).width;
+		final String font = draw.getElementFont(element);
+		return measureTextWithFont(ctx, element, font).width;
 	}
 
 	ITextMetrics measureText(CanvasRenderingContext2D ctx, IElement element) {
@@ -96,6 +122,31 @@ class TextParticle {
 		if (cached != null) {
 			return cached;
 		}
+		final TextMetrics metrics = ctx.measureText(element.value);
+		final ITextMetrics wrapped = _createMetrics(metrics);
+		cacheMeasureText[cacheKey] = wrapped;
+		return wrapped;
+	}
+
+	/// Variante quente de [measureText]: recebe a fonte já resolvida, monta a
+	/// cache key sem ler `ctx.font` do DOM e só aplica a fonte no ctx em cache
+	/// miss (quando `measureText` nativo realmente vai rodar).
+	ITextMetrics measureTextWithFont(
+		CanvasRenderingContext2D ctx,
+		IElement element,
+		String font,
+	) {
+		if (element.width != null) {
+			_applyMeasureFont(ctx, font);
+			final TextMetrics metrics = ctx.measureText(element.value);
+			return _createMetrics(metrics, widthOverride: element.width?.toDouble());
+		}
+		final String cacheKey = '${element.value}$font';
+		final ITextMetrics? cached = cacheMeasureText[cacheKey];
+		if (cached != null) {
+			return cached;
+		}
+		_applyMeasureFont(ctx, font);
 		final TextMetrics metrics = ctx.measureText(element.value);
 		final ITextMetrics wrapped = _createMetrics(metrics);
 		cacheMeasureText[cacheKey] = wrapped;

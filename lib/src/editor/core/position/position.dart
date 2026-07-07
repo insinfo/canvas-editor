@@ -173,6 +173,8 @@ class Position {
           x += element.translateX! * scale;
         }
 
+        // Cantos derivados de coordX/coordY + metrics/lineHeight; o Map só é
+        // materializado se algum consumidor ler `coordinate` (A4).
         final IElementPosition positionItem = IElementPosition(
           pageNo: pageNo,
           index: index,
@@ -185,12 +187,8 @@ class Position {
           lineHeight: curRow.height,
           isFirstLetter: j == 0,
           isLastLetter: j == elementList.length - 1,
-          coordinate: <String, List<double>>{
-            'leftTop': <double>[x, y],
-            'leftBottom': <double>[x, y + curRow.height],
-            'rightTop': <double>[x + metrics.width, y],
-            'rightBottom': <double>[x + metrics.width, y + curRow.height],
-          },
+          coordX: x,
+          coordY: y,
         );
 
         if (element.imgDisplay == ImageDisplay.surround ||

@@ -7,6 +7,18 @@ class IDrawOption {
   int? curIndex;
   bool? isSetCursor;
   bool? isSubmitHistory;
+
+  /// Adia o snapshot de histórico para o fim da rajada de digitação
+  /// (debounce). Clonar o documento inteiro a cada tecla era um dos custos
+  /// dominantes da digitação; com o adiamento o undo agrupa a rajada,
+  /// como no Word (doc/plano_otimizacao_performance.md).
+  bool? isSubmitHistoryDeferred;
+
+  /// Índice de elemento âncora da edição (digitação/backspace): habilita o
+  /// fast path de layout que recomputa só as rows do parágrafo editado
+  /// (Draw._tryFastParagraphLayout). Ignorado quando as guardas do fast path
+  /// não valem — o render cai no relayout completo normal.
+  int? fastLayoutIndex;
   bool? isCompute;
   bool? isLazy;
   bool? isInit;
@@ -17,6 +29,8 @@ class IDrawOption {
     this.curIndex,
     this.isSetCursor,
     this.isSubmitHistory,
+    this.isSubmitHistoryDeferred,
+    this.fastLayoutIndex,
     this.isCompute,
     this.isLazy,
     this.isInit,

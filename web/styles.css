@@ -2205,3 +2205,40 @@ ul {
 .overflow-hidden {
   overflow: hidden !important;
 }
+
+/* Overlay de carregamento (doc/plano_otimizacao_performance.md, A6) */
+.ce-loading-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 10000;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 14px;
+  background: rgba(255, 255, 255, 0.75);
+}
+
+.ce-loading-overlay__spinner {
+  width: 44px;
+  height: 44px;
+  border: 4px solid rgba(73, 145, 242, 0.25);
+  border-top-color: #4991f2;
+  border-radius: 50%;
+  animation: ceLoadingSpin 0.8s linear infinite;
+}
+
+.ce-loading-overlay__label {
+  color: #3d4756;
+  font-size: 14px;
+  max-width: 70vw;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+@keyframes ceLoadingSpin {
+  to {
+    transform: rotate(360deg);
+  }
+}

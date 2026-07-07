@@ -104,6 +104,12 @@ void input(String data, CanvasEvent host) {
 			IDrawOption(
 				curIndex: curIndex,
 				isSubmitHistory: !isComposing,
+				// Digitação: snapshot de undo adiado para o fim da rajada
+				// (P1 do plano de otimização — evita clone O(doc) por tecla).
+				isSubmitHistoryDeferred: true,
+				// P2: relayout restrito ao parágrafo do cursor quando as
+				// guardas do fast path valem.
+				fastLayoutIndex: curIndex,
 			),
 		);
 	}
