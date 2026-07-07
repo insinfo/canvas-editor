@@ -282,7 +282,7 @@ class DocxToElementConverter {
       font: style.fontAscii ?? style.fontHAnsi,
       size: sizeHalf == null ? null : Units.halfPointToPx(sizeHalf).round(),
     );
-    _applySpacing(element, _paraSpacing(pPr.spacing));
+    _applySpacing(element, _paraSpacing(pPr));
     return element;
   }
 
@@ -291,7 +291,7 @@ class DocxToElementConverter {
   List<IElement> _convertParagraph(
       WpParagraph paragraph, WpParagraphProperties pPr, String fromPart) {
     final rowFlex = _rowFlex(pPr.jc);
-    final spacing = _paraSpacing(pPr.spacing);
+    final spacing = _paraSpacing(pPr);
     final elements = <IElement>[];
 
     // Numeração multinível → marcador textual inline (motor real na F4.2).
@@ -562,7 +562,11 @@ class DocxToElementConverter {
       trList.add(ITr(
         height: heightPx.clamp(20.0, double.infinity),
         tdList: tdList,
-        minHeight: trPr?.heightRule == 'atLeast' ? heightPx : null,
+        // OOXML: hRule ausente = atLeast; 'exact' aproximado como mínimo
+        // (o modelo do editor não trunca conteúdo de célula). Sem trHeight,
+        // 20px evita o piso de 42px do editor (defaultTrMinHeight) — o Word
+        // dimensiona a linha pelo conteúdo (~21px para 1 linha de 12pt).
+        minHeight: trPr?.heightTwips != null ? heightPx : 20.0,
         pagingRepeat: trPr?.tblHeader == true ? true : null,
       ));
     }
@@ -650,7 +654,20 @@ class DocxToElementConverter {
   /// `w:spacing` efetivo → espaçamento Word-fiel (F4.3): rowMargin 0 (sem o
   /// padding fixo do editor), altura de linha pela fonte (auto = múltiplo de
   /// 240; atLeast/exact em twips → px, /15) e before/after em px.
-  static _ParaSpacing _paraSpacing(WpSpacing? spacing) {
+  _ParaSpacing _paraSpacing(WpParagraphProperties pPr) {
+    final spacing = pPr.spacing;
+    // F4.2: o indent efetivo dos parágrafos numerados vem do w:ind do nível
+    // de numeração (numbering.xml), com o pPr direto vencendo campo a campo.
+    WpIndent? numIndent;
+    final numPr = pPr.numPr;
+    if (numPr != null && numPr.numId != null && numPr.numId != 0) {
+      numIndent = file.numbering.levelOf(numPr.numId!, numPr.ilvl)?.indent;
+    }
+    final direct = pPr.indent;
+    final int? leftTwips = direct?.leftTwips ?? numIndent?.leftTwips;
+    final int? firstLineTwips =
+        direct?.firstLineTwips ?? numIndent?.firstLineTwips;
+    final int? hangingTwips = direct?.hangingTwips ?? numIndent?.hangingTwips;
     final line = spacing?.line;
     final rule = spacing?.lineRule ?? 'auto';
     String lineRule = 'auto';
@@ -670,6 +687,11 @@ class DocxToElementConverter {
           spacing?.beforeTwips == null ? null : spacing!.beforeTwips! / 15.0,
       afterPx:
           spacing?.afterTwips == null ? null : spacing!.afterTwips! / 15.0,
+      indentLeftPx: leftTwips == null ? null : leftTwips / 15.0,
+      indentFirstLinePx:
+          ((firstLineTwips ?? 0) - (hangingTwips ?? 0)) == 0
+              ? null
+              : ((firstLineTwips ?? 0) - (hangingTwips ?? 0)) / 15.0,
     );
   }
 
@@ -680,6 +702,8 @@ class DocxToElementConverter {
     element.lineSpacingValue = spacing.lineSpacingValue;
     element.paraSpacingBefore = spacing.beforePx;
     element.paraSpacingAfter = spacing.afterPx;
+    element.paraIndentLeft = spacing.indentLeftPx;
+    element.paraIndentFirstLine = spacing.indentFirstLinePx;
   }
 
   static String? _hexColor(String? color) {
@@ -751,11 +775,15 @@ class _ParaSpacing {
   final double lineSpacingValue; // múltiplo (auto) ou px (atLeast/exact)
   final double? beforePx;
   final double? afterPx;
+  final double? indentLeftPx;
+  final double? indentFirstLinePx;
 
   const _ParaSpacing({
     required this.lineSpacingRule,
     required this.lineSpacingValue,
     this.beforePx,
     this.afterPx,
+    this.indentLeftPx,
+    this.indentFirstLinePx,
   });
 }

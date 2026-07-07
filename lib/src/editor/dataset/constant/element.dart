@@ -39,6 +39,8 @@ const List<String> editorElementCopyAttr = <String>[
 	'lineSpacingValue',
 	'paraSpacingBefore',
 	'paraSpacingAfter',
+	'paraIndentLeft',
+	'paraIndentFirstLine',
 	'textDecoration',
 ];
 
