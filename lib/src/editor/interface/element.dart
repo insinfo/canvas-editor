@@ -725,7 +725,14 @@ class IElementPosition {
   IElementMetrics metrics;
   bool isFirstLetter;
   bool isLastLetter;
-  Map<String, List<double>> coordinate;
+
+  /// Canto superior esquerdo do elemento. Os quatro cantos do [coordinate]
+  /// são deriváveis de (coordX, coordY, metrics.width, lineHeight); guardar
+  /// só os dois doubles evita 5 alocações (1 Map + 4 List) por elemento por
+  /// render (plano de otimização A4).
+  double coordX;
+  double coordY;
+  Map<String, List<double>>? _coordinate;
 
   IElementPosition({
     required this.pageNo,
@@ -739,8 +746,25 @@ class IElementPosition {
     required this.metrics,
     required this.isFirstLetter,
     required this.isLastLetter,
-    required this.coordinate,
-  });
+    this.coordX = 0,
+    this.coordY = 0,
+    Map<String, List<double>>? coordinate,
+  }) : _coordinate = coordinate;
+
+  /// Materializado sob demanda (lazy) e cacheado; a maioria das posições
+  /// nunca tem as coordenadas lidas entre um render e o seguinte.
+  Map<String, List<double>> get coordinate {
+    return _coordinate ??= <String, List<double>>{
+      'leftTop': <double>[coordX, coordY],
+      'leftBottom': <double>[coordX, coordY + lineHeight],
+      'rightTop': <double>[coordX + metrics.width, coordY],
+      'rightBottom': <double>[coordX + metrics.width, coordY + lineHeight],
+    };
+  }
+
+  set coordinate(Map<String, List<double>> value) {
+    _coordinate = value;
+  }
 }
 
 class IElementFillRect {

@@ -1156,7 +1156,45 @@ class Draw {
     }
   }
 
-  void submitHistory([int? curIndex]) {
+  // Snapshot de histórico adiado por rajada de digitação (P1 do plano de
+  // otimização): clonar main+header+footer a cada tecla era O(documento) por
+  // keystroke. Com o adiamento, o clone acontece uma vez por rajada (debounce)
+  // e o undo agrupa a palavra digitada, como no Word/OnlyOffice.
+  int? _deferredHistoryIndex;
+  Timer? _deferredHistoryTimer;
+  static const Duration _deferredHistoryDelay = Duration(milliseconds: 300);
+
+  /// Materializa o snapshot pendente da rajada de digitação (se houver).
+  /// Chamado antes de undo/redo e em pontos de entrada de eventos que mudam
+  /// o documento fora da rajada.
+  void flushDeferredHistory() {
+    if (_deferredHistoryTimer == null) {
+      return;
+    }
+    final int? curIndex = _deferredHistoryIndex;
+    cancelDeferredHistory();
+    submitHistory(curIndex);
+  }
+
+  /// Descarta o snapshot pendente (o estado da rajada foi englobado por um
+  /// submit imediato posterior ou o documento foi substituído).
+  void cancelDeferredHistory() {
+    _deferredHistoryTimer?.cancel();
+    _deferredHistoryTimer = null;
+    _deferredHistoryIndex = null;
+  }
+
+  void submitHistory([int? curIndex, bool defer = false]) {
+    if (defer) {
+      _deferredHistoryIndex = curIndex;
+      _deferredHistoryTimer?.cancel();
+      _deferredHistoryTimer =
+          Timer(_deferredHistoryDelay, flushDeferredHistory);
+      return;
+    }
+    // Um submit imediato captura o estado corrente, que já inclui a rajada
+    // pendente — o snapshot adiado viraria uma duplicata na pilha de undo.
+    cancelDeferredHistory();
     final HistoryManager? historyManager = _historyManager as HistoryManager?;
     final RangeManager? rangeManager = _rangeManager as RangeManager?;
     final Position? position = _position as Position?;
@@ -1525,10 +1563,15 @@ class Draw {
     int listIndex = 0;
     String? listId;
     double controlRealWidth = 0;
+    // Hoisted do loop (plano de otimização A3): regex e fonte por elemento
+    // eram recriados dezenas de milhares de vezes por render.
+    final RegExp effectiveLetterReg = getLetterReg() ?? RegExp('[A-Za-z]');
     for (int i = 0; i < elementList.length; i++) {
       final IRow curRow = rowList.last;
       final IElement element = elementList[i];
       final IElement? preElement = i > 0 ? elementList[i - 1] : null;
+      // Fonte resolvida no branch de texto e reutilizada no rowElement (A3).
+      String? resolvedFontStyle;
       final double rowMarginFactor = element.rowMargin ?? defaultRowMargin;
       final double rowMargin = defaultBasicRowMarginHeight * rowMarginFactor;
       final IElementMetrics metrics = IElementMetrics(
@@ -1602,8 +1645,9 @@ class Draw {
         } else if (element.type == ElementType.label) {
         final IPadding padding = _options.label?.defaultPadding ??
           IPadding(top: 4, right: 4, bottom: 4, left: 4);
-        ctx.font = getElementFont(element);
-        final ITextMetrics fontMetrics = textParticle!.measureText(ctx, element);
+        final String labelFont = getElementFont(element);
+        final ITextMetrics fontMetrics =
+          textParticle!.measureTextWithFont(ctx, element, labelFont);
         metrics.width =
           fontMetrics.width + (padding.right + padding.left) * scale;
         metrics.height = ((element.size ?? defaultSize).toDouble()) * scale;
@@ -1804,9 +1848,9 @@ class Draw {
             (element.actualSize ?? element.size ?? defaultSize).toDouble();
         metrics.height = resolvedSize * scale;
         final String fontStyle = getElementFont(element, scale);
-        ctx.font = fontStyle;
+        resolvedFontStyle = fontStyle;
         final ITextMetrics? fontMetrics =
-            textParticle?.measureText(ctx, element);
+            textParticle?.measureTextWithFont(ctx, element, fontStyle);
         final double measuredWidth = (fontMetrics?.width ?? 0) * scale;
         metrics.width = measuredWidth;
         if (element.letterSpacing != null) {
@@ -1836,7 +1880,8 @@ class Draw {
           metrics.boundingBoxAscent +
           metrics.boundingBoxDescent +
           rowMargin;
-      final String fontStyle = getElementFont(element, scale);
+      final String fontStyle =
+          resolvedFontStyle ?? getElementFont(element, scale);
       final IRowElement rowElement = _buildRowElement(
         element,
         metrics,
@@ -1872,12 +1917,14 @@ class Draw {
         final bool isCurText =
             element.type == null || element.type == ElementType.text;
         if (isPreText && isCurText) {
-          final String word = '${preElement?.value ?? ''}${element.value}';
-          final RegExp effectiveLetterReg =
-              getLetterReg() ?? RegExp('[A-Za-z]');
-          if (effectiveLetterReg.hasMatch(word)) {
+          // Classes de letra são de 1 char: testar as duas strings separadas
+          // equivale a testar a concatenação, sem alocar a string do par.
+          final bool hasLetter = effectiveLetterReg.hasMatch(element.value) ||
+              (preElement != null &&
+                  effectiveLetterReg.hasMatch(preElement.value));
+          if (hasLetter) {
             final IMeasureWordResult measureResult =
-                textParticle.measureWord(ctx, elementList, i);
+                textParticle.measureWord(ctx, elementList, i, resolvedFontStyle);
             final IElement? endElement = measureResult.endElement;
             final double wordWidth = measureResult.width * scale;
             if (endElement != null && wordWidth <= availableWidth) {
@@ -2200,6 +2247,153 @@ class Draw {
       }
     }
     return pageRowList;
+  }
+
+  /// Nº de elementos de `_elementList` no momento do último compute — usado
+  /// pelo fast path para mapear índices novos → antigos nas rows cacheadas.
+  int _computedElementCount = 0;
+
+  /// Fast path de layout para digitação (P2 do plano de otimização; análogo
+  /// ao `Recalculate_FastWholeParagraph` do OnlyOffice): recomputa apenas as
+  /// rows do parágrafo que contém [anchorIndex] e reusa todas as demais
+  /// (renumerando índices). As páginas e posições são reparticionadas pelo
+  /// chamador como de costume. Retorna `false` (cai no relayout completo)
+  /// em qualquer situação fora do caso trivial:
+  /// zona ≠ main, cursor em tabela, floats/surround no documento, parágrafo
+  /// com lista/área/controle/título de lista/elemento não-textual, rowFlex
+  /// misto no parágrafo, ou fronteiras de rows desalinhadas.
+  bool _tryFastParagraphLayout(int anchorIndex) {
+    final Position? position = _position as Position?;
+    if (position == null || _rowList.isEmpty || _computedElementCount == 0) {
+      return false;
+    }
+    if (position.getPositionContext().isTable == true) {
+      return false;
+    }
+    if (!getZone().isMainActive()) {
+      return false;
+    }
+    final List<IElement> elementList = _elementList;
+    if (anchorIndex < 0 || anchorIndex >= elementList.length) {
+      return false;
+    }
+    // Floats mudam o fluxo de qualquer parágrafo (surround) — só o caminho
+    // completo os trata. floatPositionList ainda reflete o último render.
+    if (position.getFloatPositionList().isNotEmpty) {
+      return false;
+    }
+    if (element_utils.pickSurroundElementList(elementList).isNotEmpty) {
+      return false;
+    }
+    final int delta = elementList.length - _computedElementCount;
+
+    // Limites do parágrafo NOVO (rows quebram sempre em ZERO, então um
+    // parágrafo começa num ZERO — ou no índice 0 — e vai até o próximo ZERO).
+    int pStart = anchorIndex;
+    while (pStart > 0 && elementList[pStart].value != ZERO) {
+      pStart -= 1;
+    }
+    int pEnd = anchorIndex + 1;
+    while (pEnd < elementList.length && elementList[pEnd].value != ZERO) {
+      pEnd += 1;
+    }
+
+    // Guardas por elemento do parágrafo (novo).
+    RowFlex? sliceRowFlex;
+    bool sliceRowFlexSeen = false;
+    for (int i = pStart; i < pEnd; i++) {
+      final IElement el = elementList[i];
+      final ElementType? type = el.type;
+      if (type != null && type != ElementType.text) {
+        return false;
+      }
+      if (el.listId != null ||
+          el.areaId != null ||
+          el.controlId != null ||
+          el.imgDisplay != null ||
+          el.pagingId != null) {
+        return false;
+      }
+      // O ajuste de justify no fim do parágrafo lê o rowFlex do elemento
+      // anterior; com rowFlex misto o recorte divergiria do cálculo global.
+      if (!sliceRowFlexSeen) {
+        sliceRowFlex = el.rowFlex;
+        sliceRowFlexSeen = true;
+      } else if (el.rowFlex != sliceRowFlex) {
+        return false;
+      }
+    }
+
+    // Fronteiras equivalentes na lista ANTIGA (edições confinadas ao
+    // parágrafo: antes dele nada muda; depois, tudo desloca por delta).
+    final int pEndOld = pEnd - delta;
+    if (pEndOld < pStart || pEndOld > _computedElementCount) {
+      return false;
+    }
+
+    // Rows antigas do parágrafo: [rowStart, rowEnd) com fronteiras exatas.
+    int rowStart = _lowerBoundRowByStartIndex(pStart);
+    if (rowStart >= _rowList.length ||
+        _rowList[rowStart].startIndex != pStart) {
+      // Parágrafo 0 começa na row 0 sem ZERO próprio.
+      if (!(pStart == 0 && rowStart == 0)) {
+        return false;
+      }
+    }
+    int rowEnd = _lowerBoundRowByStartIndex(pEndOld);
+    if (rowEnd < _rowList.length && _rowList[rowEnd].startIndex != pEndOld) {
+      return false;
+    }
+    if (rowEnd < rowStart) {
+      return false;
+    }
+
+    // Recomputa as rows apenas do recorte do parágrafo.
+    final List<double> margins = getMargins();
+    final List<IRow> sliceRows = computeRowList(
+      IComputeRowListPayload(
+        startX: margins[3],
+        startY: 0,
+        pageHeight: getHeight(),
+        mainOuterHeight: getMainOuterHeight(),
+        isPagingMode: getIsPagingMode(),
+        innerWidth: getInnerWidth(),
+        surroundElementList: const <IElement>[],
+        elementList: elementList.sublist(pStart, pEnd),
+      ),
+    );
+
+    // Reindexa o recorte e desloca as rows seguintes.
+    final int baseRowIndex =
+        rowStart > 0 ? _rowList[rowStart - 1].rowIndex + 1 : 0;
+    for (int j = 0; j < sliceRows.length; j++) {
+      sliceRows[j].startIndex += pStart;
+      sliceRows[j].rowIndex = baseRowIndex + j;
+    }
+    final int rowDelta = sliceRows.length - (rowEnd - rowStart);
+    for (int j = rowEnd; j < _rowList.length; j++) {
+      final IRow row = _rowList[j];
+      row.startIndex += delta;
+      row.rowIndex += rowDelta;
+    }
+    _rowList.replaceRange(rowStart, rowEnd, sliceRows);
+    return true;
+  }
+
+  /// Menor índice de row com `startIndex >= target` (rows têm startIndex
+  /// estritamente crescente).
+  int _lowerBoundRowByStartIndex(int target) {
+    int lo = 0;
+    int hi = _rowList.length;
+    while (lo < hi) {
+      final int mid = (lo + hi) >> 1;
+      if (_rowList[mid].startIndex < target) {
+        lo = mid + 1;
+      } else {
+        hi = mid;
+      }
+    }
+    return lo;
   }
 
   void _syncCachedRowElementsForFastRender() {
@@ -2962,44 +3156,55 @@ class Draw {
     final Footer footer = _footer;
 
     if (isCompute) {
-      position?.setFloatPositionList(<IFloatPosition>[]);
-      if (isPagingMode) {
-        if ((_options.header?.disabled ?? false) != true) {
-          header.compute();
-        } else {
-          header.recovery();
-        }
-        if ((_options.footer?.disabled ?? false) != true) {
-          footer.compute();
-        } else {
-          footer.recovery();
-        }
+      // Fast path de digitação (P2 do plano de otimização, inspirado no
+      // Recalculate_FastWholeParagraph do OnlyOffice): recomputa só as rows do
+      // parágrafo editado e reusa todas as outras. Precisa rodar ANTES do
+      // reset de floatPositionList (usa a lista como guarda).
+      bool fastLayoutDone = false;
+      if (renderOption.fastLayoutIndex != null && !isSourceHistory) {
+        fastLayoutDone = _tryFastParagraphLayout(renderOption.fastLayoutIndex!);
       }
-      final List<double> margins = getMargins();
-      final double pageHeight = getHeight();
-      final double extraHeight = header.getExtraHeight();
-      final double mainOuterHeight = getMainOuterHeight();
-      final List<IElement> surroundElementList =
-          element_utils.pickSurroundElementList(_elementList);
-      final List<IRow> computedRows = computeRowList(
-        IComputeRowListPayload(
-          startX: margins[3],
-          startY: margins[0] + extraHeight,
-          pageHeight: pageHeight,
-          mainOuterHeight: mainOuterHeight,
-          isPagingMode: isPagingMode,
-          innerWidth: innerWidth,
-          surroundElementList: surroundElementList,
-          elementList: _elementList,
-        ),
-      );
-      _rowList
-        ..clear()
-        ..addAll(computedRows);
+      position?.setFloatPositionList(<IFloatPosition>[]);
+      if (!fastLayoutDone) {
+        if (isPagingMode) {
+          if ((_options.header?.disabled ?? false) != true) {
+            header.compute();
+          } else {
+            header.recovery();
+          }
+          if ((_options.footer?.disabled ?? false) != true) {
+            footer.compute();
+          } else {
+            footer.recovery();
+          }
+        }
+        final List<double> margins = getMargins();
+        final double pageHeight = getHeight();
+        final double extraHeight = header.getExtraHeight();
+        final double mainOuterHeight = getMainOuterHeight();
+        final List<IElement> surroundElementList =
+            element_utils.pickSurroundElementList(_elementList);
+        final List<IRow> computedRows = computeRowList(
+          IComputeRowListPayload(
+            startX: margins[3],
+            startY: margins[0] + extraHeight,
+            pageHeight: pageHeight,
+            mainOuterHeight: mainOuterHeight,
+            isPagingMode: isPagingMode,
+            innerWidth: innerWidth,
+            surroundElementList: surroundElementList,
+            elementList: _elementList,
+          ),
+        );
+        _rowList
+          ..clear()
+          ..addAll(computedRows);
+      }
       final List<List<IRow>> pageRows = _computePageList();
       _pageRowList
         ..clear()
         ..addAll(pageRows);
+      _computedElementCount = _elementList.length;
       position?.computePositionList();
       area?.compute();
       if (isGraffitiMode()) {
@@ -3040,7 +3245,10 @@ class Draw {
     final bool isHistoryStackEmpty = historyManager?.isStackEmpty() ?? false;
     if ((isSubmitHistory && !isFirstRender) ||
         (curIndex != null && isHistoryStackEmpty)) {
-      submitHistory(curIndex);
+      final bool deferHistory =
+          (renderOption.isSubmitHistoryDeferred ?? false) &&
+              !isHistoryStackEmpty;
+      submitHistory(curIndex, deferHistory);
     }
 
     utils.nextTick(() {
@@ -3212,6 +3420,27 @@ class Draw {
         isSubmitHistory: false,
       ),
     );
+  }
+
+  /// Aplica tamanho de página e margens SEM disparar render (plano de
+  /// otimização A5). Usado pelo fluxo de abertura de DOCX para configurar a
+  /// geometria antes do `setValue`, que faz o único render da abertura —
+  /// `setPaperSize` + `setPaperMargin` custariam dois relayouts completos
+  /// do documento anterior.
+  void setPaperOptionsSilently({
+    double? width,
+    double? height,
+    IMargin? margins,
+  }) {
+    if (width != null && height != null && width > 0 && height > 0) {
+      _options.width = width;
+      _options.height = height;
+      _formatContainer();
+      _applyPageMetrics();
+    }
+    if (margins != null) {
+      _options.margins = List<double>.from(margins);
+    }
   }
 
   // ---------------------------------------------------------------------------

@@ -151,6 +151,12 @@ void del(KeyboardEvent evt, dynamic host) {
     );
   } else {
     rangeManager.setRange(curIndex, curIndex);
-    draw.render(IDrawOption(curIndex: curIndex));
+    draw.render(IDrawOption(
+      curIndex: curIndex,
+      // Rajadas de delete: undo agrupado + relayout só do parágrafo
+      // (P1/P2 do plano de otimização; guardas caem p/ relayout completo).
+      isSubmitHistoryDeferred: true,
+      fastLayoutIndex: curIndex,
+    ));
   }
 }
