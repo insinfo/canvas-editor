@@ -98,6 +98,28 @@ void main() {
         'pageCount': js_util.allowInterop(() {
           return app.editor.getDraw().getPageList().length;
         }),
+        // Depuração F4.3: primeiras rows (altura/offset) + elementos com os
+        // campos de espaçamento, como JSON.
+        'rowStats': js_util.allowInterop(() {
+          final draw = app.editor.getDraw();
+          final rows = draw.getRowList().take(8).map((row) => {
+                'h': row.height.toStringAsFixed(1),
+                'oy': row.offsetY?.toStringAsFixed(1),
+                'n': row.elementList.length,
+              });
+          final els = draw.getOriginalMainElementList().take(12).map((el) => {
+                'v': el.value == '​' ? 'ZERO' : el.value,
+                't': el.type?.name,
+                'rm': el.rowMargin,
+                'lsr': el.lineSpacingRule,
+                'lsv': el.lineSpacingValue,
+                'b': el.paraSpacingBefore,
+                'a': el.paraSpacingAfter,
+                'sz': el.size,
+                'f': el.font,
+              });
+          return '${rows.toList()} || ${els.toList()}';
+        }),
       }),
     );
     js_util.setProperty(html.window, '__perfReady', true);
@@ -256,6 +278,8 @@ Future<void> main(List<String> args) async {
         'etp_pages',
         (await page.evaluate<num?>('() => window.__perf.pageCount()'))
             ?.toInt());
+    stdout.writeln('[rowStats] '
+        '${await page.evaluate<String?>('() => window.__perf.rowStats()')}');
     stdout.writeln('[bench] digitando $chars teclas no ETP...');
     report('typing_etp_ms_per_key', await _typeChars(page, chars));
 

@@ -1591,6 +1591,15 @@ class Draw {
       if (curRow.elementList.isEmpty) {
         curRow.startIndex = i;
       }
+      // F4.3: espaçamento antes do 1º parágrafo (doc inteiro ou recorte do
+      // fast path — o ZERO inicial não passa pelo force-break do isWrap).
+      if (i == 0 && element.value == ZERO) {
+        final double paraSpacingBefore =
+            (element.paraSpacingBefore ?? 0) * scale;
+        if (paraSpacingBefore > 0) {
+          curRow.offsetY = (curRow.offsetY ?? 0) + paraSpacingBefore;
+        }
+      }
       if ((element.hide == true ||
               element.control?.hide == true ||
               element.area?.hide == true) &&
@@ -1862,6 +1871,53 @@ class Draw {
             scale;
         metrics.boundingBoxDescent =
             (fontMetrics?.actualBoundingBoxDescent ?? 0) * scale;
+        // F4.3 (spacing Word-fiel): parágrafos vindos de DOCX trazem
+        // lineSpacingRule e rowMargin=0; a altura da linha passa a ser a da
+        // FONTE (fontBoundingBox ≈ ascent+descent+lineGap do Word), não o
+        // bounding box do glifo + padding fixo do editor. O extra de
+        // espaçamento entra acima da linha (baseline no fundo, como o Word).
+        final String? lineRule = element.lineSpacingRule;
+        if (lineRule != null) {
+          // Single do Word = métricas do TTF (ascent+descent), ~1,13-1,22 em
+          // nas famílias comuns; o fontBoundingBox do Chrome inclui folga
+          // (~1,3 em) e estoura a paginação. Tabela interina até o ce_fonts
+          // medir TTF de verdade (F4.10).
+          final double? knownFactor =
+              _singleLineFactorByFont[(element.font ??
+                      _options.defaultFont ??
+                      '')
+                  .toLowerCase()];
+          double fontAscent;
+          double fontDescent;
+          if (knownFactor != null) {
+            final double single0 = resolvedSize * knownFactor * scale;
+            fontDescent = single0 * 0.19; // proporção TTF típica (TNR/Arial)
+            fontAscent = single0 - fontDescent;
+          } else {
+            fontAscent = (fontMetrics?.fontBoundingBoxAscent ?? 0) * scale;
+            fontDescent = (fontMetrics?.fontBoundingBoxDescent ?? 0) * scale;
+            if (fontAscent <= 0) {
+              // Fallback (browser sem fontBoundingBox): proporções típicas.
+              fontAscent = resolvedSize * 0.9 * scale;
+              fontDescent = resolvedSize * 0.25 * scale;
+            }
+          }
+          final double single = fontAscent + fontDescent;
+          final double value = element.lineSpacingValue ?? 1.0;
+          double target;
+          if (lineRule == 'exact') {
+            target = value * scale;
+          } else if (lineRule == 'atLeast') {
+            final double minPx = value * scale;
+            target = single > minPx ? single : minPx;
+          } else {
+            target = single * value;
+          }
+          if (target > 0) {
+            metrics.boundingBoxDescent = fontDescent;
+            metrics.boundingBoxAscent = target - fontDescent;
+          }
+        }
         if (element.type == ElementType.superscript) {
           metrics.boundingBoxAscent += metrics.height / 2;
         } else if (element.type == ElementType.subscript) {
@@ -2035,6 +2091,17 @@ class Draw {
             element.area?.top != null &&
             element.areaId != preElement?.areaId) {
           newRow.offsetY = (element.area!.top ?? 0) * scale;
+        }
+        // F4.3: `w:spacing` before/after — o ZERO abre o parágrafo, então a
+        // primeira linha recebe o before dele + o after do parágrafo anterior
+        // (preElement é o último elemento do parágrafo que terminou).
+        if (element.value == ZERO) {
+          final double paraSpacing = ((element.paraSpacingBefore ?? 0) +
+                  (preElement?.paraSpacingAfter ?? 0)) *
+              scale;
+          if (paraSpacing > 0) {
+            newRow.offsetY = (newRow.offsetY ?? 0) + paraSpacing;
+          }
         }
         rowList.add(newRow);
       } else {
@@ -2363,6 +2430,15 @@ class Draw {
       ),
     );
 
+    // No recorte o ZERO do parágrafo é i==0 (sem preElement): repõe o
+    // `w:spacing after` do parágrafo anterior no offsetY da 1ª linha (F4.3).
+    if (sliceRows.isNotEmpty && pStart > 0) {
+      final double prevAfter =
+          (elementList[pStart - 1].paraSpacingAfter ?? 0) * _resolveScale();
+      if (prevAfter > 0) {
+        sliceRows.first.offsetY = (sliceRows.first.offsetY ?? 0) + prevAfter;
+      }
+    }
     // Reindexa o recorte e desloca as rows seguintes.
     final int baseRowIndex =
         rowStart > 0 ? _rowList[rowStart - 1].rowIndex + 1 : 0;
@@ -3781,6 +3857,18 @@ class Draw {
     final String joined = letterClass.join();
     return RegExp('[$joined]');
   }
+
+  /// Altura de linha "single" do Word em `em` por família (ascent+descent do
+  /// TTF). Interino até o ce_fonts medir as tabelas hhea/OS2 (F4.10).
+  static const Map<String, double> _singleLineFactorByFont = <String, double>{
+    'times new roman': 1.15,
+    'arial': 1.15,
+    'calibri': 1.22,
+    'cambria': 1.17,
+    'courier new': 1.13,
+    'verdana': 1.21,
+    'tahoma': 1.21,
+  };
 
   static const double _defaultOriginalWidth = 794; // px ~ A4 portrait (210mm)
   static const double _defaultOriginalHeight = 1123; // px ~ A4 portrait (297mm)

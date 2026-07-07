@@ -226,7 +226,7 @@ class DocxToElementConverter {
         case WpParagraph paragraph:
           final pPr = _resolver.resolveParagraph(paragraph);
           if (!first) {
-            elements.add(_paragraphBreak(pPr));
+            elements.add(_paragraphBreak(paragraph, pPr));
           }
           elements.addAll(_convertParagraph(paragraph, pPr, fromPart));
           first = false;
@@ -269,19 +269,29 @@ class DocxToElementConverter {
     }
   }
 
-  /// Elemento '\n' que inicia a linha do parágrafo, carregando o alinhamento.
-  IElement _paragraphBreak(WpParagraphProperties pPr) => IElement(
-        value: '\n',
-        rowFlex: _rowFlex(pPr.jc),
-        rowMargin: _rowMargin(pPr.spacing),
-      );
+  /// Elemento '\n' que inicia a linha do parágrafo, carregando o alinhamento,
+  /// o espaçamento efetivo do `w:spacing` e a FONTE efetiva do parágrafo
+  /// (F4.3) — sem fonte o ZERO cairia no defaultFont da shell e a altura dele
+  /// dominaria a primeira linha de cada parágrafo.
+  IElement _paragraphBreak(WpParagraph paragraph, WpParagraphProperties pPr) {
+    final style = _resolver.resolveRun(paragraph, null);
+    final sizeHalf = style.sizeHalfPoints;
+    final element = IElement(
+      value: '\n',
+      rowFlex: _rowFlex(pPr.jc),
+      font: style.fontAscii ?? style.fontHAnsi,
+      size: sizeHalf == null ? null : Units.halfPointToPx(sizeHalf).round(),
+    );
+    _applySpacing(element, _paraSpacing(pPr.spacing));
+    return element;
+  }
 
   // ---- Parágrafo ----
 
   List<IElement> _convertParagraph(
       WpParagraph paragraph, WpParagraphProperties pPr, String fromPart) {
     final rowFlex = _rowFlex(pPr.jc);
-    final rowMargin = _rowMargin(pPr.spacing);
+    final spacing = _paraSpacing(pPr.spacing);
     final elements = <IElement>[];
 
     // Numeração multinível → marcador textual inline (motor real na F4.2).
@@ -290,7 +300,7 @@ class DocxToElementConverter {
       final marker = _counters.next(numPr.numId!, numPr.ilvl);
       if (marker != null && marker.isNotEmpty) {
         final markerStyle = _resolver.resolveRun(paragraph, null);
-        elements.add(_styledText('$marker ', markerStyle, rowFlex, rowMargin)
+        elements.add(_styledText('$marker ', markerStyle, rowFlex, spacing)
           ..extension = const {'wpMarker': true});
       }
     }
@@ -300,28 +310,29 @@ class DocxToElementConverter {
       switch (inline) {
         case WpRun run:
           fieldState = _convertRun(
-              paragraph, run, elements, fieldState, rowFlex, rowMargin,
+              paragraph, run, elements, fieldState, rowFlex, spacing,
               fromPart: fromPart);
         case WpHyperlink link:
           final valueList = <IElement>[];
           var linkFieldState = _FieldState.none;
           for (final run in link.runs) {
             linkFieldState = _convertRun(
-                paragraph, run, valueList, linkFieldState, null, null,
+                paragraph, run, valueList, linkFieldState, null, spacing,
                 fromPart: fromPart);
           }
           if (valueList.isEmpty) break;
           final url = link.relId != null
               ? file.hyperlinkUrl(link.relId!, fromPart: fromPart)
               : (link.anchor != null ? '#${link.anchor}' : null);
-          elements.add(IElement(
+          final hyperlink = IElement(
             type: ElementType.hyperlink,
             value: '',
             url: url ?? '',
             valueList: valueList,
             rowFlex: rowFlex,
-            rowMargin: rowMargin,
-          ));
+          );
+          _applySpacing(hyperlink, spacing);
+          elements.add(hyperlink);
         case WpSimpleField field:
           // Campo simples: usa o resultado em cache (motor real na F4.7).
           _notes.add('fldSimple com resultado em cache: '
@@ -329,7 +340,7 @@ class DocxToElementConverter {
           var innerState = _FieldState.none;
           for (final run in field.runs) {
             innerState = _convertRun(
-                paragraph, run, elements, innerState, rowFlex, rowMargin,
+                paragraph, run, elements, innerState, rowFlex, spacing,
                 fromPart: fromPart);
           }
         case WpPreservedInline preserved:
@@ -343,16 +354,15 @@ class DocxToElementConverter {
     // Título: outlineLvl efetivo vira TITLE (catálogo/navegação).
     final outline = pPr.outlineLvl;
     if (outline != null && outline >= 0 && elements.isNotEmpty) {
-      return [
-        IElement(
-          type: ElementType.title,
-          value: '',
-          level: _titleLevel(outline),
-          valueList: elements,
-          rowFlex: rowFlex,
-          rowMargin: rowMargin,
-        )
-      ];
+      final title = IElement(
+        type: ElementType.title,
+        value: '',
+        level: _titleLevel(outline),
+        valueList: elements,
+        rowFlex: rowFlex,
+      );
+      _applySpacing(title, spacing);
+      return [title];
     }
     return elements;
   }
@@ -363,7 +373,7 @@ class DocxToElementConverter {
     List<IElement> into,
     _FieldState fieldState,
     RowFlex? rowFlex,
-    double? rowMargin, {
+    _ParaSpacing? spacing, {
     required String fromPart,
   }) {
     final rPr = _resolver.resolveRun(paragraph, run.properties);
@@ -384,27 +394,30 @@ class DocxToElementConverter {
         case WpText text:
           // Dentro da instrução do campo o texto não é visível.
           if (state != _FieldState.instruction && text.text.isNotEmpty) {
-            into.add(_styledText(text.text, rPr, rowFlex, rowMargin));
+            into.add(_styledText(text.text, rPr, rowFlex, spacing));
           }
         case WpTabChar _:
-          into.add(IElement(
-              type: ElementType.tab,
-              value: '',
-              rowFlex: rowFlex,
-              rowMargin: rowMargin));
+          final tab = IElement(
+              type: ElementType.tab, value: '', rowFlex: rowFlex);
+          _applySpacing(tab, spacing);
+          into.add(tab);
         case WpBreak brk:
           if (brk.breakType == 'page') {
             into.add(IElement(type: ElementType.pageBreak, value: ''));
           } else {
             // Quebra de linha (w:br) ≠ fim de parágrafo: marcada para o
-            // bridge editor→docx não dividir o parágrafo no save.
-            into.add(IElement(value: '\n')
-              ..extension = const {'wpBr': true});
+            // bridge editor→docx não dividir o parágrafo no save. Recebe o
+            // line spacing (altura da linha), mas o layout NÃO aplica
+            // before/after nela (guarda pelo extension wpBr).
+            final br = IElement(value: '\n')
+              ..extension = const {'wpBr': true};
+            _applySpacing(br, spacing);
+            into.add(br);
           }
         case WpNoBreakHyphen _:
-          into.add(_styledText('‑', rPr, rowFlex, rowMargin));
+          into.add(_styledText('‑', rPr, rowFlex, spacing));
         case WpSymbol symbol:
-          into.add(_styledText(_symbolChar(symbol), rPr, rowFlex, rowMargin));
+          into.add(_styledText(_symbolChar(symbol), rPr, rowFlex, spacing));
         case WpDrawing drawing:
           final image = _convertDrawing(drawing, fromPart);
           if (image != null) into.add(image);
@@ -420,7 +433,7 @@ class DocxToElementConverter {
   }
 
   IElement _styledText(String text, WpRunProperties rPr, RowFlex? rowFlex,
-      double? rowMargin) {
+      _ParaSpacing? spacing) {
     final sizeHalf = rPr.sizeHalfPoints;
     final underline = rPr.underline;
     final highlight = rPr.highlight != null
@@ -437,8 +450,8 @@ class DocxToElementConverter {
       color: _hexColor(rPr.color),
       highlight: highlight,
       rowFlex: rowFlex,
-      rowMargin: rowMargin,
     );
+    _applySpacing(element, spacing);
     if (rPr.vertAlign == 'superscript') {
       element.type = ElementType.superscript;
     } else if (rPr.vertAlign == 'subscript') {
@@ -634,16 +647,39 @@ class DocxToElementConverter {
         _ => null,
       };
 
-  /// `w:spacing w:line` em modo auto é múltiplo de 240 (single).
-  static double? _rowMargin(WpSpacing? spacing) {
+  /// `w:spacing` efetivo → espaçamento Word-fiel (F4.3): rowMargin 0 (sem o
+  /// padding fixo do editor), altura de linha pela fonte (auto = múltiplo de
+  /// 240; atLeast/exact em twips → px, /15) e before/after em px.
+  static _ParaSpacing _paraSpacing(WpSpacing? spacing) {
     final line = spacing?.line;
-    if (line == null) return null;
     final rule = spacing?.lineRule ?? 'auto';
-    if (rule == 'auto') {
-      final factor = line / 240.0;
-      return factor == 1.0 ? null : factor;
+    String lineRule = 'auto';
+    double lineValue = 1.0;
+    if (line != null && line > 0) {
+      if (rule == 'atLeast' || rule == 'exact') {
+        lineRule = rule;
+        lineValue = line / 15.0;
+      } else {
+        lineValue = line / 240.0;
+      }
     }
-    return null; // atLeast/exact entram no layout na Fase 4.3
+    return _ParaSpacing(
+      lineSpacingRule: lineRule,
+      lineSpacingValue: lineValue,
+      beforePx:
+          spacing?.beforeTwips == null ? null : spacing!.beforeTwips! / 15.0,
+      afterPx:
+          spacing?.afterTwips == null ? null : spacing!.afterTwips! / 15.0,
+    );
+  }
+
+  static void _applySpacing(IElement element, _ParaSpacing? spacing) {
+    if (spacing == null) return;
+    element.rowMargin = 0;
+    element.lineSpacingRule = spacing.lineSpacingRule;
+    element.lineSpacingValue = spacing.lineSpacingValue;
+    element.paraSpacingBefore = spacing.beforePx;
+    element.paraSpacingAfter = spacing.afterPx;
   }
 
   static String? _hexColor(String? color) {
@@ -705,5 +741,21 @@ class _PageNumberSpec {
     this.font,
     this.color,
     required this.paragraphs,
+  });
+}
+
+/// Espaçamento efetivo de parágrafo (F4.3) já convertido para o modelo do
+/// editor: regra/valor de altura de linha + before/after em px.
+class _ParaSpacing {
+  final String lineSpacingRule; // 'auto' | 'atLeast' | 'exact'
+  final double lineSpacingValue; // múltiplo (auto) ou px (atLeast/exact)
+  final double? beforePx;
+  final double? afterPx;
+
+  const _ParaSpacing({
+    required this.lineSpacingRule,
+    required this.lineSpacingValue,
+    this.beforePx,
+    this.afterPx,
   });
 }

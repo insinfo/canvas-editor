@@ -35,6 +35,10 @@ const List<String> editorElementCopyAttr = <String>[
 	'dateFormat',
 	'groupIds',
 	'rowMargin',
+	'lineSpacingRule',
+	'lineSpacingValue',
+	'paraSpacingBefore',
+	'paraSpacingAfter',
 	'textDecoration',
 ];
 
