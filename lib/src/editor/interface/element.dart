@@ -482,6 +482,18 @@ class IElement
   @override
   ITextDecoration? textDecoration;
 
+  // Espaçamento Word-fiel (roteiro F4.3, doc/plano_otimizacao_performance):
+  // `w:spacing` do pPr efetivo do DOCX. Quando lineSpacingRule != null o
+  // layout calcula a altura da linha pelas métricas da FONTE (como o Word)
+  // em vez do padding fixo do editor (defaultBasicRowMarginHeight).
+  /// 'auto' (value = múltiplo de single), 'atLeast' ou 'exact' (value = px).
+  String? lineSpacingRule;
+  double? lineSpacingValue;
+  /// `w:before`/`w:after` do parágrafo em px (aplicados no offsetY da
+  /// primeira linha do parágrafo/do seguinte).
+  double? paraSpacingBefore;
+  double? paraSpacingAfter;
+
   // IElementRule
   @override
   bool? hide;
@@ -632,6 +644,10 @@ class IElement
     this.rowMargin,
     this.letterSpacing,
     this.textDecoration,
+    this.lineSpacingRule,
+    this.lineSpacingValue,
+    this.paraSpacingBefore,
+    this.paraSpacingAfter,
     // IElementRule
     this.hide,
     // IElementGroup

@@ -53,7 +53,7 @@ mensurável em documentos grandes.
 ### C6 — Arquitetura: relayout global por tecla (herdado do original)
 Mesmo com C2–C5 resolvidos, o custo por tecla continua O(documento). A solução definitiva é o
 **layout incremental** (F5.3/F5.5 do roteiro): invalidação por parágrafo + shift das páginas
-seguintes. Fica explicitamente **fora deste plano** (mudança arquitetural, alto risco);
+seguintes. Fica tem que fazer (mudança arquitetural é vital);
 este plano reduz a constante para caber no orçamento com folga.
 
 ## 2. Ações deste plano
@@ -133,7 +133,7 @@ Resumo — otimização concluída e validada
  relayoutar o documento inteiro por tecla é o problema. Medido em build release, o código antigo gastava 339 ms/tecla no ETP e no TR (140 págs) uma única tecla não completava em 3 minutos (o renderer chegava a morrer). Em DDC (webdev serve), multiplique por 5–20× — daí o ~1 s/tecla que você via.
 
 Como o DocumentServer (OnlyOffice) resolve
-Investiguei o sdkjs/word/Editor/ do D:\EuroOfficeNative\DocumentServer (mecanismo documentado na §5 de plano_otimizacao_performance.md): cada parágrafo cacheia suas linhas/páginas + um EndInfo (estado de saída); a edição marca só o parágrafo sujo; um fast path recalcula o parágrafo e para se o EndInfo convergir (Recalculate_FastWholeParagraph); recálculos longos rodam fatiados em setTimeout (10 ms); e o undo é replay de deltas, sem clone do documento. Como é AGPL, não copiei código — apliquei o mecanismo:
+Investiguei o sdkjs/word/Editor/ do D:\EuroOfficeNative\DocumentServer (mecanismo documentado na §5 de plano_otimizacao_performance.md): cada parágrafo cacheia suas linhas/páginas + um EndInfo (estado de saída); a edição marca só o parágrafo sujo; um fast path recalcula o parágrafo e para se o EndInfo convergir (Recalculate_FastWholeParagraph); recálculos longos rodam fatiados em setTimeout (10 ms); e o undo é replay de deltas, sem clone do documento. — apliquei o mecanismo:
 
 Fast path de parágrafo (draw.dart _tryFastParagraphLayout): digitação/backspace/delete recomputam só as rows do parágrafo do cursor e reusam todas as outras (rows quebram em ZERO, então as fronteiras são exatas); guardas (tabela, lista, floats, controles, zona ≠ main…) caem para o relayout completo com segurança.
 Undo agrupado por rajada (history_manager.dart): o snapshot (clone O(documento) por tecla!) agora é adiado com debounce de 300 ms — undo desfaz a palavra digitada, como no Word; flush garantido antes de undo/redo.

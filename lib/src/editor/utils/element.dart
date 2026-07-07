@@ -52,6 +52,10 @@ IElement _cloneElement(
     rowFlex: source.rowFlex,
     rowMargin: source.rowMargin,
     letterSpacing: source.letterSpacing,
+    lineSpacingRule: source.lineSpacingRule,
+    lineSpacingValue: source.lineSpacingValue,
+    paraSpacingBefore: source.paraSpacingBefore,
+    paraSpacingAfter: source.paraSpacingAfter,
     textDecoration: _cloneTextDecoration(source.textDecoration),
     hide: source.hide,
     groupIds: source.groupIds?.toList(),
@@ -701,6 +705,14 @@ dynamic _getElementAttr(IElement element, String attr) {
       return element.rowFlex;
     case 'rowMargin':
       return element.rowMargin;
+    case 'lineSpacingRule':
+      return element.lineSpacingRule;
+    case 'lineSpacingValue':
+      return element.lineSpacingValue;
+    case 'paraSpacingBefore':
+      return element.paraSpacingBefore;
+    case 'paraSpacingAfter':
+      return element.paraSpacingAfter;
     case 'letterSpacing':
       return element.letterSpacing;
     case 'textDecoration':
@@ -856,6 +868,18 @@ void _setElementAttr(IElement element, String attr, dynamic value) {
       break;
     case 'rowMargin':
       element.rowMargin = value as double?;
+      break;
+    case 'lineSpacingRule':
+      element.lineSpacingRule = value as String?;
+      break;
+    case 'lineSpacingValue':
+      element.lineSpacingValue = value as double?;
+      break;
+    case 'paraSpacingBefore':
+      element.paraSpacingBefore = value as double?;
+      break;
+    case 'paraSpacingAfter':
+      element.paraSpacingAfter = value as double?;
       break;
     case 'letterSpacing':
       element.letterSpacing = value as double?;
