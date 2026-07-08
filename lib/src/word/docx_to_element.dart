@@ -602,7 +602,7 @@ class DocxToElementConverter {
         // (o modelo do editor não trunca conteúdo de célula). Sem trHeight,
         // 20px evita o piso de 42px do editor (defaultTrMinHeight) — o Word
         // dimensiona a linha pelo conteúdo (~21px para 1 linha de 12pt).
-        minHeight: trPr?.heightTwips != null ? heightPx : 20.0,
+        minHeight: trPr?.heightTwips != null ? heightPx : 16.0,
         pagingRepeat: trPr?.tblHeader == true ? true : null,
       ));
     }

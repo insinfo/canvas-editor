@@ -114,11 +114,17 @@ void main() {
             final itemTd = (trList[4] as dynamic).tdList;
             if ((itemTd as List).length > 1) {
               final descEl = (itemTd[1] as dynamic).value as List;
-              final d0 = descEl.isNotEmpty ? descEl.first as dynamic : null;
-              if (d0 != null) {
-                buf.write(' | itemDesc: before=${d0.paraSpacingBefore} '
-                    'after=${d0.paraSpacingAfter} rowMargin=${d0.rowMargin}');
+              // Altura (mainHeight) de cada célula da linha do item, p/ achar
+              // qual célula determina a altura da linha.
+              buf.write(' | itemCells=[');
+              for (final td in (itemTd as List)) {
+                final t = td as dynamic;
+                final rl = t.rowList as List?;
+                final nrows = rl?.length ?? 0;
+                buf.write('${(t.mainHeight ?? 0).toStringAsFixed(0)}'
+                    '(${nrows}L)·');
               }
+              buf.write(']');
             }
           }
           return buf.toString();
