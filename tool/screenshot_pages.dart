@@ -63,6 +63,42 @@ void main() {
         return 'page $i: rows=${rows.length} yMin=${minY?.toStringAsFixed(1)} '
             'yMax=${maxY?.toStringAsFixed(1)} firstIdx=$firstIdx lastIdx=$lastIdx';
       }),
+      'itemHeader': js_util.allowInterop(() {
+        final d = app.editor.getDraw();
+        final els = d.getOriginalMainElementList() as List;
+        final buf = StringBuffer();
+        var found = 0;
+        for (final el in els) {
+          final trList = (el as dynamic).trList as List?;
+          if (trList == null) continue;
+          for (final tr in trList) {
+            final tds = (tr as dynamic).tdList as List;
+            if (tds.length != 1) continue; // cabeçalho mesclado tem 1 célula
+            final td = tds.first as dynamic;
+            final val = (td.value as List)
+                .map((e) => '${(e as dynamic).value}').join();
+            if (!val.contains('Item 2') && !val.contains('Item 3')) continue;
+            final pl = td.positionList as List?;
+            buf.write('[colspan=${td.colspan} w=${(td.width ?? 0).toStringAsFixed(0)} '
+                'nEls=${pl?.length ?? 0} xy=[');
+            if (pl != null) {
+              for (var k = 0; k < pl.length; k++) {
+                final pos = pl[k] as dynamic;
+                final lt = pos.coordinate['leftTop'] as List?;
+                final v = '${pos.value}';
+                if (lt != null && lt.length > 1) {
+                  buf.write('"$v"@${(lt[0] as num).toStringAsFixed(0)},'
+                      '${(lt[1] as num).toStringAsFixed(0)} ');
+                }
+              }
+            }
+            buf.write(']] ');
+            found++;
+            if (found >= 1) return buf.toString();
+          }
+        }
+        return buf.isEmpty ? '(nenhum Item 2/3)' : buf.toString();
+      }),
       'rowYList': js_util.allowInterop((num pageIndex) {
         final d = app.editor.getDraw();
         final pageRows = d.getPageRowList();
@@ -100,33 +136,8 @@ void main() {
           buf.write('] ');
           final firstTd = (trList.first as dynamic).tdList.first;
           final cellEls = (firstTd as dynamic).value as List;
-          final e0 = cellEls.isNotEmpty ? cellEls.first as dynamic : null;
           final tr0 = trList.first as dynamic;
-          buf.write('tr0.minH=${tr0.minHeight} cellN=${cellEls.length} ');
-          if (e0 != null) {
-            final v = '${e0.value}';
-            buf.write('cell0[val="${v.length > 15 ? v.substring(0, 15) : v}"]: '
-                'rowMargin=${e0.rowMargin} '
-                'before=${e0.paraSpacingBefore} lineVal=${e0.lineSpacingValue}');
-          }
-          // Também uma célula de item (3ª/4ª tr) para comparar.
-          if (trList.length > 4) {
-            final itemTd = (trList[4] as dynamic).tdList;
-            if ((itemTd as List).length > 1) {
-              final descEl = (itemTd[1] as dynamic).value as List;
-              // Altura (mainHeight) de cada célula da linha do item, p/ achar
-              // qual célula determina a altura da linha.
-              buf.write(' | itemCells=[');
-              for (final td in (itemTd as List)) {
-                final t = td as dynamic;
-                final rl = t.rowList as List?;
-                final nrows = rl?.length ?? 0;
-                buf.write('${(t.mainHeight ?? 0).toStringAsFixed(0)}'
-                    '(${nrows}L)·');
-              }
-              buf.write(']');
-            }
-          }
+          buf.write('tr0.minH=${tr0.minHeight} cellN=${cellEls.length}');
           return buf.toString();
         }
         return '(sem tabela)';
@@ -271,6 +282,8 @@ Future<void> main(List<String> args) async {
         '${await page.evaluate<String?>('() => window.__shot.footerInfo()')}');
     stdout.writeln('[shot] cellSpacing: '
         '${await page.evaluate<String?>('() => window.__shot.cellSpacing()')}');
+    stdout.writeln('[shot] itemHeader: '
+        '${await page.evaluate<String?>('() => window.__shot.itemHeader()')}');
     stdout.writeln('[shot] headerInfo: '
         '${await page.evaluate<String?>('() => window.__shot.headerInfo()')}');
     for (final pg in pages) {

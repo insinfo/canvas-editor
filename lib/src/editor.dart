@@ -94,7 +94,7 @@ class EditorApp {
   /// é reproduzida sob demanda a partir dela no 1º save (F5).
   List<IElement>? _openedConvertedMain;
 
-  bool _isCatalogVisible = true;
+  bool _isCatalogVisible = false;
   bool _awaitingPainterSecondClick = false;
   Timer? _painterTimer;
   int _tableRowIndex = 0;
@@ -984,6 +984,9 @@ class EditorApp {
     final catalogModeDom = _requireElement<DivElement>('.catalog-mode');
     final catalogCloseDom =
         _requireElement<DivElement>('.catalog__header__close');
+    // Word não mostra o "Catálogo" por padrão (é o Painel de Navegação, oculto
+    // e acessível pela aba Exibir). Começa fechado; o botão do rodapé reabre.
+    catalogDom.style.display = 'none';
 
     void toggleCatalog() {
       _isCatalogVisible = !_isCatalogVisible;
