@@ -33,6 +33,79 @@ IElement _cloneElement(
   IElement source, {
   String? value,
 }) {
+  // Fast-path para texto simples (F5): a esmagadora maioria dos elementos de
+  // um DOCX é caractere de texto sem tabela/controle/imagem/lista/extensão.
+  // Clonar só os campos relevantes evita tocar ~60 campos + subclones por
+  // elemento — dominante em getValue/histórico/save de docs grandes (o clone
+  // de 514k elementos do TR levava ~7s).
+  final ElementType? type = source.type;
+  if ((type == null ||
+          type == ElementType.text ||
+          type == ElementType.superscript ||
+          type == ElementType.subscript) &&
+      source.extension == null &&
+      source.valueList == null &&
+      source.trList == null &&
+      source.colgroup == null &&
+      source.control == null &&
+      source.checkbox == null &&
+      source.radio == null &&
+      source.block == null &&
+      source.title == null &&
+      source.area == null &&
+      source.imgCrop == null &&
+      source.imgCaption == null &&
+      source.label == null &&
+      source.textDecoration == null &&
+      source.groupIds == null &&
+      source.dashArray == null &&
+      source.imgFloatPosition == null) {
+    return IElement(
+      id: source.id,
+      type: type,
+      value: value ?? source.value,
+      externalId: source.externalId,
+      font: source.font,
+      size: source.size,
+      width: source.width,
+      height: source.height,
+      bold: source.bold,
+      color: source.color,
+      highlight: source.highlight,
+      italic: source.italic,
+      underline: source.underline,
+      strikeout: source.strikeout,
+      rowFlex: source.rowFlex,
+      rowMargin: source.rowMargin,
+      letterSpacing: source.letterSpacing,
+      lineSpacingRule: source.lineSpacingRule,
+      lineSpacingValue: source.lineSpacingValue,
+      paraSpacingBefore: source.paraSpacingBefore,
+      paraSpacingAfter: source.paraSpacingAfter,
+      paraIndentLeft: source.paraIndentLeft,
+      paraIndentFirstLine: source.paraIndentFirstLine,
+      hide: source.hide,
+      conceptId: source.conceptId,
+      actualSize: source.actualSize,
+      url: source.url,
+      hyperlinkId: source.hyperlinkId,
+      dateId: source.dateId,
+      dateFormat: source.dateFormat,
+      controlId: source.controlId,
+      controlComponent: source.controlComponent,
+      tdId: source.tdId,
+      trId: source.trId,
+      tableId: source.tableId,
+      titleId: source.titleId,
+      level: source.level,
+      listType: source.listType,
+      listStyle: source.listStyle,
+      listId: source.listId,
+      listWrap: source.listWrap,
+      areaId: source.areaId,
+      areaIndex: source.areaIndex,
+    );
+  }
   return IElement(
     id: source.id,
     type: source.type,
@@ -1494,11 +1567,14 @@ void formatElementList(
     } else if ((el.type == null ||
             element_constants.textlikeElementType.contains(el.type)) &&
         el.value.length > 1) {
-      elementList.removeAt(i);
+      // Deszipa o run em caracteres com um único replaceRange (F5): o padrão
+      // antigo removeAt(i)+N inserts era O(chars×runs) — ~2 bi de ops ao abrir
+      // o TR (deslocava a cauda a cada caractere). replaceRange desloca a
+      // cauda uma vez só por run.
       final valueChars = splitText(el.value);
-      for (var v = 0; v < valueChars.length; v++) {
-        elementList.insert(i + v, _cloneElement(el, value: valueChars[v]));
-      }
+      elementList.replaceRange(i, i + 1, <IElement>[
+        for (final valueChar in valueChars) _cloneElement(el, value: valueChar),
+      ]);
       el = elementList[i];
     }
 

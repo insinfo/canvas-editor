@@ -90,6 +90,10 @@ class EditorApp {
   String? _openedDocxName;
   List<IElement>? _openedOriginalMain;
 
+  /// Snapshot pristino do main de abertura (fast-clone); a referência de save
+  /// zipada é materializada sob demanda a partir dele (F5).
+  List<IElement>? _openedPristineMain;
+
   bool _isCatalogVisible = true;
   bool _awaitingPainterSecondClick = false;
   Timer? _painterTimer;
@@ -2521,9 +2525,12 @@ class EditorApp {
       ));
       _openedDocx = docx;
       _openedDocxName = name;
-      // Referência de "intocado" para o save: o próprio getValue, para que
-      // corrente e original passem pela mesma normalização (zip) do editor.
-      _openedOriginalMain = command.getValue().data.main;
+      // Referência de "intocado" para o save (F5): guarda um snapshot barato
+      // (fast-clone) do estado de abertura; o zip caro (`getValue`, ~7s no TR)
+      // é adiado para o 1º save via `_ensureOpenedReference` — a abertura não
+      // paga por uma referência que só o save usa.
+      _openedPristineMain = draw.cloneMainForReference();
+      _openedOriginalMain = null;
 
       final notes = converted.notes.toSet();
       if (notes.isNotEmpty) {
@@ -2544,9 +2551,19 @@ class EditorApp {
   /// Salvar DOCX (roteiro_editor_profissional, F3.3): sincroniza o conteúdo
   /// atual com o modelo aberto e serializa com passthrough D1.
   /// Retorna `null` se nenhum DOCX foi aberto.
+  /// Materializa a referência de save (zip) a partir do snapshot pristino,
+  /// se ainda não foi computada (F5 — adiada da abertura para o 1º save).
+  List<IElement>? _ensureOpenedReference() {
+    if (_openedOriginalMain == null && _openedPristineMain != null) {
+      _openedOriginalMain =
+          editor.getDraw().zipMainAsSaveReference(_openedPristineMain!);
+    }
+    return _openedOriginalMain;
+  }
+
   Uint8List? saveOpenedDocxBytes() {
     final docx = _openedDocx;
-    final originalMain = _openedOriginalMain;
+    final originalMain = _ensureOpenedReference();
     if (docx == null || originalMain == null) return null;
     final currentMain = command.getValue().data.main;
     final notes = EditorToDocx.apply(docx, currentMain, originalMain);

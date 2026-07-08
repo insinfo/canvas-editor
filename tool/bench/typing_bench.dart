@@ -26,6 +26,7 @@ import 'dart:js_util' as js_util;
 import 'dart:typed_data';
 
 import 'package:canvas_text_editor/src/editor.dart';
+import 'package:canvas_text_editor/src/editor/core/draw/draw.dart' as draw_lib;
 import 'package:canvas_text_editor/src/editor/interface/range.dart'
     as range_model;
 
@@ -43,6 +44,7 @@ Future<double> _openFromUrl(EditorApp app, String url) async {
 
 void main() {
   html.window.onLoad.listen((_) async {
+    draw_lib.Draw.debugRenderTiming = true;
     final app = EditorApp(isApple: false);
     await app.initialize();
 
@@ -287,6 +289,9 @@ Future<void> main(List<String> args) async {
     page.onConsole.listen((msg) {
       if (msg.type == ConsoleMessageType.error) {
         stderr.writeln('[page:error] ${msg.text}');
+      } else if ((msg.text?.startsWith('[render]') ?? false) ||
+          (msg.text?.startsWith('[open]') ?? false)) {
+        stdout.writeln(msg.text);
       }
     });
     // window.alert/confirm bloqueiam o headless até serem tratados — o fluxo

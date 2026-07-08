@@ -233,6 +233,10 @@ class Draw {
   final List<IElement> _footerElementList;
   int _pageNo;
   int _renderCount;
+
+  // Instrumentação de fases do render (diagnóstico de performance F5).
+  static bool debugRenderTiming = false;
+  double _tPhase = 0;
   double? _pagePixelRatio;
   final I18n _i18n;
   final RegExp? _letterReg;
@@ -761,6 +765,22 @@ class Draw {
       graffiti: getGraffiti()?.getValue(),
     );
   }
+
+  /// Snapshot barato (fast-clone) do main pristino, para o fluxo de abrir
+  /// DOCX capturar o estado de abertura SEM pagar o zip caro do `getValue`
+  /// na abertura (F5). O clone congela o estado antes de qualquer edição.
+  List<IElement> cloneMainForReference() =>
+      element_utils.cloneElementList(getOriginalMainElementList());
+
+  /// Zipa um main pristino igual a `getValue().data.main` — usado para
+  /// materializar a referência de save SOB DEMANDA (no 1º save) a partir do
+  /// snapshot de [cloneMainForReference].
+  List<IElement> zipMainAsSaveReference(List<IElement> pristineMain) =>
+      element_utils.zipElementList(
+        List<IElement>.from(pristineMain),
+        options:
+            const element_utils.ZipElementListOption(isClassifyArea: true),
+      );
 
   IEditorResult getValue([IGetValueOption? options]) {
     final IEditorData originData = getOriginValue(options);
@@ -3588,6 +3608,9 @@ class Draw {
     final Header header = _header;
     final Footer footer = _footer;
 
+    if (debugRenderTiming) {
+      _tPhase = window.performance.now();
+    }
     if (isCompute) {
       // Fast path de digitação (P2 do plano de otimização, inspirado no
       // Recalculate_FastWholeParagraph do OnlyOffice): recomputa só as rows do
@@ -3633,12 +3656,29 @@ class Draw {
           ..clear()
           ..addAll(computedRows);
       }
+      if (debugRenderTiming && !fastLayoutDone) {
+        window.console.log('[render] computeRowList: '
+            '${(window.performance.now() - _tPhase).toStringAsFixed(0)}ms '
+            'rows=${_rowList.length}');
+        _tPhase = window.performance.now();
+      }
       final List<List<IRow>> pageRows = _computePageList();
       _pageRowList
         ..clear()
         ..addAll(pageRows);
       _computedElementCount = _elementList.length;
+      if (debugRenderTiming) {
+        window.console.log('[render] computePageList: '
+            '${(window.performance.now() - _tPhase).toStringAsFixed(0)}ms '
+            'pages=${_pageRowList.length}');
+        _tPhase = window.performance.now();
+      }
       position?.computePositionList();
+      if (debugRenderTiming) {
+        window.console.log('[render] computePositionList: '
+            '${(window.performance.now() - _tPhase).toStringAsFixed(0)}ms');
+        _tPhase = window.performance.now();
+      }
       area?.compute();
       if (isGraffitiMode()) {
         getGraffiti()?.compute();
@@ -3659,13 +3699,28 @@ class Draw {
     final Cursor? cursor = _cursor as Cursor?;
     cursor?.recoveryCursor();
 
+    if (debugRenderTiming) {
+      window.console.log('[render] compute-tail(area/search/etc): '
+          '${(window.performance.now() - _tPhase).toStringAsFixed(0)}ms');
+      _tPhase = window.performance.now();
+    }
     _syncPageCanvases();
+    if (debugRenderTiming) {
+      window.console.log('[render] syncPageCanvases: '
+          '${(window.performance.now() - _tPhase).toStringAsFixed(0)}ms');
+      _tPhase = window.performance.now();
+    }
 
     if (isLazy && isPagingMode) {
       _lazyRender();
     } else {
       _disconnectLazyRender();
       _immediateRender();
+    }
+    if (debugRenderTiming) {
+      window.console.log('[render] draw(lazy/immediate): '
+          '${(window.performance.now() - _tPhase).toStringAsFixed(0)}ms');
+      _tPhase = window.performance.now();
     }
 
     if (isSetCursor) {
