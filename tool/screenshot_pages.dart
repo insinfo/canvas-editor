@@ -63,6 +63,43 @@ void main() {
         return 'page $i: rows=${rows.length} yMin=${minY?.toStringAsFixed(1)} '
             'yMax=${maxY?.toStringAsFixed(1)} firstIdx=$firstIdx lastIdx=$lastIdx';
       }),
+      'elemSize': js_util.allowInterop((String needle) {
+        final d = app.editor.getDraw();
+        final els = d.getOriginalMainElementList() as List;
+        final buf = StringBuffer();
+        var chars = '';
+        for (var i = 0; i < els.length && i < 4000; i++) {
+          final e = els[i] as dynamic;
+          chars += '${e.value}';
+          if (chars.contains(needle)) {
+            // Dumpa size/font dos ~6 elementos ao redor do match.
+            for (var k = (i - 3 < 0 ? 0 : i - 3); k <= i; k++) {
+              final ee = els[k] as dynamic;
+              buf.write('"${ee.value}"sz=${ee.size}f=${ee.font} ');
+            }
+            return buf.toString();
+          }
+        }
+        return '(não achado)';
+      }),
+      'findPage': js_util.allowInterop((String needle) {
+        final d = app.editor.getDraw();
+        final pageRows = d.getPageRowList();
+        final posList = d.getPosition().getOriginalMainPositionList() as List;
+        for (var p = 0; p < pageRows.length; p++) {
+          final rows = pageRows[p] as List;
+          final buf = StringBuffer();
+          for (final row in rows) {
+            final start = (row as dynamic).startIndex as int;
+            final n = (row.elementList as List).length;
+            for (var k = start; k < start + n && k < posList.length; k++) {
+              buf.write('${(posList[k] as dynamic).value}');
+            }
+          }
+          if (buf.toString().contains(needle)) return p + 1;
+        }
+        return -1;
+      }),
       'itemHeader': js_util.allowInterop(() {
         final d = app.editor.getDraw();
         final els = d.getOriginalMainElementList() as List;
@@ -282,8 +319,20 @@ Future<void> main(List<String> args) async {
         '${await page.evaluate<String?>('() => window.__shot.footerInfo()')}');
     stdout.writeln('[shot] cellSpacing: '
         '${await page.evaluate<String?>('() => window.__shot.cellSpacing()')}');
-    stdout.writeln('[shot] itemHeader: '
-        '${await page.evaluate<String?>('() => window.__shot.itemHeader()')}');
+    stdout.writeln('[shot] bodySize: ${await page.evaluate<String?>(
+        '(s) => window.__shot.elemSize(s)', args: <dynamic>['objeto da presente'])}');
+    for (final mark in <String>[
+      'CONDIÇÕES GERAIS',
+      'DESCRIÇÃO DA SOLUÇÃO',
+      'FUNDAMENTAÇÃO',
+      'REQUISITOS DA CONTRATAÇÃO',
+      'GESTÃO DO CONTRATO',
+      'RISCOS TÉCNICOS',
+      'APROVAÇÃO E ASSINATURA',
+    ]) {
+      stdout.writeln('[shot] pág de "$mark": ${await page.evaluate<num?>(
+          '(s) => window.__shot.findPage(s)', args: <dynamic>[mark])}');
+    }
     stdout.writeln('[shot] headerInfo: '
         '${await page.evaluate<String?>('() => window.__shot.headerInfo()')}');
     for (final pg in pages) {
