@@ -312,6 +312,11 @@ class Draw {
   // recria o observer; só redesenha as páginas vivas.
   final Set<int> _livePages = <int>{};
   int _observedPageCount = -1;
+  // Fila de páginas a desenhar por causa do scroll (via IntersectionObserver).
+  // O desenho é fatiado em frames (rAF, ~8ms/frame) para a rolagem rápida não
+  // travar a main thread desenhando N páginas de uma vez.
+  final List<int> _pendingScrollDraw = <int>[];
+  bool _scrollDrawScheduled = false;
   ScrollObserver? _scrollObserver;
   SelectionObserver? _selectionObserver;
   MouseObserver? _mouseObserver;
@@ -3628,6 +3633,49 @@ class Draw {
     _lazyRenderObserver = null;
     _observedPageCount = -1;
     _livePages.clear();
+    _pendingScrollDraw.clear();
+  }
+
+  /// Agenda o dreno da fila de desenho de scroll num frame (rAF), coalescendo
+  /// múltiplas mudanças de visibilidade num só drain fatiado.
+  void _scheduleScrollDraw() {
+    if (_scrollDrawScheduled) {
+      return;
+    }
+    _scrollDrawScheduled = true;
+    window.requestAnimationFrame((_) => _drainScrollDraw());
+  }
+
+  /// Desenha as páginas pendentes do scroll com time-budget (~8ms/frame),
+  /// cedendo entre frames para a rolagem não travar.
+  void _drainScrollDraw() {
+    _scrollDrawScheduled = false;
+    final Position? position = _position as Position?;
+    if (position == null || _pendingScrollDraw.isEmpty) {
+      return;
+    }
+    final List<IElementPosition> positionList =
+        position.getOriginalMainPositionList();
+    final List<IElement> elementList = getOriginalMainElementList();
+    final double start = window.performance.now();
+    while (_pendingScrollDraw.isNotEmpty) {
+      final int i = _pendingScrollDraw.removeAt(0);
+      if (i >= 0 && i < _pageRowList.length && _livePages.contains(i)) {
+        _drawPage(
+          IDrawPagePayload(
+            elementList: elementList,
+            positionList: positionList,
+            rowList: _pageRowList[i],
+            pageNo: i,
+          ),
+        );
+      }
+      if (_pendingScrollDraw.isNotEmpty &&
+          window.performance.now() - start > 8) {
+        _scheduleScrollDraw();
+        break;
+      }
+    }
   }
 
   /// Mantém/libera o backing store do canvas da página [i] (F5.4a —
@@ -3734,8 +3782,21 @@ class Draw {
           if (pageIndex == null) {
             continue;
           }
-          handlePage(pageIndex, isIntersecting);
+          // Scroll: enfileira o desenho (fatiado em frames) em vez de desenhar
+          // sincronamente — evita travar ao rolar rápido por várias páginas.
+          if (isIntersecting) {
+            _livePages.add(pageIndex);
+            _setPageCanvasLive(pageIndex, true);
+            if (!_pendingScrollDraw.contains(pageIndex)) {
+              _pendingScrollDraw.add(pageIndex);
+            }
+          } else {
+            _livePages.remove(pageIndex);
+            _pendingScrollDraw.remove(pageIndex);
+            _setPageCanvasLive(pageIndex, false);
+          }
         }
+        _scheduleScrollDraw();
       },
       <String, dynamic>{'rootMargin': '${bufferPx}px 0px ${bufferPx}px 0px'},
     );
