@@ -512,6 +512,14 @@ class IElement
   List<IColgroup>? colgroup;
   @override
   List<ITr>? trList;
+
+  /// Estado transitório do table paging (F4.5/F5): quando uma parte de tabela
+  /// dividida foi particionada no render [tablePartRenderId], o layout emite
+  /// direto a geometria [tablePartHeight] sem re-executar o setup O(linhas)
+  /// da tabela — evita o custo O(partes×linhas) numa tabela de milhares de
+  /// linhas. Não serializado.
+  int? tablePartRenderId;
+  double? tablePartHeight;
   @override
   TableBorder? borderType;
   @override

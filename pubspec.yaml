@@ -20,6 +20,8 @@ dependencies:
     path: packages/ce_opc
   ce_docx:
     path: packages/ce_docx
+  ce_fonts:
+    path: packages/ce_fonts
 
 
 dev_dependencies:

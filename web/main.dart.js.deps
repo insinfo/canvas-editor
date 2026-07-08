@@ -238,6 +238,10 @@ file:///C:/MyDartProjects/canvas-editor-port/packages/ce_docx/lib/src/styles.dar
 file:///C:/MyDartProjects/canvas-editor-port/packages/ce_docx/lib/src/units.dart
 file:///C:/MyDartProjects/canvas-editor-port/packages/ce_docx/lib/src/validator.dart
 file:///C:/MyDartProjects/canvas-editor-port/packages/ce_docx/lib/src/writer.dart
+file:///C:/MyDartProjects/canvas-editor-port/packages/ce_fonts/lib/ce_fonts.dart
+file:///C:/MyDartProjects/canvas-editor-port/packages/ce_fonts/lib/src/font_metrics.dart
+file:///C:/MyDartProjects/canvas-editor-port/packages/ce_fonts/lib/src/font_registry.dart
+file:///C:/MyDartProjects/canvas-editor-port/packages/ce_fonts/lib/src/metrics_data.dart
 file:///C:/MyDartProjects/canvas-editor-port/packages/ce_opc/lib/ce_opc.dart
 file:///C:/MyDartProjects/canvas-editor-port/packages/ce_opc/lib/src/content_types.dart
 file:///C:/MyDartProjects/canvas-editor-port/packages/ce_opc/lib/src/opc_package.dart
