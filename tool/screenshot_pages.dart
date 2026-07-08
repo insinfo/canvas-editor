@@ -63,6 +63,13 @@ void main() {
         return 'page $i: rows=${rows.length} yMin=${minY?.toStringAsFixed(1)} '
             'yMax=${maxY?.toStringAsFixed(1)} firstIdx=$firstIdx lastIdx=$lastIdx';
       }),
+      'geom': js_util.allowInterop(() {
+        final d = app.editor.getDraw();
+        final m = d.getMargins();
+        return 'width=${d.getWidth()} height=${d.getHeight()} '
+            'dpr=${d.getPagePixelRatio()} '
+            'margins=[${m.map((v) => (v as num).toStringAsFixed(1)).join(",")}]';
+      }),
       'headerInfo': js_util.allowInterop(() {
         final d = app.editor.getDraw();
         final h = d.getHeader();
@@ -71,9 +78,18 @@ void main() {
                 'w=${e.width}h=${e.height}')
             .join(' | ');
         final rows = h.getRowList()
-            .map((r) => 'h=${r.height.toStringAsFixed(0)}oy=${r.offsetY?.toStringAsFixed(0)}')
+            .map((r) => 'h=${r.height.toStringAsFixed(0)}oy=${r.offsetY?.toStringAsFixed(0)}a=${r.ascent?.toStringAsFixed(0)}')
             .join(',');
-        return 'headerHeight=${h.getHeight().toStringAsFixed(1)} '
+        final posY = h.getPositionList()
+            .map((p) {
+              final lt = p.coordinate['leftTop'] as List?;
+              final lb = p.coordinate['leftBottom'] as List?;
+              final y0 = (lt != null && lt.length > 1) ? (lt[1] as num).toDouble() : null;
+              final y1 = (lb != null && lb.length > 1) ? (lb[1] as num).toDouble() : null;
+              return '${y0?.toStringAsFixed(0)}..${y1?.toStringAsFixed(0)}';
+            })
+            .join(',');
+        return 'posY=[$posY] headerHeight=${h.getHeight().toStringAsFixed(1)} '
             'extraHeight=${h.getExtraHeight().toStringAsFixed(1)} '
             'headerTop=${h.getHeaderTop().toStringAsFixed(1)} '
             'rows=[$rows] elems=[$els]';
@@ -167,12 +183,21 @@ Future<void> main(List<String> args) async {
         clip: Rectangle<num>(0, 0, 900, 240));
     File(p.join(outDir.path, '$which-ui.png')).writeAsBytesSync(uiBytes);
     stdout.writeln('[shot] salvo ${p.join(outDir.path, '$which-ui.png')} (interface)');
+    stdout.writeln('[shot] geom: '
+        '${await page.evaluate<String?>('() => window.__shot.geom()')}');
     stdout.writeln('[shot] headerInfo: '
         '${await page.evaluate<String?>('() => window.__shot.headerInfo()')}');
     for (final pg in pages) {
       stdout.writeln('[shot] ${await page.evaluate<String?>(
           '(i) => window.__shot.pageYRange(i)', args: <dynamic>[pg - 1])}');
     }
+    // Esconde o chrome fixo (titlebar/abas/menu) para não sobrepor o canvas
+    // nas capturas por-página (element.screenshot compõe overlays fixos).
+    await page.evaluate<void>('''() => {
+      for (const sel of ['.word-titlebar', '.ribbon-tabs', '.menu', '.catalog']) {
+        document.querySelectorAll(sel).forEach((e) => e.style.display = 'none');
+      }
+    }''');
     for (final pg in pages) {
       // Rola a página alvo ao viewport para materializá-la (virtualização).
       await page.evaluate<void>(

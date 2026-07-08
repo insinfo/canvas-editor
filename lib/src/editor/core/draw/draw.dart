@@ -2734,6 +2734,14 @@ class Draw {
       }
       final IElement clone = element_utils.cloneElement(element);
       clone.trList = nextRows;
+      // Rebaseia a geometria (td.x/td.y) ao TOPO desta parte. Os ITd reusados
+      // guardam o `y` acumulado da tabela INTEIRA (ex.: ~300px para a 3ª linha),
+      // e como o fast-path de render (tablePartRenderId) não re-roda o layout,
+      // a parte de continuação renderizaria ~N px abaixo do header (gap enorme
+      // no topo da página, inflando a contagem de páginas). Recalcular aqui —
+      // uma vez por parte, O(linhas_da_parte) — zera esse offset e posiciona
+      // headers repetidos corretamente no topo.
+      (_tableParticle as TableParticle?)?.computeRowColInfo(clone);
       clone.pagingId = pagingId;
       clone.pagingIndex = (element.pagingIndex ?? 0) + k;
       clone.id = utils.getUUID();
