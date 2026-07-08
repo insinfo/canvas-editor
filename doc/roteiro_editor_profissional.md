@@ -305,8 +305,19 @@ cada item; TR renderiza as 140 páginas sem erro.
 3. Layout incremental: invalidação por faixa (parágrafo/tabela sujos) em vez de `computeRowList`
    global; cache de linhas por parágrafo com hash de conteúdo+formatação; reuso do row cache já
    existente no repaint rápido.
-4. Virtualização: canvas só para páginas no viewport ±2 (hoje `_lazyRender` já observa — estender
-   para destruir/recriar canvases fora do viewport e manter memória plana nas 140 págs).
+4. Virtualização (confirmado pela observação do usuário 2026-07-08: o Word renderiza sob demanda
+   ao rolar e a barra de rolagem é estimada/refinada, não fixa). Dois níveis:
+   - **F5.4a memória de canvas**: hoje `_lazyRender` já DESENHA sob demanda (IntersectionObserver),
+     mas `_syncPageCanvases`/`_applyPageMetrics` alocam o backing store cheio das N páginas
+     (~3,5 MB/página → ~650 MB no TR, ~1,4 GB em 400 págs). Liberar o backing store das páginas
+     fora do viewport (canvas 1×1, mantendo o tamanho CSS) e restaurar ao entrar → memória plana.
+     Cuidado: o E2E assere `canvas.width > 700` na 1ª página, então as visíveis têm que nascer vivas.
+   - **F5.5 layout progressivo**: NÃO computar o layout inteiro na abertura (hoje 6,3s no TR =
+     `formatElementList` + `computeRowList` + posições, tudo síncrono). Computar só o necessário
+     para o viewport inicial, mostrar, e continuar o resto fatiado (rAF/timer), com **altura total
+     ESTIMADA** e refinada ao rolar (é isto que deixa a barra do Word "instável"). Trade-off de UX:
+     abertura ~instantânea vs. barra de rolagem que ajusta durante a rolagem (comportamento do Word).
+     Exige tornar o `computeRowList` retomável (layout por faixa) — mudança arquitetural maior.
 5. Digitação: caminho rápido de edição intra-parágrafo (re-layout só do parágrafo + shift das
    páginas seguintes se a altura mudou); debounce de recomputações de campo `NUMPAGES`.
 6. dart2js: eliminar `dynamic` quente nos loops de layout, listas tipadas, evitar closures em hot
