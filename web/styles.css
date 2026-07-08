@@ -43,17 +43,106 @@ ul {
   list-style: none;
 }
 
+/* Barra de título estilo Word (F6) */
+.word-titlebar {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 30px;
+  z-index: 11;
+  display: flex;
+  align-items: center;
+  background: #2b579a;
+  color: #ffffff;
+  font-size: 12px;
+  padding: 0 12px;
+  box-sizing: border-box;
+}
+
+.word-titlebar__left {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.word-titlebar__toggle {
+  width: 26px;
+  height: 14px;
+  border-radius: 8px;
+  background: #5b7fc0;
+  position: relative;
+}
+
+.word-titlebar__toggle::after {
+  content: '';
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: #ffffff;
+}
+
+.word-titlebar__doc {
+  position: absolute;
+  left: 50%;
+  transform: translateX(-50%);
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 50%;
+}
+
+/* Abas do ribbon estilo Word (F6) */
+.ribbon-tabs {
+  position: fixed;
+  top: 30px;
+  left: 0;
+  width: 100%;
+  height: 34px;
+  z-index: 10;
+  display: flex;
+  align-items: flex-end;
+  background: #ffffff;
+  border-bottom: 1px solid #d9dee4;
+  padding-left: 8px;
+  box-sizing: border-box;
+}
+
+.ribbon-tab {
+  padding: 6px 14px;
+  font-size: 13px;
+  color: #444;
+  cursor: pointer;
+  border-bottom: 2px solid transparent;
+  user-select: none;
+}
+
+.ribbon-tab:hover {
+  background: #f3f6fb;
+}
+
+.ribbon-tab--active {
+  color: #2b579a;
+  font-weight: 600;
+  border-bottom-color: #2b579a;
+}
+
 .menu {
   width: 100%;
   height: 60px;
-  top: 0;
+  top: 64px;
   z-index: 9;
   position: fixed;
   display: flex;
   align-items: center;
   justify-content: center;
-  background: #F2F4F7;
-  box-shadow: 0 2px 4px 0 transparent;
+  background: #f5f7fa;
+  border-bottom: 1px solid #e2e6ed;
+  box-shadow: 0 1px 3px 0 rgba(0, 0, 0, .04);
 }
 
 .menu-divider {
@@ -1189,7 +1278,7 @@ ul {
   position: fixed;
   left: 0;
   bottom: 0;
-  top: 100px;
+  top: 164px;
   padding: 0 20px 40px 20px;
 }
 
@@ -1657,7 +1746,7 @@ ul {
 }
 
 .editor>div {
-  margin: 80px auto;
+  margin: 144px auto 80px;
 }
 
 .ce-page-container canvas {
@@ -1669,7 +1758,7 @@ ul {
   height: 650px;
   position: fixed;
   transform: translateX(420px);
-  top: 200px;
+  top: 264px;
   left: 50%;
   overflow-y: auto;
 }

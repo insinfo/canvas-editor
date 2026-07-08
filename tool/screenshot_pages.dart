@@ -40,6 +40,29 @@ void main() {
       }),
       'pageCount': js_util.allowInterop(
           () => app.editor.getDraw().getPageList().length),
+      'pageYRange': js_util.allowInterop((num pageIndex) {
+        final d = app.editor.getDraw();
+        final pageRows = d.getPageRowList();
+        final i = pageIndex.toInt();
+        if (i < 0 || i >= pageRows.length) return 'fora do range';
+        final rows = pageRows[i] as List;
+        final posList = d.getPosition().getOriginalMainPositionList() as List;
+        double? minY, maxY;
+        int? firstIdx, lastIdx;
+        for (final row in rows) {
+          final start = (row as dynamic).startIndex as int;
+          final n = (row.elementList as List).length;
+          for (var k = start; k < start + n && k < posList.length; k++) {
+            final lt = (posList[k] as dynamic).coordinate['leftTop'] as List?;
+            if (lt == null || lt.length < 2) continue;
+            final yv = (lt[1] as num).toDouble();
+            if (minY == null || yv < minY) { minY = yv; firstIdx = k; }
+            if (maxY == null || yv > maxY) { maxY = yv; lastIdx = k; }
+          }
+        }
+        return 'page $i: rows=${rows.length} yMin=${minY?.toStringAsFixed(1)} '
+            'yMax=${maxY?.toStringAsFixed(1)} firstIdx=$firstIdx lastIdx=$lastIdx';
+      }),
       'headerInfo': js_util.allowInterop(() {
         final d = app.editor.getDraw();
         final h = d.getHeader();
@@ -139,8 +162,17 @@ Future<void> main(List<String> args) async {
       prev = cur;
     }
     stdout.writeln('[shot] paginação estável: $prev páginas.');
+    // Captura só o topo da interface (titlebar + ribbon + menu) para ver o F6.
+    final List<int> uiBytes = await page.screenshot(
+        clip: Rectangle<num>(0, 0, 900, 240));
+    File(p.join(outDir.path, '$which-ui.png')).writeAsBytesSync(uiBytes);
+    stdout.writeln('[shot] salvo ${p.join(outDir.path, '$which-ui.png')} (interface)');
     stdout.writeln('[shot] headerInfo: '
         '${await page.evaluate<String?>('() => window.__shot.headerInfo()')}');
+    for (final pg in pages) {
+      stdout.writeln('[shot] ${await page.evaluate<String?>(
+          '(i) => window.__shot.pageYRange(i)', args: <dynamic>[pg - 1])}');
+    }
     for (final pg in pages) {
       // Rola a página alvo ao viewport para materializá-la (virtualização).
       await page.evaluate<void>(

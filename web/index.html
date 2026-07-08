@@ -12,6 +12,24 @@
 
 <body>
   <div id="app">
+    <!-- Barra de título estilo Word (F6) -->
+    <div class="word-titlebar">
+      <div class="word-titlebar__left">
+        <span class="word-titlebar__autosave">Salvamento Automático</span>
+        <span class="word-titlebar__toggle" aria-hidden="true"></span>
+      </div>
+      <div class="word-titlebar__doc" id="wordDocTitle">Documento — Editor Canvas</div>
+      <div class="word-titlebar__right"></div>
+    </div>
+    <!-- Abas do ribbon estilo Word (F6) -->
+    <div class="ribbon-tabs" role="tablist">
+      <div class="ribbon-tab" data-tab="arquivo">Arquivo</div>
+      <div class="ribbon-tab ribbon-tab--active" data-tab="inicial">Página Inicial</div>
+      <div class="ribbon-tab" data-tab="inserir">Inserir</div>
+      <div class="ribbon-tab" data-tab="layout">Layout</div>
+      <div class="ribbon-tab" data-tab="revisao">Revisão</div>
+      <div class="ribbon-tab" data-tab="exibir">Exibir</div>
+    </div>
     <div class="menu" editor-component="menu">
       <div class="menu-item">
         <div class="menu-item__undo">
@@ -424,6 +442,19 @@
       </div>
     </div>
   </div>
+  <script>
+    // Troca visual de aba do ribbon (F6). Só "Página Inicial" tem controles
+    // hoje; as demais ficam ativas visualmente para o look do Word.
+    (function () {
+      var tabs = document.querySelectorAll('.ribbon-tab');
+      tabs.forEach(function (t) {
+        t.addEventListener('click', function () {
+          tabs.forEach(function (x) { x.classList.remove('ribbon-tab--active'); });
+          t.classList.add('ribbon-tab--active');
+        });
+      });
+    })();
+  </script>
 </body>
 
 </html>

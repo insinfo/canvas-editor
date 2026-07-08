@@ -2525,6 +2525,11 @@ class EditorApp {
       ));
       _openedDocx = docx;
       _openedDocxName = name;
+      // Atualiza a barra de título estilo Word (F6) com o nome do arquivo.
+      final titleDom = document.getElementById('wordDocTitle');
+      if (titleDom != null) {
+        titleDom.text = '$name — Editor Canvas';
+      }
       // Referência de "intocado" para o save (F5): NÃO clona nada na abertura.
       // Guarda a saída crua do conversor (não mutada pelo setValue) e reproduz
       // a referência (clone+format+zip) só no 1º save — poupa ~250ms de clone
