@@ -344,6 +344,13 @@ Future<void> main(List<String> args) async {
           'tr_pages',
           (await page.evaluate<num?>('() => window.__perf.pageCount()'))
               ?.toInt());
+      // F5.5: aguarda a paginação progressiva async terminar e confirma o
+      // total (deve bater com o layout completo).
+      await Future<void>.delayed(const Duration(seconds: 6));
+      report(
+          'tr_pages_final',
+          (await page.evaluate<num?>('() => window.__perf.pageCount()'))
+              ?.toInt());
       stdout.writeln('[tableStats] '
           '${await page.evaluate<String?>('() => window.__perf.tableStats()')}');
       stdout.writeln('[canvasMem] '

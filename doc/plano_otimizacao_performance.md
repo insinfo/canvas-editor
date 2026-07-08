@@ -153,3 +153,41 @@ Importante: não avalie desempenho com webdev serve — é DDC, sem otimização
 
 Próximos passos (registrados no roteiro F5)
 Os 281 ms do TR ainda são dominados pelo computePositionList/paginação O(documento) — a continuação é posições incrementais + convergência por EndInfo + recálculo fatiado em timer (F5.3/F5.5) e histórico por deltas. E o TR paginar em 82 págs (Word: 140) é o gap de fidelidade de spacing (F4.3), não de performance — é o próximo item natural do roteiro para a sua queixa de "respeitar os dados do arquivo".
+
+Confirmei o bug do espaçamento e ele muda meu conselho. Preciso te passar o que encontrei antes de gastar dias no Web Worker.
+
+Olhei suas capturas com atenção e diagnostiquei bugs de fidelidade concretos e corrigíveis:
+
+"u s o p o r p r a z o" nas células — é a justificação (jc="both") distribuindo espaço entre cada caractere em vez de entre palavras (draw.dart:2260). O Word só espaça nos espaços. Correção pontual.
+Cabeçalho sobrepondo o corpo (pág. 4) — a altura reservada do header/zona está errada, o texto do corpo sobe demais.
+Linhas de tabela gigantes e vazias (pág. 7-8) — altura de linha/rowspan mal calculada (provavelmente relacionado às células-continuação do meu table paging).
+Textos flutuantes ("l4.133/2021", "que deverão compor a solução") — são os text boxes/carimbos (mc:AlternateContent) hoje posicionados errado.
+
+
+Deixei os dois estudos rodando e vou sintetizar o plano quando terminarem. Enquanto isso, um resumo honesto de onde estamos:
+
+Você tem razão e eu fui pessimista demais. pdf.js, Google Docs e OnlyOffice provam que web worker para renderização de documento é o caminho certo — e a chave que eu estava subestimando é exatamente o que o pdf.js resolve: não se serializa objetos gordos. O worker calcula e devolve uma lista compacta de comandos de desenho (texto com x/y/fonte/cor, bordas como coordenadas de linha) em typed arrays transferíveis (custo ~zero, sem cópia), transmitida por página sob demanda — não os 514k objetos IElement/IRow de uma vez. É isso que torna a serialização barata.
+
+O que está em andamento:
+
+✅ Correção da justificação já commitada e no build (2362330) — atualize o 127.0.0.1:8080 e o "u s o p o r p r a z o" das células deve virar "uso por prazo" (espaço entre palavras, como o Word).
+🔍 Clonei o pdf.js em docx_rendering/referencias/pdf.js e disparei dois estudos a fundo: (1) pdf.js — protocolo do worker, transferables, streaming por página, divisão worker-calcula-comandos / main-desenha; (2) OnlyOffice — se o layout do editor de texto deles usa web worker ou recálculo fatiado na main thread (isso decide a melhor arquitetura para nós).
+Quando os estudos voltarem, trago um plano concreto de web worker para o editor: o que roda no worker (parse + layout + paginação, tudo já em Dart puro e sem canvas graças ao ce_fonts), o formato compacto/transferível que volta por página, e como a main thread só executa os comandos de desenho. Aí implemento em incrementos verificáveis por você na tela.
+
+Os dois estudos voltaram e dão um veredito claro e baseado em evidência:
+
+pdf.js (visualizador read-only): usa web worker + lista de comandos compacta + transferables + streaming. Perfeito — para read-only.
+OnlyOffice (editor de texto editável, igual ao nosso): NÃO usa web worker para o layout. Usa recálculo fatiado na main thread com yield — um laço que calcula uma página por vez, cede o thread a cada ~10 ms (ou 50 páginas), retoma de um cursor de estado (FullRecalc), mantém as 2 primeiras páginas síncronas (viewport instantâneo) e é versionado/cancelável (uma edição durante a paginação descarta o laço antigo). Web worker deles só aparece em spellcheck e hash de senha. Fontes/PDF são WASM, mas síncrono na main thread.
+A conclusão que os dados entregam: para um editor editável, o layout toca o modelo do documento a cada tecla — mandá-lo para um worker exigiria serializar o modelo de ida e volta a cada edição, o que é pior. Por isso o OnlyOffice, um editor industrial maduro, deliberadamente mantém o layout na main thread e o fatia. O web worker do pdf.js funciona porque PDF é read-only (nunca edita).
+
+Então o caminho comprovado e de menor risco para "abrir/rolar sem travar" no nosso caso é o modelo OnlyOffice: layout fatiado na main thread — que é exatamente a barra "estimada/instável" que você observou no Word e aprovou. Você estava certo que a resposta estava nesses projetos; a evidência só apontou o mecanismo certo (fatiar, não worker) para o caso editável.
+
+Vou registrar essa decisão de arquitetura na memória e começar a implementar o modelo OnlyOffice.
+
+aí você está certíssimo, e é exatamente o padrão do OnlyOffice (zlib em WASM) e do pdf.js (transferem o ArrayBuffer do arquivo): descompressão é o caso perfeito para worker — tarefa isolada, entra bytes comprimidos e sai bytes descomprimidos, ambos como transferable (zero-copy), sem serializar o modelo. Não tem o problema do layout (que toca o modelo a cada tecla).
+
+Só quero te dar o número real para priorizar: no TR (476 KB comprimido → 4,45 MB de XML), a descompressão + parse leva ~247 ms; o congelamento grande da abertura é o layout (2,3s). Então:
+
+Layout fatiado na main thread = ganho grande (os 2,3s) → fazer primeiro.
+Worker de descompressão = ganho menor hoje (~247ms), mas você tem razão que escala com o tamanho — um DOCX de 10-20 MB pode levar 1-2s só para descomprimir. E é muito mais simples que o worker de layout (bytes↔bytes, sem serializar 514k elementos). Ótimo candidato como próximo passo, depois do layout fatiado.
+Então o plano combinado fica: (1) layout fatiado agora, (2) worker de descompressão depois para arquivos grandes. Vou seguir com o layout fatiado — começando pela peça retomável do computeRowList.
