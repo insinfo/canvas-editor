@@ -2257,12 +2257,30 @@ class Draw {
                   ? curRow.elementList.sublist(1)
                   : curRow.elementList;
           if (rowElementList.length > 1) {
-            final double gap =
-                (availableWidth - curRow.width) / (rowElementList.length - 1);
-            for (int e = 0; e < rowElementList.length - 1; e++) {
-              rowElementList[e].metrics.width += gap;
+            final double totalGap = availableWidth - curRow.width;
+            // Justificação estilo Word (F4.3): distribui o espaço extra apenas
+            // nos ESPAÇOS (limites de palavra), não entre cada caractere —
+            // senão células estreitas viram "u s o  p o r  p r a z o".
+            // Estica só espaço normal (U+0020) e ideográfico (U+3000); nbsp
+            // (U+00A0) e narrow nbsp (U+202F) NÃO esticam, por definição.
+            final List<int> spaceIndexes = <int>[];
+            for (int e = 0; e < rowElementList.length; e++) {
+              final String v = rowElementList[e].value;
+              if (v.length == 1) {
+                final int cu = v.codeUnitAt(0);
+                if (cu == 0x20 || cu == 0x3000) {
+                  spaceIndexes.add(e);
+                }
+              }
             }
-            curRow.width = availableWidth;
+            if (spaceIndexes.isNotEmpty && totalGap > 0) {
+              final double gap = totalGap / spaceIndexes.length;
+              for (final int e in spaceIndexes) {
+                rowElementList[e].metrics.width += gap;
+              }
+              curRow.width = availableWidth;
+            }
+            // Sem espaços (palavra única) → não estica (como o Word).
           }
         }
       }
