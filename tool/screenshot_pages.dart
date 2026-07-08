@@ -40,6 +40,21 @@ void main() {
       }),
       'pageCount': js_util.allowInterop(
           () => app.editor.getDraw().getPageList().length),
+      'headerInfo': js_util.allowInterop(() {
+        final d = app.editor.getDraw();
+        final h = d.getHeader();
+        final els = h.getElementList()
+            .map((e) => '${e.type?.name ?? "text"}:"${e.value.length > 12 ? e.value.substring(0, 12) : e.value}"'
+                'w=${e.width}h=${e.height}')
+            .join(' | ');
+        final rows = h.getRowList()
+            .map((r) => 'h=${r.height.toStringAsFixed(0)}oy=${r.offsetY?.toStringAsFixed(0)}')
+            .join(',');
+        return 'headerHeight=${h.getHeight().toStringAsFixed(1)} '
+            'extraHeight=${h.getExtraHeight().toStringAsFixed(1)} '
+            'headerTop=${h.getHeaderTop().toStringAsFixed(1)} '
+            'rows=[$rows] elems=[$els]';
+      }),
     }));
     js_util.setProperty(html.window, '__shotReady', true);
   });
@@ -124,6 +139,8 @@ Future<void> main(List<String> args) async {
       prev = cur;
     }
     stdout.writeln('[shot] paginação estável: $prev páginas.');
+    stdout.writeln('[shot] headerInfo: '
+        '${await page.evaluate<String?>('() => window.__shot.headerInfo()')}');
     for (final pg in pages) {
       // Rola a página alvo ao viewport para materializá-la (virtualização).
       await page.evaluate<void>(
