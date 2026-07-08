@@ -33,6 +33,9 @@ class Header {
 	List<IElement> _elementList;
 	List<IRow> _rowList;
 	List<IElementPosition> _positionList;
+	List<IHeaderTextBox> _textBoxes = const <IHeaderTextBox>[];
+
+	void setTextBoxes(List<IHeaderTextBox> boxes) => _textBoxes = boxes;
 
 	dynamic _drawDynamic<T>(T Function(dynamic target) callback) {
 		try {
@@ -182,8 +185,49 @@ class Header {
 			);
 			return null;
 		});
+		_renderTextBoxes(ctx, pageNo);
 		ctx.restore();
 	}
+
+		// Desenha as caixas de texto flutuantes do cabecalho (carimbos, F4.8):
+		// borda + fill no canto e o texto via o pipeline de layout/render.
+		void _renderTextBoxes(CanvasRenderingContext2D ctx, int pageNo) {
+			if (_textBoxes.isEmpty) return;
+			final double scale = (_options.scale ?? 1).toDouble();
+			final double innerWidth = _draw.getInnerWidth();
+			final List<double> margins = _draw.getMargins();
+			final double headerTop = getHeaderTop();
+			const double pad = 4;
+			for (final IHeaderTextBox tb in _textBoxes) {
+				final double w = tb.widthPx * scale;
+				final double left = margins[3] + (tb.alignRight ? (innerWidth - w) : 0);
+				final double top = headerTop + tb.offsetYPx * scale;
+				final double innerBoxWidth = w - 2 * pad * scale;
+				final List<IRow> rows = _drawDynamic((dynamic target) {
+					final dynamic r = target.computeRowList(
+						IComputeRowListPayload(innerWidth: innerBoxWidth, elementList: tb.elements));
+					return r is List ? r.whereType<IRow>().toList() : <IRow>[];
+				}) as List<IRow>? ?? const <IRow>[];
+				double contentH = 0;
+				for (final IRow r in rows) { contentH += r.height + (r.offsetY ?? 0); }
+				final double h = math.max(tb.heightPx * scale, contentH + 2 * pad * scale);
+				ctx.save();
+				if (tb.fillColor != null) { ctx..fillStyle = tb.fillColor!..fillRect(left, top, w, h); }
+				ctx..strokeStyle = tb.borderColor ?? '#000000'..lineWidth = tb.borderWidthPx * scale..strokeRect(left, top, w, h);
+				ctx.restore();
+				final List<IElementPosition> positions = <IElementPosition>[];
+				_position.computePageRowPosition(IComputePageRowPositionPayload(
+					positionList: positions, rowList: rows, pageNo: 0, startRowIndex: 0,
+					startIndex: 0, startX: left + pad * scale, startY: top + pad * scale,
+					innerWidth: innerBoxWidth, zone: EditorZone.header));
+				_drawDynamic((dynamic target) {
+					target.drawRow(ctx, IDrawRowPayload(elementList: tb.elements,
+						positionList: positions, rowList: rows, pageNo: pageNo, startIndex: 0,
+						innerWidth: innerBoxWidth, zone: EditorZone.header));
+					return null;
+				});
+			}
+		}
 
 	IHeader _resolveHeader() {
 		final IHeader header = _options.header ??= IHeader();

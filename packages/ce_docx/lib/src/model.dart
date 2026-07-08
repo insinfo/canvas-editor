@@ -399,6 +399,37 @@ class WpPreservedRunContent extends WpRunContent {
   WpPreservedRunContent(this.qname, this.xml);
 }
 
+/// Caixa de texto flutuante (shape `wps:wsp` dentro de `mc:AlternateContent`),
+/// ex.: o carimbo "Continuação de Processo" no cabeçalho (F4.8). Guarda a
+/// geometria da âncora, a borda/preenchimento e os blocos de texto internos,
+/// além do XML bruto para preservação no save.
+class WpTextBox extends WpRunContent {
+  /// Alinhamento horizontal da âncora: 'left' | 'center' | 'right' | null.
+  final String? positionHAlign;
+  final int? offsetXEmu;
+  final int? offsetYEmu;
+  final int? extentCxEmu;
+  final int? extentCyEmu;
+  final int? borderWidthEmu;
+  final String? borderColorHex; // sem '#'
+  final String? fillColorHex; // sem '#'
+  final List<WpBlock> blocks;
+  final String rawXml;
+
+  WpTextBox({
+    this.positionHAlign,
+    this.offsetXEmu,
+    this.offsetYEmu,
+    this.extentCxEmu,
+    this.extentCyEmu,
+    this.borderWidthEmu,
+    this.borderColorHex,
+    this.fillColorHex,
+    required this.blocks,
+    required this.rawXml,
+  });
+}
+
 // ---------------------------------------------------------------------------
 // Inlines de parágrafo
 // ---------------------------------------------------------------------------

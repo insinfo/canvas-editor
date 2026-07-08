@@ -121,6 +121,9 @@ class DocxWriter {
           buffer.write('/>');
         case WpDrawing drawing:
           buffer.write(drawing.rawXml);
+        case WpTextBox textBox:
+          // Caixa de texto (carimbo): re-emite o XML bruto (preservação D1).
+          buffer.write(textBox.rawXml);
         case WpFieldChar fieldChar:
           buffer
               .write('<w:fldChar w:fldCharType="${fieldChar.fldCharType}"/>');
