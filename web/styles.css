@@ -139,7 +139,12 @@ ul {
   position: fixed;
   display: flex;
   align-items: center;
-  justify-content: center;
+  /* Alinhado à esquerda como o ribbon do Word (era centralizado, o que cortava
+     o 1º grupo em telas estreitas). */
+  justify-content: flex-start;
+  padding-left: 14px;
+  box-sizing: border-box;
+  overflow-x: auto;
   background: #f5f7fa;
   border-bottom: 1px solid #e2e6ed;
   box-shadow: 0 1px 3px 0 rgba(0, 0, 0, .04);
@@ -147,8 +152,8 @@ ul {
 
 .menu-divider {
   width: 1px;
-  height: 16px;
-  margin: 0 8px;
+  height: 38px;
+  margin: 0 10px;
   display: inline-block;
   background-color: #cfd2d8;
 }
@@ -158,6 +163,24 @@ ul {
   display: flex;
   align-items: center;
   position: relative;
+  /* Espaço abaixo p/ o rótulo do grupo (estilo ribbon do Word) — centraliza
+     ícones+rótulo nos 60px do menu. */
+  margin-bottom: 13px;
+}
+
+.menu-item[data-label]::after {
+  content: attr(data-label);
+  position: absolute;
+  top: 100%;
+  margin-top: 3px;
+  left: 50%;
+  transform: translateX(-50%);
+  font-size: 9.5px;
+  line-height: 1;
+  color: #9aa3b0;
+  letter-spacing: .2px;
+  white-space: nowrap;
+  pointer-events: none;
 }
 
 .menu-item>div {
