@@ -314,12 +314,18 @@ cada item; TR renderiza as 140 páginas sem erro.
      nasce viva (E2E `canvas.width>700` ok). `_immediateRender` (impressão/export) revive todas.
      **Resultado (TR): 3/184 canvases vivos, ~10 MB de backing store (era ~650 MB); memória plana p/
      200-400 págs; abertura 6,3→~4s** (sem alocar N bitmaps). E2E 39/39.
-   - **F5.5 layout progressivo**: NÃO computar o layout inteiro na abertura (hoje 6,3s no TR =
-     `formatElementList` + `computeRowList` + posições, tudo síncrono). Computar só o necessário
-     para o viewport inicial, mostrar, e continuar o resto fatiado (rAF/timer), com **altura total
-     ESTIMADA** e refinada ao rolar (é isto que deixa a barra do Word "instável"). Trade-off de UX:
-     abertura ~instantânea vs. barra de rolagem que ajusta durante a rolagem (comportamento do Word).
-     Exige tornar o `computeRowList` retomável (layout por faixa) — mudança arquitetural maior.
+   - **F5.5 layout progressivo/fatiado** ✅ (2026-07-08, modelo OnlyOffice — decisão baseada em
+     estudo de pdf.js+OnlyOffice: editor editável fatia na main thread, NÃO usa worker de layout).
+     `computeRowList` agora é **retomável** (`_RowLayoutState`: cursor de continuação i/x/y/pageNo/
+     lista + `budgetRows`); com `resume==null` o comportamento é idêntico (E2E garante). `render()`
+     na abertura de docs grandes (`isFirstRender` + >3000 elems): 1ª fatia **síncrona** (~220 rows,
+     cobre viewport), resto pagina em **ticks de Timer** (orçamento ~12ms, como o
+     `GetCalculateTimeLimit` do OnlyOffice), **versionado/cancelável** (edição durante a paginação
+     aborta o laço; fast path desabilitado enquanto parcial). A barra de rolagem cresce conforme as
+     páginas chegam (altura estimada, estilo Word). **Resultado: 1ª pintura TR 4s→1,7s, ETP →0,34s;
+     paginação async completa até 184 págs (verificado); E2E 39/39, VM 20/20.** Falta p/ <1s:
+     fatiar também o `formatElementList` (1,6s antes do render) e worker de descompressão p/
+     arquivos de 10-20 MB.
 5. Digitação: caminho rápido de edição intra-parágrafo (re-layout só do parágrafo + shift das
    páginas seguintes se a altura mudou); debounce de recomputações de campo `NUMPAGES`.
 6. dart2js: eliminar `dynamic` quente nos loops de layout, listas tipadas, evitar closures em hot

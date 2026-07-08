@@ -237,6 +237,20 @@ class Draw {
   // Instrumentação de fases do render (diagnóstico de performance F5).
   static bool debugRenderTiming = false;
   double _tPhase = 0;
+
+  // Layout progressivo/fatiado (F5.5, modelo OnlyOffice): a 1ª fatia é
+  // síncrona (viewport), o resto pagina em ticks de Timer com orçamento de
+  // tempo. `_progressiveLayoutVersion` versiona o job — qualquer novo render
+  // cancela o laço em voo (edição durante a paginação).
+  Timer? _progressiveTimer;
+  int _progressiveLayoutVersion = 0;
+  _RowLayoutState? _progressiveResume;
+  IComputeRowListPayload? _progressiveRowPayload;
+  // Rows da 1ª fatia síncrona (~viewport + folga p/ E2E) e de cada tick.
+  static const int _progressiveFirstChunkRows = 220;
+  static const int _progressiveTickRows = 400;
+  // Só ativa em docs grandes o bastante para valer o custo do fatiamento.
+  static const int _progressiveMinElements = 3000;
   double? _pagePixelRatio;
   final I18n _i18n;
   final RegExp? _letterReg;
@@ -1525,10 +1539,19 @@ class Draw {
   // Row computation & pagination (functional parity subset)
   // -------------------------------------------------------------------------
 
-  List<IRow> computeRowList(IComputeRowListPayload payload) {
+  /// Layout fatiado (F5.5, modelo OnlyOffice): com [resume] fornecido, RETOMA
+  /// de onde parou (mesmo elementList) e cede o thread ao produzir
+  /// `resume.budgetRows` rows, num limite de parágrafo, salvando o cursor.
+  /// Com [resume] == null o comportamento é idêntico ao layout completo.
+  // ignore: library_private_types_in_public_api
+  List<IRow> computeRowList(
+    IComputeRowListPayload payload, {
+    _RowLayoutState? resume,
+  }) {
     final double innerWidth = payload.innerWidth;
     final List<IElement> elementList = payload.elementList;
     if (innerWidth <= 0 || elementList.isEmpty) {
+      resume?.done = true;
       return <IRow>[];
     }
     final bool isPagingMode = payload.isPagingMode ?? false;
@@ -1561,8 +1584,8 @@ class Draw {
         listParticle?.computeListStyle(ctx, elementList) ?? <String, double>{};
     final List<IElement> surroundElementList =
         List<IElement>.from(payload.surroundElementList ?? const <IElement>[]);
-    final List<IRow> rowList = <IRow>[];
-    if (elementList.isNotEmpty) {
+    final List<IRow> rowList = resume?.rowList ?? <IRow>[];
+    if (rowList.isEmpty && elementList.isNotEmpty) {
       rowList.add(
         IRow(
           width: 0,
@@ -1578,16 +1601,20 @@ class Draw {
         ),
       );
     }
-    double x = startX;
-    double y = startY;
-    int pageNo = 0;
-    int listIndex = 0;
-    String? listId;
-    double controlRealWidth = 0;
+    final bool isResuming = resume?.started ?? false;
+    double x = isResuming ? resume!.x : startX;
+    double y = isResuming ? resume!.y : startY;
+    int pageNo = isResuming ? resume!.pageNo : 0;
+    int listIndex = isResuming ? resume!.listIndex : 0;
+    String? listId = isResuming ? resume!.listId : null;
+    double controlRealWidth = isResuming ? resume!.controlRealWidth : 0;
+    // Corte de fatia (F5.5): produz até `budgetRows` rows por chamada.
+    final int chunkStartRowCount = rowList.length;
+    final int budgetRows = resume?.budgetRows ?? (1 << 30);
     // Hoisted do loop (plano de otimização A3): regex e fonte por elemento
     // eram recriados dezenas de milhares de vezes por render.
     final RegExp effectiveLetterReg = getLetterReg() ?? RegExp('[A-Za-z]');
-    for (int i = 0; i < elementList.length; i++) {
+    for (int i = resume?.i ?? 0; i < elementList.length; i++) {
       final IRow curRow = rowList.last;
       final IElement element = elementList[i];
       final IElement? preElement = i > 0 ? elementList[i - 1] : null;
@@ -2319,7 +2346,33 @@ class Draw {
             <String, double>{'x': x, 'rowIncreaseWidth': 0};
         x = (nextSurround['x'] ?? x) + metrics.width;
       }
+      // Corte de fatia (F5.5): cedeu o orçamento de rows E estamos num limite
+      // de parágrafo (próximo elemento inicia parágrafo) → salva o cursor de
+      // continuação e devolve as rows acumuladas até aqui.
+      if (resume != null &&
+          (rowList.length - chunkStartRowCount) >= budgetRows &&
+          i + 1 < elementList.length &&
+          elementList[i + 1].value == ZERO) {
+        resume
+          ..i = i + 1
+          ..x = x
+          ..y = y
+          ..pageNo = pageNo
+          ..listIndex = listIndex
+          ..listId = listId
+          ..controlRealWidth = controlRealWidth
+          ..started = true
+          ..done = false;
+        return _finalizeRowList(rowList);
+      }
     }
+    resume?.done = true;
+    return _finalizeRowList(rowList);
+  }
+
+  /// Filtra rows vazias e reindexa (compartilhado entre o retorno completo e
+  /// cada fatia do layout progressivo).
+  List<IRow> _finalizeRowList(List<IRow> rowList) {
     final List<IRow> normalizedRows =
         rowList.where((IRow row) => row.elementList.isNotEmpty).toList();
     for (int i = 0; i < normalizedRows.length; i++) {
@@ -3658,6 +3711,14 @@ class Draw {
   void render([IDrawOption? option]) {
     ensureContainerMounted();
     _renderCount += 1;
+    // Cancela qualquer paginação progressiva em voo (F5.5): este render é a
+    // nova verdade; um tick antigo que ainda dispare vai abortar pela versão.
+    _progressiveLayoutVersion += 1;
+    _progressiveTimer?.cancel();
+    _progressiveTimer = null;
+    _progressiveResume = null;
+    _progressiveRowPayload = null;
+    final int layoutVersion = _progressiveLayoutVersion;
     final IDrawOption renderOption = option ?? IDrawOption();
     final bool isCompute = renderOption.isCompute ?? true;
     final bool isLazy = renderOption.isLazy ?? true;
@@ -3713,21 +3774,42 @@ class Draw {
         final double mainOuterHeight = getMainOuterHeight();
         final List<IElement> surroundElementList =
             element_utils.pickSurroundElementList(_elementList);
-        final List<IRow> computedRows = computeRowList(
-          IComputeRowListPayload(
-            startX: margins[3],
-            startY: margins[0] + extraHeight,
-            pageHeight: pageHeight,
-            mainOuterHeight: mainOuterHeight,
-            isPagingMode: isPagingMode,
-            innerWidth: innerWidth,
-            surroundElementList: surroundElementList,
-            elementList: _elementList,
-          ),
+        final IComputeRowListPayload rowPayload = IComputeRowListPayload(
+          startX: margins[3],
+          startY: margins[0] + extraHeight,
+          pageHeight: pageHeight,
+          mainOuterHeight: mainOuterHeight,
+          isPagingMode: isPagingMode,
+          innerWidth: innerWidth,
+          surroundElementList: surroundElementList,
+          elementList: _elementList,
         );
-        _rowList
-          ..clear()
-          ..addAll(computedRows);
+        // Layout fatiado (F5.5): na abertura de docs grandes, a 1ª fatia é
+        // síncrona (viewport + folga) e o resto pagina em ticks de Timer, para
+        // a UI não travar. Edições usam o fast path; demais renders são
+        // completos como antes.
+        final bool useProgressive = isFirstRender &&
+            isPagingMode &&
+            _mode != EditorMode.print &&
+            _elementList.length > _progressiveMinElements;
+        if (useProgressive) {
+          final _RowLayoutState state = _RowLayoutState()
+            ..budgetRows = _progressiveFirstChunkRows;
+          final List<IRow> firstChunk =
+              computeRowList(rowPayload, resume: state);
+          _rowList
+            ..clear()
+            ..addAll(firstChunk);
+          if (!state.done) {
+            _progressiveResume = state;
+            _progressiveRowPayload = rowPayload;
+          }
+        } else {
+          final List<IRow> computedRows = computeRowList(rowPayload);
+          _rowList
+            ..clear()
+            ..addAll(computedRows);
+        }
       }
       if (debugRenderTiming && !fastLayoutDone) {
         window.console.log('[render] computeRowList: '
@@ -3739,7 +3821,11 @@ class Draw {
       _pageRowList
         ..clear()
         ..addAll(pageRows);
-      _computedElementCount = _elementList.length;
+      // Enquanto a paginação progressiva não termina, `_rowList` é parcial —
+      // 0 desabilita o fast path de edição (que assume o layout completo);
+      // uma edição durante a paginação cai no relayout completo (correto).
+      _computedElementCount =
+          _progressiveResume != null ? 0 : _elementList.length;
       if (debugRenderTiming) {
         window.console.log('[render] computePageList: '
             '${(window.performance.now() - _tPhase).toStringAsFixed(0)}ms '
@@ -3841,6 +3927,75 @@ class Draw {
         }
       }
     });
+
+    // F5.5: se a 1ª fatia não cobriu o doc inteiro, agenda a paginação do
+    // restante em ticks (após esta pintura da 1ª fatia).
+    if (_progressiveResume != null && _progressiveRowPayload != null) {
+      _progressiveTimer =
+          Timer(Duration.zero, () => _progressiveTick(layoutVersion));
+    }
+  }
+
+  /// Um tick do layout progressivo (F5.5): pagina mais uma fatia do documento,
+  /// re-pagina/reposiciona o acumulado, redesenha e agenda o próximo tick até
+  /// terminar. Aborta se um novo render assumiu (versão mudou).
+  void _progressiveTick(int version) {
+    if (version != _progressiveLayoutVersion) {
+      return; // um novo render cancelou este job
+    }
+    final _RowLayoutState? state = _progressiveResume;
+    final IComputeRowListPayload? payload = _progressiveRowPayload;
+    if (state == null || payload == null) {
+      return;
+    }
+    final Stopwatch sw = Stopwatch()..start();
+    // Processa fatias até estourar ~12ms (orçamento por tick, como o
+    // GetCalculateTimeLimit=10ms do OnlyOffice) ou terminar.
+    do {
+      state.budgetRows = _progressiveTickRows;
+      final List<IRow> rows = computeRowList(payload, resume: state);
+      _rowList
+        ..clear()
+        ..addAll(rows);
+    } while (!state.done && sw.elapsedMilliseconds < 12);
+
+    final List<List<IRow>> pageRows = _computePageList();
+    _pageRowList
+      ..clear()
+      ..addAll(pageRows);
+    // Só marca o layout como completo (habilitando o fast path de edição)
+    // quando a paginação progressiva termina.
+    _computedElementCount = state.done ? _elementList.length : 0;
+    (_position as Position?)?.computePositionList();
+    _syncPageCanvases();
+    if (getIsPagingMode()) {
+      _lazyRender();
+    } else {
+      _immediateRender();
+    }
+
+    if (!state.done) {
+      _progressiveTimer =
+          Timer(Duration.zero, () => _progressiveTick(version));
+      return;
+    }
+    // Terminou: computa o que precisava do documento inteiro e avisa listeners.
+    _progressiveResume = null;
+    _progressiveRowPayload = null;
+    _progressiveTimer = null;
+    (_area as Area?)?.compute();
+    if (_mode != EditorMode.print) {
+      final Search? search = _search as Search?;
+      final String? keyword = search?.getSearchKeyword();
+      if (keyword != null && keyword.isNotEmpty) {
+        search?.compute(keyword);
+      }
+      (_control as Control?)?.computeHighlightList();
+    }
+    _listener?.pageSizeChange?.call(_pageRowList.length);
+    if (_eventBus?.isSubscribe?.call('pageSizeChange') == true) {
+      _eventBus.emit('pageSizeChange', _pageRowList.length);
+    }
   }
 
   int? setCursor([int? curIndex]) {
@@ -4369,4 +4524,23 @@ class Draw {
   static const List<double> _defaultMargins = <double>[96, 96, 96, 96];
   static const double _defaultMarginIndicatorSize = 35;
   static const double _defaultPageNumberBottom = 60;
+}
+
+/// Cursor de continuação do layout fatiado (F5.5, modelo OnlyOffice). Guarda o
+/// estado do laço de `computeRowList` para retomar de onde parou entre ticks:
+/// índice do elemento, x/y (relativos à página), página, estado de lista e a
+/// lista de rows acumulada. `budgetRows` limita quantas rows uma fatia produz
+/// antes de ceder o thread.
+class _RowLayoutState {
+  final List<IRow> rowList = <IRow>[];
+  int i = 0;
+  double x = 0;
+  double y = 0;
+  int pageNo = 0;
+  int listIndex = 0;
+  String? listId;
+  double controlRealWidth = 0;
+  int budgetRows = 1 << 30;
+  bool started = false;
+  bool done = false;
 }
