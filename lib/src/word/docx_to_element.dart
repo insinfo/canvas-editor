@@ -111,14 +111,8 @@ class DocxToElementConverter {
         footerBlocks == null ? null : _extractPageNumber(footerBlocks);
     final footer = footerBlocks == null
         ? <IElement>[]
-        : _convertBlocks(
-            pageNumber == null
-                ? footerBlocks.blocks
-                : [
-                    for (final block in footerBlocks.blocks)
-                      if (!pageNumber.paragraphs.contains(block)) block
-                  ],
-            fromPart: footerBlocks.partName);
+        : _convertFooterBlocks(footerBlocks.blocks, footerBlocks.partName,
+            pageNumber?.paragraphs ?? const <WpParagraph>{});
     if (file.headersByType.length > 1) {
       _notes.add('headers first/even convertidos apenas como default '
           '(seleção por tipo na Fase 4.6)');
@@ -245,6 +239,48 @@ class DocxToElementConverter {
       }
     }
     return elements;
+  }
+
+  /// Converte os blocos do rodapé preservando o banner (imagem com logos/
+  /// endereço) e removendo APENAS a última linha dos parágrafos que contêm o
+  /// campo PAGE/NUMPAGES — essa linha ("Página X | Y") é renderizada
+  /// dinamicamente pelo pageNumber do editor. Antes, o parágrafo inteiro era
+  /// descartado, sumindo com o banner (rodapé ficava só com o número de página).
+  List<IElement> _convertFooterBlocks(
+      List<WpBlock> blocks, String fromPart, Set<WpParagraph> pageNumParas) {
+    final result = <IElement>[];
+    var first = true;
+    for (final block in blocks) {
+      switch (block) {
+        case WpParagraph paragraph:
+          final pPr = _resolver.resolveParagraph(paragraph);
+          if (!first) result.add(_paragraphBreak(paragraph, pPr));
+          var converted = _convertParagraph(paragraph, pPr, fromPart);
+          if (pageNumParas.contains(paragraph)) {
+            // A linha do número vem após o último <w:br> — corta a partir dele.
+            var cut = converted.length;
+            for (var i = converted.length - 1; i >= 0; i--) {
+              if (converted[i].value == '\n') {
+                cut = i;
+                break;
+              }
+            }
+            converted = converted.sublist(0, cut);
+          }
+          result.addAll(converted);
+          first = false;
+        case WpTable table:
+          if (!first) result.add(IElement(value: '\n'));
+          final t = _convertTable(table, fromPart);
+          if (t != null) result.add(t);
+          first = false;
+        case WpPreservedBlock preserved:
+          _notes.add('bloco de rodapé preservado não renderizado: '
+              '${preserved.qname}');
+      }
+    }
+    if (result.isEmpty) result.add(IElement(value: ''));
+    return result;
   }
 
   /// Marca o elemento (e descendentes) com o índice do bloco de origem no
