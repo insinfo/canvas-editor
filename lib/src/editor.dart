@@ -90,9 +90,9 @@ class EditorApp {
   String? _openedDocxName;
   List<IElement>? _openedOriginalMain;
 
-  /// Snapshot pristino do main de abertura (fast-clone); a referência de save
-  /// zipada é materializada sob demanda a partir dele (F5).
-  List<IElement>? _openedPristineMain;
+  /// Saída crua do conversor (não mutada pelo setValue); a referência de save
+  /// é reproduzida sob demanda a partir dela no 1º save (F5).
+  List<IElement>? _openedConvertedMain;
 
   bool _isCatalogVisible = true;
   bool _awaitingPainterSecondClick = false;
@@ -2525,11 +2525,11 @@ class EditorApp {
       ));
       _openedDocx = docx;
       _openedDocxName = name;
-      // Referência de "intocado" para o save (F5): guarda um snapshot barato
-      // (fast-clone) do estado de abertura; o zip caro (`getValue`, ~7s no TR)
-      // é adiado para o 1º save via `_ensureOpenedReference` — a abertura não
-      // paga por uma referência que só o save usa.
-      _openedPristineMain = draw.cloneMainForReference();
+      // Referência de "intocado" para o save (F5): NÃO clona nada na abertura.
+      // Guarda a saída crua do conversor (não mutada pelo setValue) e reproduz
+      // a referência (clone+format+zip) só no 1º save — poupa ~250ms de clone
+      // de 122k elementos no TR na abertura.
+      _openedConvertedMain = converted.main;
       _openedOriginalMain = null;
 
       final notes = converted.notes.toSet();
@@ -2554,9 +2554,10 @@ class EditorApp {
   /// Materializa a referência de save (zip) a partir do snapshot pristino,
   /// se ainda não foi computada (F5 — adiada da abertura para o 1º save).
   List<IElement>? _ensureOpenedReference() {
-    if (_openedOriginalMain == null && _openedPristineMain != null) {
-      _openedOriginalMain =
-          editor.getDraw().zipMainAsSaveReference(_openedPristineMain!);
+    if (_openedOriginalMain == null && _openedConvertedMain != null) {
+      _openedOriginalMain = editor
+          .getDraw()
+          .buildSaveReferenceFromConverted(_openedConvertedMain!);
     }
     return _openedOriginalMain;
   }

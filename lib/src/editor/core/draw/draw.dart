@@ -780,21 +780,28 @@ class Draw {
     );
   }
 
-  /// Snapshot barato (fast-clone) do main pristino, para o fluxo de abrir
-  /// DOCX capturar o estado de abertura SEM pagar o zip caro do `getValue`
-  /// na abertura (F5). O clone congela o estado antes de qualquer edição.
-  List<IElement> cloneMainForReference() =>
-      element_utils.cloneElementList(getOriginalMainElementList());
-
-  /// Zipa um main pristino igual a `getValue().data.main` — usado para
-  /// materializar a referência de save SOB DEMANDA (no 1º save) a partir do
-  /// snapshot de [cloneMainForReference].
-  List<IElement> zipMainAsSaveReference(List<IElement> pristineMain) =>
-      element_utils.zipElementList(
-        List<IElement>.from(pristineMain),
-        options:
-            const element_utils.ZipElementListOption(isClassifyArea: true),
-      );
+  /// Reproduz `getValue().data.main` do estado de ABERTURA a partir da saída
+  /// crua do conversor (F5): clona + formata + zipa, exatamente o mesmo
+  /// pipeline que `setValue`+`getValue` fizeram ao abrir. Assim a abertura NÃO
+  /// paga clone/format/zip da referência de save (~250ms de clone de 122k
+  /// elementos no TR) — isso é adiado para o 1º save (ação do usuário, com
+  /// spinner). `convertedMain` não é mutado por `setValue` (que clona a
+  /// entrada), então guardá-lo por referência é seguro.
+  List<IElement> buildSaveReferenceFromConverted(
+      List<IElement> convertedMain) {
+    final List<IElement> main = element_utils.cloneElementList(convertedMain);
+    element_utils.formatElementList(
+      main,
+      element_utils.FormatElementListOption(
+        editorOptions: _options,
+        isForceCompensation: true,
+      ),
+    );
+    return element_utils.zipElementList(
+      List<IElement>.from(main),
+      options: const element_utils.ZipElementListOption(isClassifyArea: true),
+    );
+  }
 
   IEditorResult getValue([IGetValueOption? options]) {
     final IEditorData originData = getOriginValue(options);
@@ -898,6 +905,7 @@ class Draw {
         ),
       );
     }
+    final double tFmt = debugRenderTiming ? window.performance.now() : 0;
     if (main != null) {
       element_utils.formatElementList(
         main,
@@ -906,6 +914,11 @@ class Draw {
           isForceCompensation: true,
         ),
       );
+    }
+    if (debugRenderTiming) {
+      window.console.log('[render] formatElementList(main): '
+          '${(window.performance.now() - tFmt).toStringAsFixed(0)}ms '
+          'elems=${main?.length}');
     }
     if (footer != null) {
       element_utils.formatElementList(
