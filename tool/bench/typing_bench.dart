@@ -100,6 +100,21 @@ void main() {
         'pageCount': js_util.allowInterop(() {
           return app.editor.getDraw().getPageList().length;
         }),
+        // F5.4a: nº de canvases com backing store vivo (largura > 1) vs total,
+        // e memória aproximada do backing store (MB).
+        'canvasMemStats': js_util.allowInterop(() {
+          final pages = app.editor.getDraw().getPageList();
+          var live = 0;
+          num livemb = 0;
+          for (final c in pages) {
+            if (c is html.CanvasElement && (c.width ?? 0) > 1) {
+              live++;
+              livemb += (c.width ?? 0) * (c.height ?? 0) * 4;
+            }
+          }
+          return 'live=$live/${pages.length} '
+              'backingMB=${(livemb / 1048576).toStringAsFixed(1)}';
+        }),
         // Depuração F4.5: visão agregada das tabelas no documento aberto.
         'tableStats': js_util.allowInterop(() {
           final draw = app.editor.getDraw();
@@ -331,6 +346,8 @@ Future<void> main(List<String> args) async {
               ?.toInt());
       stdout.writeln('[tableStats] '
           '${await page.evaluate<String?>('() => window.__perf.tableStats()')}');
+      stdout.writeln('[canvasMem] '
+          '${await page.evaluate<String?>('() => window.__perf.canvasMemStats()')}');
       final trChars = chars < 10 ? chars : 10;
       stdout.writeln('[bench] digitando $trChars teclas no TR...');
       report('typing_tr_ms_per_key', await _typeChars(page, trChars));
