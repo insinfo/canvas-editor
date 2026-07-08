@@ -232,11 +232,26 @@ class TextParticle {
 		context.restore();
 	}
 
+	// Cache do measureText do batch (perf de digitação): a página redesenhada a
+	// cada tecla tem os mesmos batches; medir de novo o mesmo texto+fonte é
+	// interop DOM caro. Chaveado por "texto\x1ffonte".
+	final Map<String, double> _scaleWidthCache = <String, double>{};
+
 	double _measuredWidth(CanvasRenderingContext2D context, String value) {
+		final String key = '$value\x1f$curStyle';
+		final double? cached = _scaleWidthCache[key];
+		if (cached != null) {
+			return cached;
+		}
 		try {
 			final TextMetrics m = context.measureText(value);
 			final dynamic w = js_util.getProperty(m, 'width');
-			return w is num ? w.toDouble() : 0;
+			final double result = w is num ? w.toDouble() : 0;
+			if (_scaleWidthCache.length > 4000) {
+				_scaleWidthCache.clear();
+			}
+			_scaleWidthCache[key] = result;
+			return result;
 		} catch (_) {
 			return 0;
 		}

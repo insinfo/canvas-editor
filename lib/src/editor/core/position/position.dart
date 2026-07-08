@@ -235,7 +235,18 @@ class Position {
 
         if (element.type == ElementType.table && element.hide != true) {
           final List<ITr>? trList = element.trList;
-          if (trList != null) {
+          // Cache de posições de célula (perf): se esta parte de tabela não se
+          // moveu desde o último cálculo (mesmo tablePreY e pageNo), as posições
+          // absolutas das células são idênticas — reusa as td.positionList
+          // existentes e pula todo o loop. Grande ganho ao digitar no corpo
+          // (a tabela gigante do TR não precisa ser reposicionada por tecla).
+          final bool tableCached = trList != null &&
+              element.lastPositionedTablePreY == tablePreY &&
+              element.lastPositionedPageNo == pageNo &&
+              trList.isNotEmpty &&
+              trList.first.tdList.isNotEmpty &&
+              (trList.first.tdList.first.positionList?.isNotEmpty ?? false);
+          if (trList != null && !tableCached) {
             final double tdPaddingWidth = (tdPadding[1] + tdPadding[3]);
             final double tdPaddingHeight = (tdPadding[0] + tdPadding[2]);
             for (var t = 0; t < trList.length; t++) {
@@ -313,6 +324,8 @@ class Position {
                 y = drawRowResult.y;
               }
             }
+            element.lastPositionedTablePreY = tablePreY;
+            element.lastPositionedPageNo = pageNo;
           }
           x = tablePreX;
           y = tablePreY;
