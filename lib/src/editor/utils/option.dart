@@ -89,7 +89,7 @@ IEditorOption mergeOption([IEditorOption? options]) {
     locale: options?.locale ?? 'ptBR',
     defaultType: options?.defaultType ?? 'TEXT',
     defaultColor: options?.defaultColor ?? '#000000',
-    defaultFont: options?.defaultFont ?? 'Microsoft YaHei',
+    defaultFont: options?.defaultFont ?? 'Arial',
     defaultSize: options?.defaultSize ?? 16,
     minSize: options?.minSize ?? 5,
     maxSize: options?.maxSize ?? 72,

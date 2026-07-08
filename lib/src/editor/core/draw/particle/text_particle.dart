@@ -35,6 +35,13 @@ class TextParticle {
 	String text;
 	String curStyle;
 	String? curColor;
+	// Soma das larguras (do LAYOUT/TTF) dos elementos no batch atual. O
+	// `fillText` avança pela métrica do Arial do canvas do browser, que difere
+	// da nossa métrica TTF; sem corrigir, o batch "deriva" e o próximo batch
+	// (posicionado pelo layout) sobrepõe o anterior (ex.: "determinado(locação)"
+	// nos cabeçalhos centralizados). No render escalamos o batch p/ casar esta
+	// largura, mantendo 1 fillText por batch.
+	double _layoutWidth = 0;
 	final Map<String, ITextMetrics> cacheMeasureText;
 
 	// Estado do ctx de medição (plano de otimização A2): setar/ler `ctx.font`
@@ -177,13 +184,16 @@ class TextParticle {
 		}
 		if (text.isEmpty) {
 			_setCurXY(x, y);
+			_layoutWidth = 0;
 		}
 		if ((curStyle.isNotEmpty && element.style != curStyle) ||
 					element.color != curColor) {
 			complete();
 			_setCurXY(x, y);
+			_layoutWidth = 0;
 		}
 		text += element.value;
+		_layoutWidth += element.metrics.width;
 		curStyle = element.style;
 		curColor = element.color;
 	}
@@ -204,8 +214,32 @@ class TextParticle {
 		context.save();
 		context.font = curStyle;
 		context.fillStyle = curColor ?? _defaultColor;
-		context.fillText(text, curX, curY);
+		// Casa a largura renderizada (métrica do canvas) com a largura do layout
+		// (TTF), escalando o batch horizontalmente. Sem isso o texto deriva e
+		// batches consecutivos (quebrados na pontuação) se sobrepõem.
+		final double canvasWidth = _measuredWidth(context, text);
+		if (_layoutWidth > 0 &&
+				canvasWidth > 0 &&
+				(canvasWidth - _layoutWidth).abs() > 0.25) {
+			final double scaleX = _layoutWidth / canvasWidth;
+			context
+				..translate(curX, curY)
+				..scale(scaleX, 1)
+				..fillText(text, 0, 0);
+		} else {
+			context.fillText(text, curX, curY);
+		}
 		context.restore();
+	}
+
+	double _measuredWidth(CanvasRenderingContext2D context, String value) {
+		try {
+			final TextMetrics m = context.measureText(value);
+			final dynamic w = js_util.getProperty(m, 'width');
+			return w is num ? w.toDouble() : 0;
+		} catch (_) {
+			return 0;
+		}
 	}
 
 	ITextMetrics _createMetrics(TextMetrics metrics, {double? widthOverride}) {
