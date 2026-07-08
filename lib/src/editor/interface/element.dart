@@ -520,6 +520,15 @@ class IElement
   /// linhas. Não serializado.
   int? tablePartRenderId;
   double? tablePartHeight;
+
+  /// Cache de posições de célula (perf de digitação): `tablePreY`/`pageNo` da
+  /// última vez que as posições das células desta parte de tabela foram
+  /// calculadas. Se a tabela não se moveu (mesmo tablePreY e pageNo), as
+  /// posições absolutas das células são idênticas — `computePositionList` pula
+  /// o recálculo. Sem isso, cada tecla recomputava TODAS as células da tabela
+  /// gigante do TR (94% do conteúdo), custando ~250-450 ms/tecla. Não serializado.
+  double? lastPositionedTablePreY;
+  int? lastPositionedPageNo;
   @override
   TableBorder? borderType;
   @override

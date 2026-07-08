@@ -306,6 +306,12 @@ class Draw {
   WorkerManager? _workerManager;
   Zone? _zone;
   IntersectionObserver? _lazyRenderObserver;
+  // Páginas atualmente vivas (visíveis) e nº de páginas observado — usados pelo
+  // caminho leve de redraw (perf de digitação): se a paginação não mudou, o
+  // render não recomputa visibilidade (getBoundingClientRect em N páginas) nem
+  // recria o observer; só redesenha as páginas vivas.
+  final Set<int> _livePages = <int>{};
+  int _observedPageCount = -1;
   ScrollObserver? _scrollObserver;
   SelectionObserver? _selectionObserver;
   MouseObserver? _mouseObserver;
@@ -3620,6 +3626,8 @@ class Draw {
   void _disconnectLazyRender() {
     _lazyRenderObserver?.disconnect();
     _lazyRenderObserver = null;
+    _observedPageCount = -1;
+    _livePages.clear();
   }
 
   /// Mantém/libera o backing store do canvas da página [i] (F5.4a —
@@ -3661,6 +3669,29 @@ class Draw {
     final List<IElementPosition> positionList =
         position.getOriginalMainPositionList();
     final List<IElement> elementList = getOriginalMainElementList();
+    // Caminho LEVE de redraw (perf de digitação): se o observer já existe e a
+    // paginação não mudou, não recomputa visibilidade (evita N×
+    // getBoundingClientRect, que força reflow do DOM) nem recria o observer —
+    // só redesenha as páginas já vivas (a página editada está visível). O
+    // scroll continua tratado pelo observer persistente.
+    if (_lazyRenderObserver != null &&
+        _observedPageCount == _pageList.length &&
+        _livePages.isNotEmpty) {
+      for (final int i in _livePages.toList(growable: false)) {
+        if (i >= 0 && i < _pageRowList.length) {
+          _setPageCanvasLive(i, true);
+          _drawPage(
+            IDrawPagePayload(
+              elementList: elementList,
+              positionList: positionList,
+              rowList: _pageRowList[i],
+              pageNo: i,
+            ),
+          );
+        }
+      }
+      return;
+    }
     _disconnectLazyRender();
     // Buffer (~1 viewport) para materializar as páginas um pouco antes de
     // entrarem na tela e só liberar quando já saíram com folga — evita
@@ -3671,6 +3702,7 @@ class Draw {
         return;
       }
       if (isIntersecting) {
+        _livePages.add(pageIndex);
         _setPageCanvasLive(pageIndex, true);
         _drawPage(
           IDrawPagePayload(
@@ -3681,6 +3713,7 @@ class Draw {
           ),
         );
       } else {
+        _livePages.remove(pageIndex);
         _setPageCanvasLive(pageIndex, false);
       }
     }
@@ -3712,6 +3745,7 @@ class Draw {
     // e a 1ª página visível ficar pronta antes de qualquer assert de teste.
     final double viewportBottom = (window.innerHeight ?? 800) + bufferPx.toDouble();
     final double viewportTop = -bufferPx.toDouble();
+    _livePages.clear();
     for (int i = 0; i < _pageList.length; i++) {
       final CanvasElement page = _pageList[i];
       final Rectangle<num> rect = page.getBoundingClientRect();
@@ -3720,6 +3754,7 @@ class Draw {
       handlePage(i, visible);
       observer.observe(page);
     }
+    _observedPageCount = _pageList.length;
   }
 
   void _immediateRender() {
