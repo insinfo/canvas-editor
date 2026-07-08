@@ -2512,8 +2512,13 @@ class EditorApp {
       // F4.6 (parcial): distâncias de header/footer do sectPr.
       (drawOptions.header ??= header_model.IHeader()).top =
           converted.headerDistancePx;
+      // Quando há número de página dinâmico (renderizado numa linha própria no
+      // rodapé do Word, abaixo do banner), sobe o conteúdo do rodapé ~1 linha
+      // para o número não sobrepor a última linha do banner (ex.: o "www...").
+      final double footerPageNumberGap =
+          converted.pageNumberFormat != null ? 24.0 : 0.0;
       (drawOptions.footer ??= IFooter()).bottom =
-          converted.footerDistancePx;
+          converted.footerDistancePx + footerPageNumberGap;
 
       // O forceUpdate antigo limpava o range antes de renderizar; preserva o
       // comportamento sem pagar outro render.

@@ -414,6 +414,11 @@ class Draw {
 
   int getRenderCount() => _renderCount;
 
+  /// True enquanto a paginação progressiva (layout fatiado) ainda não terminou.
+  /// Consumidores async (ex.: imagens que carregam) esperam terminar antes de
+  /// forçar um re-render, para não interromper a paginação em andamento.
+  bool isProgressiveLayoutActive() => _progressiveResume != null;
+
   List<int> getVisiblePageNoList() => List<int>.from(_visiblePageNoList);
 
   void setVisiblePageNoList(List<int> value) {

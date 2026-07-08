@@ -29,8 +29,37 @@ class ImageParticle {
 
 	DivElement? _floatImageContainer;
 	ImageElement? _floatImage;
+	bool _reRenderScheduled = false;
 
 	double _scale() => (_options.scale ?? 1).toDouble();
+
+	// Re-render coalescido após uma imagem inline carregar (fidelidade): uma
+	// imagem que termina de carregar DEPOIS do render final (comum no banner do
+	// rodapé) não é desenhada, porque o onLoad direto é pulado quando o
+	// renderCount avançou. Aqui, ao terminar a paginação progressiva, forçamos
+	// UM re-render — a imagem já está em cache e é desenhada na posição correta,
+	// sem novo load nem loop. Várias imagens coalescem em um só re-render.
+	void _scheduleReRender() {
+		if (_reRenderScheduled) {
+			return;
+		}
+		_reRenderScheduled = true;
+		void run() {
+			if (_draw.isProgressiveLayoutActive()) {
+				Timer(const Duration(milliseconds: 80), run);
+				return;
+			}
+			_reRenderScheduled = false;
+			_draw.render(
+				IDrawOption(
+					isCompute: false,
+					isSetCursor: false,
+					isSubmitHistory: false,
+				),
+			);
+		}
+		Future<void>.microtask(run);
+	}
 
 	List<IElement> getOriginalMainImageList() {
 		final List<IElement> imageList = <IElement>[];
@@ -293,9 +322,6 @@ class ImageParticle {
 			if (!completer.isCompleted) {
 				completer.complete(element);
 			}
-			if (renderCountSnapshot != _draw.getRenderCount()) {
-				return;
-			}
 			if (element.imgDisplay == ImageDisplay.floatBottom) {
 				_draw.render(
 					IDrawOption(
@@ -304,6 +330,12 @@ class ImageParticle {
 						isSubmitHistory: false,
 					),
 				);
+			} else if (renderCountSnapshot != _draw.getRenderCount()) {
+				// Render avancou desde esta chamada: a posicao (x,y) deste closure
+				// ficou obsoleta e o draw direto nao apareceria. Reagenda um re-render
+				// coalescido -- a imagem ja esta em cache e sera desenhada na posicao
+				// atual (corrige o banner do rodape, que carrega apos o render final).
+				_scheduleReRender();
 			} else {
 				_drawImageWithCrop(ctx, image, element, x, y, width, height);
 				_renderCaption(ctx, element, x, y, width, height);

@@ -125,6 +125,20 @@ void main() {
         }
         return '(sem tabela)';
       }),
+      'footerInfo': js_util.allowInterop(() {
+        final d = app.editor.getDraw();
+        final f = d.getFooter();
+        final els = f.getElementList() as List;
+        final types = els.take(20).map((e) {
+          final ed = e as dynamic;
+          String t = 'text';
+          try { t = '${ed.type ?? "text"}'; } catch (_) {}
+          final v = '${ed.value}';
+          return '$t:${v.length > 10 ? v.substring(0, 10) : v}';
+        }).join('|');
+        return 'footerEls=${els.length} h=${f.getHeight().toStringAsFixed(0)} '
+            'rows=${(f.getRowList() as List).length} [$types]';
+      }),
       'geom': js_util.allowInterop(() {
         final d = app.editor.getDraw();
         final m = d.getMargins();
@@ -247,6 +261,8 @@ Future<void> main(List<String> args) async {
     stdout.writeln('[shot] salvo ${p.join(outDir.path, '$which-ui.png')} (interface)');
     stdout.writeln('[shot] geom: '
         '${await page.evaluate<String?>('() => window.__shot.geom()')}');
+    stdout.writeln('[shot] footerInfo: '
+        '${await page.evaluate<String?>('() => window.__shot.footerInfo()')}');
     stdout.writeln('[shot] cellSpacing: '
         '${await page.evaluate<String?>('() => window.__shot.cellSpacing()')}');
     stdout.writeln('[shot] headerInfo: '
