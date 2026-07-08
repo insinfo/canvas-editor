@@ -273,7 +273,7 @@ Future<void> main(List<String> args) async {
     stdout.writeln('[shot] paginação estável: $prev páginas.');
     // Captura só o topo da interface (titlebar + ribbon + menu) para ver o F6.
     final List<int> uiBytes = await page.screenshot(
-        clip: Rectangle<num>(0, 0, 900, 240));
+        clip: Rectangle<num>(0, 0, 900, 700));
     File(p.join(outDir.path, '$which-ui.png')).writeAsBytesSync(uiBytes);
     stdout.writeln('[shot] salvo ${p.join(outDir.path, '$which-ui.png')} (interface)');
     stdout.writeln('[shot] geom: '
