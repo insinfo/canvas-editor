@@ -1626,7 +1626,7 @@ class Draw {
     final int budgetRows = resume?.budgetRows ?? (1 << 30);
     // Hoisted do loop (plano de otimização A3): regex e fonte por elemento
     // eram recriados dezenas de milhares de vezes por render.
-    final RegExp effectiveLetterReg = getLetterReg() ?? RegExp('[A-Za-z]');
+    final RegExp effectiveLetterReg = getLetterReg() ?? _defaultLetterReg;
     for (int i = resume?.i ?? 0; i < elementList.length; i++) {
       final IRow curRow = rowList.last;
       final IElement element = elementList[i];
@@ -2127,18 +2127,26 @@ class Draw {
         final bool isCurText =
             element.type == null || element.type == ElementType.text;
         if (isPreText && isCurText) {
-          // Classes de letra são de 1 char: testar as duas strings separadas
-          // equivale a testar a concatenação, sem alocar a string do par.
-          final bool hasLetter = effectiveLetterReg.hasMatch(element.value) ||
-              (preElement != null &&
-                  effectiveLetterReg.hasMatch(preElement.value));
-          if (hasLetter) {
+          // Só olha à frente no INÍCIO de uma palavra (atual é letra e o
+          // anterior NÃO é) — senão a quebra cairia no meio da palavra
+          // ("Migração / I" | "mplantação"). No começo da palavra, se ela
+          // inteira não couber no restante da linha, a decisão de wrap a joga
+          // inteira para a próxima linha (comportamento do Word).
+          final bool curIsLetter = effectiveLetterReg.hasMatch(element.value);
+          final bool preIsLetter = preElement != null &&
+              effectiveLetterReg.hasMatch(preElement.value);
+          if (curIsLetter && !preIsLetter) {
             final IMeasureWordResult measureResult =
                 textParticle.measureWord(ctx, elementList, i, resolvedFontStyle);
             final IElement? endElement = measureResult.endElement;
             final double wordWidth = measureResult.width * scale;
-            if (endElement != null && wordWidth <= availableWidth) {
-              nextElement = endElement;
+            // NÃO exigir endElement != null: a última palavra da célula não
+            // tem caractere não-letra depois dela (endElement=null), mas ainda
+            // precisa ser mantida inteira ("Treinam|ento", "M|ês").
+            if (wordWidth <= availableWidth) {
+              if (endElement != null) {
+                nextElement = endElement;
+              }
               curRowWidth += wordWidth;
             }
           }
@@ -4530,6 +4538,13 @@ class Draw {
     'verdana': 1.21,
     'tahoma': 1.21,
   };
+
+  /// Classe de "letra" para word-break (F4.3): inclui A-Z, a-z E os acentos
+  /// latinos (0xC0-0x24F: à á â ã ç é ê í ó ô õ ú etc.). Sem os acentos, o
+  /// `[A-Za-z]` quebrava palavras em português no meio ("Implanta|ção"),
+  /// porque a medição de palavra parava no 1º caractere acentuado.
+  static final RegExp _defaultLetterReg =
+      RegExp('[A-Za-zÀ-ɏ]');
 
   static const double _defaultOriginalWidth = 794; // px ~ A4 portrait (210mm)
   static const double _defaultOriginalHeight = 1123; // px ~ A4 portrait (297mm)
