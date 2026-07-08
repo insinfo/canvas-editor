@@ -307,11 +307,13 @@ cada item; TR renderiza as 140 páginas sem erro.
    existente no repaint rápido.
 4. Virtualização (confirmado pela observação do usuário 2026-07-08: o Word renderiza sob demanda
    ao rolar e a barra de rolagem é estimada/refinada, não fixa). Dois níveis:
-   - **F5.4a memória de canvas**: hoje `_lazyRender` já DESENHA sob demanda (IntersectionObserver),
-     mas `_syncPageCanvases`/`_applyPageMetrics` alocam o backing store cheio das N páginas
-     (~3,5 MB/página → ~650 MB no TR, ~1,4 GB em 400 págs). Liberar o backing store das páginas
-     fora do viewport (canvas 1×1, mantendo o tamanho CSS) e restaurar ao entrar → memória plana.
-     Cuidado: o E2E assere `canvas.width > 700` na 1ª página, então as visíveis têm que nascer vivas.
+   - **F5.4a memória de canvas** ✅ (2026-07-08): `_createPage` nasce dormente (backing store 1×1,
+     tamanho CSS preservado); `_setPageCanvasLive` infla/libera o bitmap; o `_lazyRender` mantém
+     vivas só as páginas no viewport (± 1 tela via `rootMargin`) e libera as demais ao sair, com um
+     passo inicial síncrono que materializa as visíveis (via `getBoundingClientRect`) — a 1ª página
+     nasce viva (E2E `canvas.width>700` ok). `_immediateRender` (impressão/export) revive todas.
+     **Resultado (TR): 3/184 canvases vivos, ~10 MB de backing store (era ~650 MB); memória plana p/
+     200-400 págs; abertura 6,3→~4s** (sem alocar N bitmaps). E2E 39/39.
    - **F5.5 layout progressivo**: NÃO computar o layout inteiro na abertura (hoje 6,3s no TR =
      `formatElementList` + `computeRowList` + posições, tudo síncrono). Computar só o necessário
      para o viewport inicial, mostrar, e continuar o resto fatiado (rAF/timer), com **altura total

@@ -1,5 +1,5 @@
 # Plano de Otimização de Performance — digitação e abertura de DOCX
-
+webdev serve --auto=refresh -- --delete-conflicting-outputs
 Data: 2026-07-07. Antecipa itens da **Fase 5 (G4)** do
 [roteiro_editor_profissional.md](roteiro_editor_profissional.md), motivado por dois sintomas
 reportados com o ETP (19 págs no Word / ~30 no editor, 10.319 palavras) e o TR (140 págs):
@@ -91,7 +91,7 @@ construção (mesmo resultado, menos trabalho), validado pela suíte E2E existen
 
 ## 5. Ações P1/P2 — incremental estilo OnlyOffice (adicionadas em execução)
 
-Investigado o mecanismo do ONLYOFFICE DocumentServer (`sdkjs/word/Editor/`:
+Investigado o mecanismo do ONLYOFFICE D:\EuroOfficeNative\DocumentServer DocumentServer (`sdkjs/word/Editor/`:
 `Document.js` `private_Recalculate`/`Recalculate_Page`, `Paragraph_Recalculate.js`
 `Recalculate_FastWholeParagraph`, `History.js` com undo por deltas): lá cada
 parágrafo cacheia `Lines`/`Pages` + um `EndInfo` de saída; a edição marca o

@@ -3511,6 +3511,36 @@ class Draw {
     _lazyRenderObserver = null;
   }
 
+  /// Mantém/libera o backing store do canvas da página [i] (F5.4a —
+  /// virtualização de memória). Um canvas dormente fica 1×1 (bitmap liberado),
+  /// mas o tamanho CSS é preservado pelo `_applyPageMetrics`, então a posição
+  /// e a barra de rolagem não mudam. Ao voltar a ficar vivo, redimensiona o
+  /// backing store e reaplica a transformação de DPR (o resize limpa o canvas,
+  /// então quem chama precisa redesenhar).
+  void _setPageCanvasLive(int i, bool live) {
+    if (i < 0 || i >= _pageList.length) {
+      return;
+    }
+    final CanvasElement canvas = _pageList[i];
+    if (live) {
+      final double dpr = getPagePixelRatio();
+      final int fullW = (getWidth() * dpr).round();
+      final int fullH = (getHeight() * dpr).round();
+      if (canvas.width != fullW || canvas.height != fullH) {
+        canvas
+          ..width = fullW
+          ..height = fullH;
+        if (i < _ctxList.length) {
+          _initPageContext(_ctxList[i]);
+        }
+      }
+    } else if (canvas.width != 1) {
+      canvas
+        ..width = 1
+        ..height = 1;
+    }
+  }
+
   void _lazyRender() {
     final Position? position = _position as Position?;
     if (position == null) {
@@ -3521,27 +3551,16 @@ class Draw {
         position.getOriginalMainPositionList();
     final List<IElement> elementList = getOriginalMainElementList();
     _disconnectLazyRender();
-    final IntersectionObserver observer =
-        IntersectionObserver((entries, observer) {
-      for (final IntersectionObserverEntry entry in entries) {
-        final double ratio = (entry.intersectionRatio ?? 0).toDouble();
-        final bool isIntersecting =
-            (entry as dynamic).isIntersecting == true || ratio > 0;
-        if (!isIntersecting) {
-          continue;
-        }
-        final Element? target = entry.target;
-        if (target == null) {
-          continue;
-        }
-        final String? indexAttr = target.dataset['index'];
-        final int? pageIndex =
-            indexAttr != null ? int.tryParse(indexAttr) : null;
-        if (pageIndex == null ||
-            pageIndex < 0 ||
-            pageIndex >= _pageRowList.length) {
-          continue;
-        }
+    // Buffer (~1 viewport) para materializar as páginas um pouco antes de
+    // entrarem na tela e só liberar quando já saíram com folga — evita
+    // piscar branco em rolagem rápida.
+    final int bufferPx = (window.innerHeight ?? 800);
+    void handlePage(int pageIndex, bool isIntersecting) {
+      if (pageIndex < 0 || pageIndex >= _pageRowList.length) {
+        return;
+      }
+      if (isIntersecting) {
+        _setPageCanvasLive(pageIndex, true);
         _drawPage(
           IDrawPagePayload(
             elementList: elementList,
@@ -3550,10 +3569,44 @@ class Draw {
             pageNo: pageIndex,
           ),
         );
+      } else {
+        _setPageCanvasLive(pageIndex, false);
       }
-    });
+    }
+
+    final IntersectionObserver observer = IntersectionObserver(
+      (entries, observer) {
+        for (final IntersectionObserverEntry entry in entries) {
+          final double ratio = (entry.intersectionRatio ?? 0).toDouble();
+          final bool isIntersecting =
+              (entry as dynamic).isIntersecting == true || ratio > 0;
+          final Element? target = entry.target;
+          if (target == null) {
+            continue;
+          }
+          final String? indexAttr = target.dataset['index'];
+          final int? pageIndex =
+              indexAttr != null ? int.tryParse(indexAttr) : null;
+          if (pageIndex == null) {
+            continue;
+          }
+          handlePage(pageIndex, isIntersecting);
+        }
+      },
+      <String, dynamic>{'rootMargin': '${bufferPx}px 0px ${bufferPx}px 0px'},
+    );
     _lazyRenderObserver = observer;
-    for (final CanvasElement page in _pageList) {
+    // Estado inicial síncrono (F5.4a): desenha as páginas atualmente no
+    // viewport (± buffer) e libera as demais, para a memória já nascer plana
+    // e a 1ª página visível ficar pronta antes de qualquer assert de teste.
+    final double viewportBottom = (window.innerHeight ?? 800) + bufferPx.toDouble();
+    final double viewportTop = -bufferPx.toDouble();
+    for (int i = 0; i < _pageList.length; i++) {
+      final CanvasElement page = _pageList[i];
+      final Rectangle<num> rect = page.getBoundingClientRect();
+      final bool visible =
+          rect.bottom > viewportTop && rect.top < viewportBottom;
+      handlePage(i, visible);
       observer.observe(page);
     }
   }
@@ -3567,6 +3620,8 @@ class Draw {
         position.getOriginalMainPositionList();
     final List<IElement> elementList = getOriginalMainElementList();
     for (int i = 0; i < _pageRowList.length; i++) {
+      // Caminho não-lazy (impressão/export/contínuo): todas as páginas vivas.
+      _setPageCanvasLive(i, true);
       _drawPage(
         IDrawPagePayload(
           elementList: elementList,
@@ -4119,9 +4174,15 @@ class Draw {
     final int pixelHeight = (height * ratio).round();
     for (int i = 0; i < _pageList.length; i++) {
       final CanvasElement page = _pageList[i];
+      // Páginas dormentes (F5.4a: backing store 1×1, fora do viewport) NÃO são
+      // reinfladas aqui — senão cada render realocaria o bitmap cheio de todas
+      // as páginas. O tamanho real é reaplicado por `_setPageCanvasLive` quando
+      // a página volta ao viewport. O tamanho CSS é sempre atualizado para a
+      // posição/altura da barra de rolagem permanecerem corretas.
+      final bool isDormant = (page.width ?? 0) <= 1 && (page.height ?? 0) <= 1;
       final bool metricsChanged =
           page.width != pixelWidth || page.height != pixelHeight;
-      if (metricsChanged) {
+      if (!isDormant && metricsChanged) {
         page
           ..width = pixelWidth
           ..height = pixelHeight;
@@ -4220,11 +4281,14 @@ class Draw {
     final double width = getWidth();
     final double height = getHeight();
     final double marginGap = getPageGap();
-    final double dpr = getPagePixelRatio();
 
+    // Nasce DORMENTE (backing store 1×1) — F5.4a: só as páginas que entram no
+    // viewport ganham backing store cheio (via `_setPageCanvasLive`), evitando
+    // o pico de alocar N bitmaps de página na abertura (crítico p/ 200-400
+    // págs). O tamanho CSS fixa o tamanho renderizado/posição na barra.
     final CanvasElement canvas = CanvasElement()
-      ..width = (width * dpr).toInt()
-      ..height = (height * dpr).toInt()
+      ..width = 1
+      ..height = 1
       ..style.width = '${width}px'
       ..style.height = '${height}px'
       ..style.marginBottom = '${marginGap}px'
@@ -4234,7 +4298,6 @@ class Draw {
       ..dataset['index'] = '$index';
 
     final CanvasRenderingContext2D ctx = canvas.context2D;
-    _initPageContext(ctx);
 
     _pageContainer.append(canvas);
     _pageList.add(canvas);
