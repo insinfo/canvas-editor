@@ -63,6 +63,68 @@ void main() {
         return 'page $i: rows=${rows.length} yMin=${minY?.toStringAsFixed(1)} '
             'yMax=${maxY?.toStringAsFixed(1)} firstIdx=$firstIdx lastIdx=$lastIdx';
       }),
+      'rowYList': js_util.allowInterop((num pageIndex) {
+        final d = app.editor.getDraw();
+        final pageRows = d.getPageRowList();
+        final i = pageIndex.toInt();
+        if (i < 0 || i >= pageRows.length) return 'fora do range';
+        final rows = pageRows[i] as List;
+        final posList = d.getPosition().getOriginalMainPositionList() as List;
+        final buf = StringBuffer();
+        for (final row in rows) {
+          final start = (row as dynamic).startIndex as int;
+          final h = (row.height as num).toDouble();
+          final oy = ((row.offsetY ?? 0) as num).toDouble();
+          double? y;
+          if (start >= 0 && start < posList.length) {
+            final lt = (posList[start] as dynamic).coordinate['leftTop'] as List?;
+            if (lt != null && lt.length > 1) y = (lt[1] as num).toDouble();
+          }
+          buf.write('y=${y?.toStringAsFixed(0) ?? "?"}h=${h.toStringAsFixed(0)}oy=${oy.toStringAsFixed(0)} ');
+        }
+        return buf.toString();
+      }),
+      'cellSpacing': js_util.allowInterop(() {
+        final d = app.editor.getDraw();
+        final els = d.getOriginalMainElementList() as List;
+        final buf = StringBuffer();
+        for (final el in els) {
+          final trList = (el as dynamic).trList as List?;
+          if (trList == null || trList.isEmpty) continue;
+          // Primeira tabela: dump das alturas de tr e do spacing da 1ª célula.
+          buf.write('h/minH=[');
+          for (final tr in trList.take(8)) {
+            final t = tr as dynamic;
+            buf.write('${(t.height as num).toStringAsFixed(0)}/${t.minHeight}·');
+          }
+          buf.write('] ');
+          final firstTd = (trList.first as dynamic).tdList.first;
+          final cellEls = (firstTd as dynamic).value as List;
+          final e0 = cellEls.isNotEmpty ? cellEls.first as dynamic : null;
+          final tr0 = trList.first as dynamic;
+          buf.write('tr0.minH=${tr0.minHeight} cellN=${cellEls.length} ');
+          if (e0 != null) {
+            final v = '${e0.value}';
+            buf.write('cell0[val="${v.length > 15 ? v.substring(0, 15) : v}"]: '
+                'rowMargin=${e0.rowMargin} '
+                'before=${e0.paraSpacingBefore} lineVal=${e0.lineSpacingValue}');
+          }
+          // Também uma célula de item (3ª/4ª tr) para comparar.
+          if (trList.length > 4) {
+            final itemTd = (trList[4] as dynamic).tdList;
+            if ((itemTd as List).length > 1) {
+              final descEl = (itemTd[1] as dynamic).value as List;
+              final d0 = descEl.isNotEmpty ? descEl.first as dynamic : null;
+              if (d0 != null) {
+                buf.write(' | itemDesc: before=${d0.paraSpacingBefore} '
+                    'after=${d0.paraSpacingAfter} rowMargin=${d0.rowMargin}');
+              }
+            }
+          }
+          return buf.toString();
+        }
+        return '(sem tabela)';
+      }),
       'geom': js_util.allowInterop(() {
         final d = app.editor.getDraw();
         final m = d.getMargins();
@@ -185,11 +247,15 @@ Future<void> main(List<String> args) async {
     stdout.writeln('[shot] salvo ${p.join(outDir.path, '$which-ui.png')} (interface)');
     stdout.writeln('[shot] geom: '
         '${await page.evaluate<String?>('() => window.__shot.geom()')}');
+    stdout.writeln('[shot] cellSpacing: '
+        '${await page.evaluate<String?>('() => window.__shot.cellSpacing()')}');
     stdout.writeln('[shot] headerInfo: '
         '${await page.evaluate<String?>('() => window.__shot.headerInfo()')}');
     for (final pg in pages) {
       stdout.writeln('[shot] ${await page.evaluate<String?>(
           '(i) => window.__shot.pageYRange(i)', args: <dynamic>[pg - 1])}');
+      stdout.writeln('[shot] rowYs ${await page.evaluate<String?>(
+          '(i) => window.__shot.rowYList(i)', args: <dynamic>[pg - 1])}');
     }
     // Esconde o chrome fixo (titlebar/abas/menu) para não sobrepor o canvas
     // nas capturas por-página (element.screenshot compõe overlays fixos).
