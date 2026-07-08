@@ -158,9 +158,12 @@ class Position {
       for (var j = 0; j < elementList.length; j++) {
         final IRowElement element = elementList[j];
         final IElementMetrics metrics = element.metrics;
-        final bool isImageLike = (element.imgDisplay != null &&
-                element.imgDisplay != ImageDisplay.inline &&
-                element.type == ElementType.image) ||
+        // Imagens (inline ou não) e látex descem da baseline: o topo fica em
+        // `ascent - altura` para o RODAPÉ da imagem repousar na baseline. Antes
+        // as inline eram excluídas e usavam `offsetY = ascent`, o que empurrava
+        // a imagem ~altura px para baixo (o brasão do cabeçalho "descia" ~87px e
+        // sobrepunha o conteúdo nas páginas de continuação).
+        final bool isImageLike = element.type == ElementType.image ||
             element.type == ElementType.latex;
         final double offsetY = element.hide != true && isImageLike
             ? curRow.ascent - metrics.height
