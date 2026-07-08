@@ -44,7 +44,9 @@ class TextParticle {
 	CanvasRenderingContext2D? _measureCtx;
 	String _measureFont = '';
 
-	static final RegExp _fallbackLetterReg = RegExp('[A-Za-z]');
+	// Inclui acentos latinos (0xC0-0x24F) — sem eles, palavras em português
+	// eram quebradas no meio ("Implanta|ção"). Ver Draw._defaultLetterReg.
+	static final RegExp _fallbackLetterReg = RegExp('[A-Za-zÀ-ɏ]');
 
 	void _applyMeasureFont(CanvasRenderingContext2D ctx, String font) {
 		if (font.isEmpty) {

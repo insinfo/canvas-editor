@@ -30,6 +30,10 @@ const Map<MaxHeightRatio, double> maxHeightRadioMapping = {
 
 class LetterClass {
   static const String ENGLISH = 'A-Za-z';
+  /// Faixa ampla de letras latinas acentuadas (Latin-1 Supplement + Latin
+  /// Extended-A/B, 0xC0–0x24F): à á â ã ç é ê í ó ô õ ú ü etc. Incluída no
+  /// padrão para o word-break NÃO quebrar palavras em pt-BR/latim no meio.
+  static const String LATIN = 'À-ɏ';
   static const String SPANISH = 'A-Za-zÁÉÍÓÚáéíóúÑñÜü';
   static const String FRENCH = 'A-Za-zÀÂÇàâçÉéÈèÊêËëÎîÏïÔôÙùÛûŸÿ';
   static const String GERMAN = 'A-Za-zÄäÖöÜüß';

@@ -124,7 +124,7 @@ IEditorOption mergeOption([IEditorOption? options]) {
     printPixelRatio: options?.printPixelRatio ?? 3,
     maskMargin: _resolveList(options?.maskMargin, const <double>[0, 0, 0, 0]),
     letterClass: _resolveStringList(
-        options?.letterClass, const <String>[LetterClass.ENGLISH]),
+        options?.letterClass, const <String>[LetterClass.ENGLISH, LetterClass.LATIN]),
     contextMenuDisableKeys:
         _resolveStringList(options?.contextMenuDisableKeys, const <String>[]),
     shortcutDisableKeys:
