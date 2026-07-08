@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:html';
+import 'package:ce_fonts/ce_fonts.dart' as ce_fonts;
 import '../../dataset/constant/common.dart';
 import '../../dataset/constant/editor.dart';
 import '../../dataset/constant/element.dart' as element_constants;
@@ -1672,6 +1673,22 @@ class Draw {
         metrics.boundingBoxDescent = 0;
         metrics.boundingBoxAscent =
           (padding.top + fontMetrics.actualBoundingBoxAscent) * scale;
+      } else if (element.type == ElementType.table &&
+          element.tablePartRenderId == _renderCount) {
+        // Parte de tabela já particionada NESTE render (F4.5/F5): o setup
+        // completo (computeRowColInfo, layout de célula, redução, split) já
+        // rodou uma vez sobre a tabela inteira; aqui só emitimos a geometria
+        // desta parte, evitando o custo O(partes×linhas).
+        final double partHeight = element.tablePartHeight ?? element.height ?? 0;
+        element.height = partHeight;
+        metrics.width = (element.width ?? 0) * scale;
+        metrics.height = partHeight * scale;
+        metrics.boundingBoxDescent = metrics.height;
+        metrics.boundingBoxAscent = -rowMargin;
+        if (i + 1 < elementList.length &&
+            elementList[i + 1].type == ElementType.table) {
+          metrics.boundingBoxAscent -= rowMargin;
+        }
       } else if (element.type == ElementType.table) {
         if (element.pagingId != null) {
           int tableIndex = i + 1;
@@ -1697,6 +1714,21 @@ class Draw {
           if (combineCount > 0) {
             elementList.removeRange(i + 1, i + 1 + combineCount);
           }
+          // Reconstitui a tabela original: remove as células-continuação
+          // sintéticas e restaura os rowspans truncados pela divisão anterior
+          // (F4.5) — sem isso o merge-back devolveria uma tabela corrompida.
+          final List<ITr>? merged = element.trList;
+          if (merged != null) {
+            for (final ITr tr in merged) {
+              tr.tdList.removeWhere((ITd td) => td.pagingContinuation == true);
+              for (final ITd td in tr.tdList) {
+                if (td.originalRowspan != null) {
+                  td.rowspan = td.originalRowspan!;
+                  td.originalRowspan = null;
+                }
+              }
+            }
+          }
         }
         element.pagingIndex = element.pagingIndex ?? 0;
         final List<ITr>? trList = element.trList;
@@ -1714,14 +1746,29 @@ class Draw {
               final ITd td = tr.tdList[d];
               final double tdInnerWidth =
                   ((td.width ?? 0) - tdPaddingWidth) * scale;
-              final List<IRow> tdRowList = computeRowList(
-                IComputeRowListPayload(
-                  innerWidth: tdInnerWidth <= 0 ? innerWidth : tdInnerWidth,
-                  elementList: td.value,
-                  isFromTable: true,
-                  isPagingMode: isPagingMode,
-                ),
-              );
+              final double effectiveInnerWidth =
+                  tdInnerWidth <= 0 ? innerWidth : tdInnerWidth;
+              // Reusa o layout da célula quando ela já foi medida NESTE render
+              // com a mesma largura (F4.5/F5): o table paging move as mesmas
+              // células para as partes seguintes — sem isso o split fica
+              // O(n²) numa tabela de milhares de linhas.
+              final List<IRow> tdRowList;
+              if (td.rowList != null &&
+                  td.layoutRenderId == _renderCount &&
+                  td.layoutInnerWidth == effectiveInnerWidth) {
+                tdRowList = td.rowList!;
+              } else {
+                tdRowList = computeRowList(
+                  IComputeRowListPayload(
+                    innerWidth: effectiveInnerWidth,
+                    elementList: td.value,
+                    isFromTable: true,
+                    isPagingMode: isPagingMode,
+                  ),
+                );
+                td.layoutRenderId = _renderCount;
+                td.layoutInnerWidth = effectiveInnerWidth;
+              }
               // offsetY carrega o before/after dos parágrafos da célula
               // (F4.3) — sem ele a altura do TD ignora o espaçamento.
               final double rowHeight = tdRowList.fold<double>(
@@ -1811,222 +1858,22 @@ class Draw {
         // deste branch reconstitui antes de re-dividir), repetindo os tr com
         // pagingRepeat como cabeçalho. Port do Draw.ts original (~1618-1737).
         if (isPagingMode && !isFromTable) {
-          final double pageContentHeight = pageHeight;
-          final double marginHeight = mainOuterHeight;
-          double curPagePreHeight = marginHeight;
-          for (int r = 0; r < rowList.length; r++) {
-            final IRow row = rowList[r];
-            final double rowOffsetY = row.offsetY ?? 0;
-            if (row.height + curPagePreHeight + rowOffsetY >
-                    pageContentHeight ||
-                (r > 0 && rowList[r - 1].isPageBreak == true)) {
-              curPagePreHeight = marginHeight + row.height + rowOffsetY;
-            } else {
-              curPagePreHeight += row.height + rowOffsetY;
-            }
-          }
-          final List<ITr> trList = element.trList ?? <ITr>[];
-          if (trList.isNotEmpty) {
-            // A altura restante da página comporta a 1ª linha divisível?
-            final double rowMarginHeight = rowMargin * 2 * scale;
-            final double firstTrHeight = trList.first.height * scale;
-            if (curPagePreHeight + firstTrHeight + rowMarginHeight >
-                    pageContentHeight ||
-                ((element.pagingIndex ?? 0) != 0 &&
-                    trList.first.pagingRepeat == true) ||
-                (i > 0 &&
-                    elementList[i - 1].type == ElementType.pageBreak)) {
-              // Sem linha divisível: tabela começa em página nova.
-              curPagePreHeight = marginHeight;
-            }
-            // Tabela estoura a página: truncar linhas para a próxima parte.
-            if (curPagePreHeight + rowMarginHeight + elementHeight >
-                pageContentHeight) {
-              int deleteStart = 0;
-              int deleteCount = 0;
-              double preTrHeight = 0;
-              if (trList.length > 1) {
-                for (int r = 0; r < trList.length; r++) {
-                  final ITr tr = trList[r];
-                  final double trHeight = tr.height * scale;
-                  if (curPagePreHeight +
-                          rowMarginHeight +
-                          preTrHeight +
-                          trHeight >
-                      pageContentHeight) {
-                    break;
-                  } else {
-                    deleteStart = r + 1;
-                    deleteCount = trList.length - deleteStart;
-                    preTrHeight += trHeight;
-                  }
-                }
-              }
-              if (deleteCount > 0) {
-                final List<ITr> cloneTrList =
-                    trList.sublist(deleteStart, deleteStart + deleteCount);
-                trList.removeRange(deleteStart, deleteStart + deleteCount);
-                // Rowspan cruzando o corte (o original desistia da divisão —
-                // as tabelas gigantes do TR mesclam a 1ª coluna o tempo
-                // todo): trunca o rowspan na parte 1 e insere célula de
-                // continuação vazia na parte 2, como o `vMerge continue` do
-                // Word (F4.5).
-                final int gridCols = element.colgroup?.length ?? 0;
-                if (gridCols > 0 && cloneTrList.isNotEmpty) {
-                  final int part1Rows = trList.length;
-                  final List<List<ITd?>> owners = List<List<ITd?>>.generate(
-                    part1Rows,
-                    (_) => List<ITd?>.filled(gridCols, null),
-                  );
-                  // (coluna, td, linhas restantes) das células cruzantes.
-                  final List<List<Object>> crossing = <List<Object>>[];
-                  for (int r0 = 0; r0 < part1Rows; r0++) {
-                    int col = 0;
-                    for (final ITd td in trList[r0].tdList) {
-                      while (col < gridCols && owners[r0][col] != null) {
-                        col += 1;
-                      }
-                      if (col >= gridCols) {
-                        break;
-                      }
-                      final int spanEnd = r0 + td.rowspan;
-                      for (int rr = r0;
-                          rr < (spanEnd < part1Rows ? spanEnd : part1Rows);
-                          rr++) {
-                        for (int cc = col;
-                            cc < col + td.colspan && cc < gridCols;
-                            cc++) {
-                          owners[rr][cc] = td;
-                        }
-                      }
-                      if (spanEnd > part1Rows) {
-                        crossing.add(<Object>[col, td, spanEnd - part1Rows]);
-                        td.rowspan = part1Rows - r0;
-                      }
-                      col += td.colspan;
-                    }
-                  }
-                  if (crossing.isNotEmpty) {
-                    crossing.sort((a, b) =>
-                        (a[0] as int).compareTo(b[0] as int));
-                    final ITr firstCloneTr = cloneTrList.first;
-                    // Colunas ocupadas pelas continuações.
-                    final Set<int> phantomCols = <int>{};
-                    for (final List<Object> cross in crossing) {
-                      final ITd td = cross[1] as ITd;
-                      for (int k = cross[0] as int;
-                          k < (cross[0] as int) + td.colspan;
-                          k++) {
-                        phantomCols.add(k);
-                      }
-                    }
-                    // Colunas dos tds reais da 1ª linha da parte 2.
-                    final List<int> realCols = <int>[];
-                    int col = 0;
-                    for (final ITd td in firstCloneTr.tdList) {
-                      while (phantomCols.contains(col)) {
-                        col += 1;
-                      }
-                      realCols.add(col);
-                      col += td.colspan;
-                    }
-                    int inserted = 0;
-                    for (final List<Object> cross in crossing) {
-                      final int crossCol = cross[0] as int;
-                      final ITd ownerTd = cross[1] as ITd;
-                      final int remaining = cross[2] as int;
-                      int insertAt = inserted;
-                      for (final int realCol in realCols) {
-                        if (realCol < crossCol) {
-                          insertAt += 1;
-                        }
-                      }
-                      firstCloneTr.tdList.insert(
-                        insertAt,
-                        ITd(
-                          id: utils.getUUID(),
-                          colspan: ownerTd.colspan,
-                          rowspan: remaining,
-                          value: <IElement>[IElement(value: '')],
-                          backgroundColor: ownerTd.backgroundColor,
-                          borderTypes: ownerTd.borderTypes?.toList(),
-                          verticalAlign: ownerTd.verticalAlign,
-                        ),
-                      );
-                      inserted += 1;
-                    }
-                  }
-                }
-                final double cloneTrHeight = cloneTrList.fold<double>(
-                  0,
-                  (double pre, ITr cur) => pre + cur.height,
-                );
-                final double cloneTrRealHeight = cloneTrHeight * scale;
-                final String pagingId = element.pagingId ?? utils.getUUID();
-                element.pagingId = pagingId;
-                element.height = (element.height ?? 0) - cloneTrHeight;
-                metrics.height -= cloneTrRealHeight;
-                metrics.boundingBoxDescent -= cloneTrRealHeight;
-                // Parte seguinte da tabela.
-                final IElement cloneElement =
-                    element_utils.cloneElement(element);
-                cloneElement.pagingId = pagingId;
-                cloneElement.pagingIndex = (element.pagingIndex ?? 0) + 1;
-                // Cabeçalho repetido por página (w:tblHeader/pagingRepeat).
-                final List<ITr> repeatTrList = trList
-                    .where((ITr tr) => tr.pagingRepeat == true)
-                    .toList();
-                final List<ITr> nextTrList = cloneTrList;
-                if (repeatTrList.isNotEmpty) {
-                  final List<ITr> cloneRepeatTrList =
-                      element_utils.cloneTrList(repeatTrList);
-                  for (final ITr tr in cloneRepeatTrList) {
-                    tr.id = utils.getUUID();
-                  }
-                  nextTrList.insertAll(0, cloneRepeatTrList);
-                }
-                cloneElement.trList = nextTrList;
-                cloneElement.id = utils.getUUID();
-                spliceElementList(
-                  elementList,
-                  i + 1,
-                  0,
-                  <IElement>[cloneElement],
-                );
-              }
-            }
-          }
-          // Cursor dentro de tabela dividida: reencontrar o tr pelo id.
-          if (element.pagingId != null && position != null) {
-            final IPositionContext positionContext =
-                position.getPositionContext();
-            if (positionContext.isTable) {
-              int newPositionContextIndex = -1;
-              int newPositionContextTrIndex = -1;
-              int tableIndex = i;
-              while (tableIndex < elementList.length) {
-                final IElement curElement = elementList[tableIndex];
-                if (curElement.pagingId != element.pagingId) {
-                  break;
-                }
-                final int trIndex = curElement.trList?.indexWhere(
-                      (ITr r) => r.id == positionContext.trId,
-                    ) ??
-                    -1;
-                if (trIndex >= 0) {
-                  newPositionContextIndex = tableIndex;
-                  newPositionContextTrIndex = trIndex;
-                  break;
-                }
-                tableIndex += 1;
-              }
-              if (newPositionContextIndex >= 0) {
-                positionContext.index = newPositionContextIndex;
-                positionContext.trIndex = newPositionContextTrIndex;
-                position.setPositionContext(positionContext);
-              }
-            }
-          }
+          // Table paging em PASSO ÚNICO (F4.5/F5): particiona a tabela
+          // inteira de uma vez em vez de cortar uma parte por iteração do
+          // laço externo (que re-executava o setup O(linhas) por parte →
+          // O(partes×linhas) numa tabela de milhares de linhas).
+          _partitionTableAcrossPages(
+            element: element,
+            rowList: rowList,
+            elementList: elementList,
+            index: i,
+            metrics: metrics,
+            pageContentHeight: pageHeight,
+            marginHeight: mainOuterHeight,
+            scale: scale,
+            rowMargin: rowMargin,
+            position: position,
+          );
         }
       } else if (element.type == ElementType.separator) {
         final double lineWidth =
@@ -2092,50 +1939,63 @@ class Draw {
         metrics.height = resolvedSize * scale;
         final String fontStyle = getElementFont(element, scale);
         resolvedFontStyle = fontStyle;
-        final ITextMetrics? fontMetrics =
-            textParticle?.measureTextWithFont(ctx, element, fontStyle);
-        final double measuredWidth = (fontMetrics?.width ?? 0) * scale;
-        metrics.width = measuredWidth;
-        if (element.letterSpacing != null) {
-          metrics.width += element.letterSpacing! * scale;
-        }
-        metrics.boundingBoxAscent = (element.value == ZERO
-                ? (element.size ?? defaultSize).toDouble()
-                : fontMetrics?.actualBoundingBoxAscent ?? resolvedSize) *
-            scale;
-        metrics.boundingBoxDescent =
-            (fontMetrics?.actualBoundingBoxDescent ?? 0) * scale;
-        // F4.3 (spacing Word-fiel): parágrafos vindos de DOCX trazem
-        // lineSpacingRule e rowMargin=0; a altura da linha passa a ser a da
-        // FONTE (fontBoundingBox ≈ ascent+descent+lineGap do Word), não o
-        // bounding box do glifo + padding fixo do editor. O extra de
-        // espaçamento entra acima da linha (baseline no fundo, como o Word).
-        final String? lineRule = element.lineSpacingRule;
-        if (lineRule != null) {
-          // Single do Word = métricas do TTF (ascent+descent), ~1,13-1,22 em
-          // nas famílias comuns; o fontBoundingBox do Chrome inclui folga
-          // (~1,3 em) e estoura a paginação. Tabela interina até o ce_fonts
-          // medir TTF de verdade (F4.10).
-          final double? knownFactor =
-              _singleLineFactorByFont[(element.font ??
-                      _options.defaultFont ??
-                      '')
-                  .toLowerCase()];
-          double fontAscent;
-          double fontDescent;
-          if (knownFactor != null) {
-            final double single0 = resolvedSize * knownFactor * scale;
-            fontDescent = single0 * 0.19; // proporção TTF típica (TNR/Arial)
-            fontAscent = single0 - fontDescent;
-          } else {
-            fontAscent = (fontMetrics?.fontBoundingBoxAscent ?? 0) * scale;
-            fontDescent = (fontMetrics?.fontBoundingBoxDescent ?? 0) * scale;
-            if (fontAscent <= 0) {
-              // Fallback (browser sem fontBoundingBox): proporções típicas.
+        final double scaledSize = resolvedSize * scale;
+        final bool isZero = element.value == ZERO;
+        // F4.10 (D4): métricas TTF determinísticas quando a família está no
+        // registry (Arial e substitutas cobrem ~100% dos DOCX de resources/).
+        // Largura e altura de linha deixam de depender do que o browser tem
+        // instalado e passam a bater com o Word. Sem métricas → fallback
+        // canvas (measureText), como antes.
+        final ce_fonts.FontMetrics? ttf = ce_fonts.FontRegistry.instance
+            .lookup(element.font ?? _options.defaultFont);
+        // ascent/descent do glifo (bounding box) e da linha (com lineGap).
+        double glyphAscent;
+        double glyphDescent;
+        double fontAscent;
+        double fontDescent;
+        if (ttf != null) {
+          metrics.width = isZero ? 0 : ttf.measureWidth(element.value, scaledSize);
+          glyphAscent = isZero ? scaledSize : ttf.ascentPx(scaledSize);
+          glyphDescent = ttf.descentPx(scaledSize);
+          // lineGap todo acima (baseline ancorada pelo descent embaixo).
+          fontAscent = ttf.ascentPx(scaledSize) + ttf.lineGapPx(scaledSize);
+          fontDescent = ttf.descentPx(scaledSize);
+        } else {
+          final ITextMetrics? fontMetrics =
+              textParticle?.measureTextWithFont(ctx, element, fontStyle);
+          metrics.width = (fontMetrics?.width ?? 0) * scale;
+          glyphAscent = (isZero
+                  ? (element.size ?? defaultSize).toDouble()
+                  : fontMetrics?.actualBoundingBoxAscent ?? resolvedSize) *
+              scale;
+          glyphDescent = (fontMetrics?.actualBoundingBoxDescent ?? 0) * scale;
+          fontAscent = (fontMetrics?.fontBoundingBoxAscent ?? 0) * scale;
+          fontDescent = (fontMetrics?.fontBoundingBoxDescent ?? 0) * scale;
+          if (fontAscent <= 0) {
+            final double? knownFactor = _singleLineFactorByFont[
+                (element.font ?? _options.defaultFont ?? '').toLowerCase()];
+            if (knownFactor != null) {
+              final double single0 = resolvedSize * knownFactor * scale;
+              fontDescent = single0 * 0.19;
+              fontAscent = single0 - fontDescent;
+            } else {
               fontAscent = resolvedSize * 0.9 * scale;
               fontDescent = resolvedSize * 0.25 * scale;
             }
           }
+        }
+        if (element.letterSpacing != null) {
+          metrics.width += element.letterSpacing! * scale;
+        }
+        metrics.boundingBoxAscent = glyphAscent;
+        metrics.boundingBoxDescent = glyphDescent;
+        // F4.3 (spacing Word-fiel): parágrafos vindos de DOCX trazem
+        // lineSpacingRule e rowMargin=0; a altura da linha passa a ser a da
+        // FONTE (ascent+descent+lineGap do Word), não o bounding box do glifo
+        // + padding fixo do editor. O extra de espaçamento entra acima da
+        // linha (baseline no fundo, como o Word).
+        final String? lineRule = element.lineSpacingRule;
+        if (lineRule != null) {
           final double single = fontAscent + fontDescent;
           final double value = element.lineSpacingValue ?? 1.0;
           double target;
@@ -2566,6 +2426,256 @@ class Draw {
   /// Nº de elementos de `_elementList` no momento do último compute — usado
   /// pelo fast path para mapear índices novos → antigos nas rows cacheadas.
   int _computedElementCount = 0;
+
+  static double _sumTrHeight(List<ITr> rows) {
+    double h = 0;
+    for (final ITr tr in rows) {
+      h += tr.height;
+    }
+    return h;
+  }
+
+  /// Trata `rowspan` cruzando a fronteira entre [prevRows] e [nextRows]
+  /// (F4.5): trunca o span das células que ultrapassam [prevRows] e insere a
+  /// célula-continuação correspondente na 1ª linha de [nextRows], como o
+  /// `vMerge continue` do Word. Chamado da esquerda p/ direita, então uma
+  /// continuação pode ela mesma cruzar a próxima fronteira.
+  void _bridgeRowspanAcrossCut(
+      List<ITr> prevRows, List<ITr> nextRows, int gridCols) {
+    if (gridCols <= 0 || prevRows.isEmpty || nextRows.isEmpty) {
+      return;
+    }
+    final int prevCount = prevRows.length;
+    final List<List<ITd?>> owners = List<List<ITd?>>.generate(
+      prevCount,
+      (_) => List<ITd?>.filled(gridCols, null),
+    );
+    // (coluna, td, linhas restantes) das células que cruzam a fronteira.
+    final List<List<Object>> crossing = <List<Object>>[];
+    for (int r0 = 0; r0 < prevCount; r0++) {
+      int col = 0;
+      for (final ITd td in prevRows[r0].tdList) {
+        while (col < gridCols && owners[r0][col] != null) {
+          col += 1;
+        }
+        if (col >= gridCols) {
+          break;
+        }
+        final int spanEnd = r0 + td.rowspan;
+        for (int rr = r0; rr < (spanEnd < prevCount ? spanEnd : prevCount); rr++) {
+          for (int cc = col; cc < col + td.colspan && cc < gridCols; cc++) {
+            owners[rr][cc] = td;
+          }
+        }
+        if (spanEnd > prevCount) {
+          crossing.add(<Object>[col, td, spanEnd - prevCount]);
+          td.originalRowspan ??= td.rowspan;
+          td.rowspan = prevCount - r0;
+        }
+        col += td.colspan;
+      }
+    }
+    if (crossing.isEmpty) {
+      return;
+    }
+    crossing.sort((a, b) => (a[0] as int).compareTo(b[0] as int));
+    final ITr firstNextTr = nextRows.first;
+    final Set<int> phantomCols = <int>{};
+    for (final List<Object> cross in crossing) {
+      final ITd td = cross[1] as ITd;
+      for (int k = cross[0] as int; k < (cross[0] as int) + td.colspan; k++) {
+        phantomCols.add(k);
+      }
+    }
+    final List<int> realCols = <int>[];
+    int col = 0;
+    for (final ITd td in firstNextTr.tdList) {
+      while (phantomCols.contains(col)) {
+        col += 1;
+      }
+      realCols.add(col);
+      col += td.colspan;
+    }
+    int inserted = 0;
+    for (final List<Object> cross in crossing) {
+      final int crossCol = cross[0] as int;
+      final ITd ownerTd = cross[1] as ITd;
+      final int remaining = cross[2] as int;
+      int insertAt = inserted;
+      for (final int realCol in realCols) {
+        if (realCol < crossCol) {
+          insertAt += 1;
+        }
+      }
+      firstNextTr.tdList.insert(
+        insertAt,
+        ITd(
+          id: utils.getUUID(),
+          colspan: ownerTd.colspan,
+          rowspan: remaining,
+          value: <IElement>[IElement(value: '')],
+          backgroundColor: ownerTd.backgroundColor,
+          borderTypes: ownerTd.borderTypes?.toList(),
+          verticalAlign: ownerTd.verticalAlign,
+          pagingContinuation: true,
+        ),
+      );
+      inserted += 1;
+    }
+  }
+
+  /// Table paging em passo único (F4.5/F5): particiona a tabela inteira (já
+  /// medida) em partes ≤ altura de página, criando todas as continuações de
+  /// uma vez e marcando-as para o laço externo não re-executar o setup por
+  /// parte. Substitui o algoritmo O(partes×linhas) do port original.
+  void _partitionTableAcrossPages({
+    required IElement element,
+    required List<IRow> rowList,
+    required List<IElement> elementList,
+    required int index,
+    required IElementMetrics metrics,
+    required double pageContentHeight,
+    required double marginHeight,
+    required double scale,
+    required double rowMargin,
+    required Position? position,
+  }) {
+    final List<ITr> fullTrList = element.trList ?? <ITr>[];
+    if (fullTrList.isEmpty) {
+      return;
+    }
+    final double rowMarginHeight = rowMargin * 2 * scale;
+    final int gridCols = element.colgroup?.length ?? 0;
+
+    // 1) Fill da página corrente (uma varredura de rowList).
+    double curPagePreHeight = marginHeight;
+    for (int r = 0; r < rowList.length; r++) {
+      final IRow row = rowList[r];
+      final double oy = row.offsetY ?? 0;
+      if (row.height + curPagePreHeight + oy > pageContentHeight ||
+          (r > 0 && rowList[r - 1].isPageBreak == true)) {
+        curPagePreHeight = marginHeight + row.height + oy;
+      } else {
+        curPagePreHeight += row.height + oy;
+      }
+    }
+    final double firstTrHeight = fullTrList.first.height * scale;
+    if (curPagePreHeight + firstTrHeight + rowMarginHeight > pageContentHeight ||
+        (index > 0 &&
+            elementList[index - 1].type == ElementType.pageBreak)) {
+      curPagePreHeight = marginHeight;
+    }
+
+    // 2) Fronteiras de corte em um passo (altura acumulada, sem re-varrer).
+    final List<ITr> repeatHeaders =
+        fullTrList.where((ITr t) => t.pagingRepeat == true).toList();
+    final double repeatHeadersHeight =
+        _sumTrHeight(repeatHeaders) * scale;
+    final List<int> cutIndices = <int>[];
+    int partStart = 0;
+    double pageFill = curPagePreHeight;
+    for (int r = 0; r < fullTrList.length; r++) {
+      final double trH = fullTrList[r].height * scale;
+      if (r > partStart &&
+          pageFill + rowMarginHeight + trH > pageContentHeight) {
+        cutIndices.add(r);
+        partStart = r;
+        pageFill = marginHeight + repeatHeadersHeight + trH;
+      } else {
+        pageFill += trH;
+      }
+    }
+    if (cutIndices.isEmpty) {
+      return; // cabe inteira; métricas já setadas pelo chamador.
+    }
+
+    // 3) Constrói as partes (fronteiras [0, cut0, ..., N]).
+    final String pagingId = element.pagingId ?? utils.getUUID();
+    element.pagingId = pagingId;
+    element.pagingIndex = element.pagingIndex ?? 0;
+    final List<List<ITr>> partRows = <List<ITr>>[];
+    int prevCut = 0;
+    for (final int cut in cutIndices) {
+      partRows.add(fullTrList.sublist(prevCut, cut));
+      prevCut = cut;
+    }
+    partRows.add(fullTrList.sublist(prevCut));
+
+    // Parte 0 permanece em element.
+    List<ITr> prevPartRows = partRows[0];
+    element.trList = prevPartRows;
+    element.height = _sumTrHeight(prevPartRows);
+
+    final List<IElement> clones = <IElement>[];
+    for (int k = 1; k < partRows.length; k++) {
+      List<ITr> nextRows = partRows[k];
+      if (gridCols > 0) {
+        _bridgeRowspanAcrossCut(prevPartRows, nextRows, gridCols);
+      }
+      if (repeatHeaders.isNotEmpty) {
+        final List<ITr> clonedHeaders =
+            element_utils.cloneTrList(repeatHeaders);
+        for (final ITr t in clonedHeaders) {
+          t.id = utils.getUUID();
+        }
+        nextRows = <ITr>[...clonedHeaders, ...nextRows];
+      }
+      final IElement clone = element_utils.cloneElement(element);
+      clone.trList = nextRows;
+      clone.pagingId = pagingId;
+      clone.pagingIndex = (element.pagingIndex ?? 0) + k;
+      clone.id = utils.getUUID();
+      clone.height = _sumTrHeight(nextRows);
+      clone.tablePartRenderId = _renderCount;
+      clone.tablePartHeight = clone.height;
+      clones.add(clone);
+      prevPartRows = nextRows;
+    }
+
+    // 4) Emenda todas as partes de uma vez.
+    spliceElementList(elementList, index + 1, 0, clones);
+
+    // 5) Métricas da parte 0.
+    final double part0Height = element.height ?? 0;
+    metrics.height = part0Height * scale;
+    metrics.boundingBoxDescent = metrics.height;
+    metrics.boundingBoxAscent = -rowMargin;
+    if (index + 1 < elementList.length &&
+        elementList[index + 1].type == ElementType.table) {
+      metrics.boundingBoxAscent -= rowMargin;
+    }
+
+    // 6) Fixup do positionContext (cursor em tabela dividida).
+    if (position != null) {
+      final IPositionContext positionContext = position.getPositionContext();
+      if (positionContext.isTable) {
+        int newIndex = -1;
+        int newTrIndex = -1;
+        int tableIndex = index;
+        while (tableIndex < elementList.length) {
+          final IElement curElement = elementList[tableIndex];
+          if (curElement.pagingId != pagingId) {
+            break;
+          }
+          final int trIndex = curElement.trList?.indexWhere(
+                (ITr r) => r.id == positionContext.trId,
+              ) ??
+              -1;
+          if (trIndex >= 0) {
+            newIndex = tableIndex;
+            newTrIndex = trIndex;
+            break;
+          }
+          tableIndex += 1;
+        }
+        if (newIndex >= 0) {
+          positionContext.index = newIndex;
+          positionContext.trIndex = newTrIndex;
+          position.setPositionContext(positionContext);
+        }
+      }
+    }
+  }
 
   /// Fast path de layout para digitação (P2 do plano de otimização; análogo
   /// ao `Recalculate_FastWholeParagraph` do OnlyOffice): recomputa apenas as

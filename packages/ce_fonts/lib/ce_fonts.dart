@@ -1,5 +1,12 @@
-/// Parser TTF + métricas + subsetting.
+/// Parser TTF + métricas (hmtx/cmap) para layout determinístico (D4/F4.10) e,
+/// futuramente, subsetting para embedding no PDF (F7.2).
 ///
-/// Implementação nas Fases 4.10 e 7.2 do roteiro_editor_profissional
-/// (métricas determinísticas D4; subsetting para embedding no PDF).
+/// Uso no layout:
+/// ```dart
+/// final m = FontRegistry.instance.lookup('Arial');
+/// final w = m?.measureWidth('texto', 16); // px, ou null → fallback canvas
+/// ```
 library;
+
+export 'src/font_metrics.dart';
+export 'src/font_registry.dart';

@@ -34,6 +34,23 @@ class ITd {
 	bool? disabled;
 	bool? deletable;
 
+	/// Estado transitório do layout (F4.5/F5): identifica em qual render o
+	/// `rowList` da célula foi calculado e com qual largura interna. O table
+	/// paging move as MESMAS células (mesmos objetos) para as partes
+	/// seguintes; sem este marcador cada divisão re-mede todas as linhas
+	/// restantes → O(n²) numa tabela de milhares de linhas. Não serializado.
+	int? layoutRenderId;
+	double? layoutInnerWidth;
+
+	/// Célula-continuação sintética (F4.5): inserida na parte seguinte quando
+	/// um `rowspan` cruza a quebra de página (equivalente ao `vMerge continue`
+	/// do Word). Removida na reconstituição da tabela (merge-back).
+	bool? pagingContinuation;
+
+	/// `rowspan` original antes de a divisão de página o truncar; usado para
+	/// restaurar a célula na reconstituição. Não serializado.
+	int? originalRowspan;
+
 	ITd({
 		this.conceptId,
 		this.id,
@@ -64,5 +81,7 @@ class ITd {
 		this.realMinHeight,
 		this.disabled,
 		this.deletable,
+		this.pagingContinuation,
+		this.originalRowspan,
 	});
 }
