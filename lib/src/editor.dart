@@ -2523,6 +2523,22 @@ class EditorApp {
       (drawOptions.footer ??= IFooter()).bottom =
           converted.footerDistancePx + footerPageNumberGap;
 
+      // Caixas de texto flutuantes do cabeçalho (carimbo, F4.8): passa ao frame
+      // do header ANTES do render do setValue.
+      draw.getHeader().setTextBoxes(<header_model.IHeaderTextBox>[
+        for (final tb in converted.headerTextBoxes)
+          header_model.IHeaderTextBox(
+            elements: tb.elements,
+            alignRight: tb.alignRight,
+            offsetYPx: tb.offsetYPx,
+            widthPx: tb.widthPx,
+            heightPx: tb.heightPx,
+            borderColor: tb.borderColor,
+            borderWidthPx: tb.borderWidthPx,
+            fillColor: tb.fillColor,
+          ),
+      ]);
+
       // O forceUpdate antigo limpava o range antes de renderizar; preserva o
       // comportamento sem pagar outro render.
       draw.getRange().clearRange();

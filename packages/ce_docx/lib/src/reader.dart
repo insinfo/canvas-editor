@@ -255,12 +255,84 @@ class DocxReader {
           content.add(WpInstrText(child.text));
         case 'w:lastRenderedPageBreak':
           break; // marcador transiente do Word — recalculado pelo layout
+        case 'mc:AlternateContent':
+          // Shape com caixa de texto (carimbo). Se não for, cai no preserved.
+          final tb = _parseTextBox(child);
+          content.add(tb ??
+              WpPreservedRunContent(child.qname, child.toXmlString()));
         case _:
           content
               .add(WpPreservedRunContent(child.qname, child.toXmlString()));
       }
     }
     return WpRun(properties: properties, content: content);
+  }
+
+  /// Parseia um `mc:AlternateContent` que seja um shape com caixa de texto
+  /// (`wps:wsp` + `w:txbxContent`), ex.: o carimbo do cabeçalho (F4.8).
+  /// Retorna null (→ preserved) se não for uma caixa de texto.
+  WpTextBox? _parseTextBox(XmlElement el) {
+    XmlElement? wsp;
+    for (final w in el.descendantsNamed('wps:wsp')) {
+      wsp = w;
+      break;
+    }
+    if (wsp == null) return null;
+    XmlElement? txbx;
+    for (final t in wsp.descendantsNamed('w:txbxContent')) {
+      txbx = t;
+      break;
+    }
+    if (txbx == null) return null;
+
+    String? hAlign;
+    int? offX, offY, cx, cy;
+    XmlElement? anchor;
+    for (final a in el.descendantsNamed('wp:anchor')) {
+      anchor = a;
+      break;
+    }
+    if (anchor != null) {
+      final posH = anchor.firstChild('wp:positionH');
+      hAlign = posH?.firstChild('wp:align')?.text.trim();
+      offX = int.tryParse(
+          posH?.firstChild('wp:posOffset')?.text.trim() ?? '');
+      final posV = anchor.firstChild('wp:positionV');
+      offY = int.tryParse(
+          posV?.firstChild('wp:posOffset')?.text.trim() ?? '');
+      final extent = anchor.firstChild('wp:extent');
+      cx = int.tryParse(extent?.getAttribute('cx') ?? '');
+      cy = int.tryParse(extent?.getAttribute('cy') ?? '');
+    }
+
+    int? borderW;
+    String? borderColor, fillColor;
+    final spPr = wsp.firstChild('wps:spPr');
+    if (spPr != null) {
+      final ln = spPr.firstChild('a:ln');
+      borderW = int.tryParse(ln?.getAttribute('w') ?? '');
+      if (ln != null) {
+        for (final c in ln.descendantsNamed('a:srgbClr')) {
+          borderColor = c.getAttribute('val');
+          break;
+        }
+      }
+      fillColor =
+          spPr.firstChild('a:solidFill')?.firstChild('a:srgbClr')?.getAttribute('val');
+    }
+
+    return WpTextBox(
+      positionHAlign: hAlign,
+      offsetXEmu: offX,
+      offsetYEmu: offY,
+      extentCxEmu: cx,
+      extentCyEmu: cy,
+      borderWidthEmu: borderW,
+      borderColorHex: borderColor,
+      fillColorHex: fillColor,
+      blocks: _parseBlocks(txbx),
+      rawXml: el.toXmlString(),
+    );
   }
 
   WpDrawing _parseDrawing(XmlElement el) {

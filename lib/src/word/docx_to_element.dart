@@ -40,6 +40,9 @@ class DocxConversionResult {
   final String? pageNumberFont;
   final String? pageNumberColor;
 
+  /// Caixas de texto flutuantes do cabeçalho (carimbos, F4.8).
+  final List<DocxTextBox> headerTextBoxes;
+
   /// Notas de fidelidade (o que foi substituído/só preservado).
   final List<String> notes;
 
@@ -47,6 +50,7 @@ class DocxConversionResult {
     required this.header,
     required this.main,
     required this.footer,
+    this.headerTextBoxes = const [],
     required this.pageWidthPx,
     required this.pageHeightPx,
     required this.marginsPx,
@@ -58,6 +62,30 @@ class DocxConversionResult {
     this.pageNumberFont,
     this.pageNumberColor,
     required this.notes,
+  });
+}
+
+/// Caixa de texto flutuante convertida (carimbo, F4.8): conteúdo já em
+/// IElement[] + geometria em px para o render posicionar/desenhar a borda.
+class DocxTextBox {
+  final List<IElement> elements;
+  final bool alignRight;
+  final double offsetYPx;
+  final double widthPx;
+  final double heightPx;
+  final String? borderColor;
+  final double borderWidthPx;
+  final String? fillColor;
+
+  DocxTextBox({
+    required this.elements,
+    required this.alignRight,
+    required this.offsetYPx,
+    required this.widthPx,
+    required this.heightPx,
+    required this.borderColor,
+    required this.borderWidthPx,
+    required this.fillColor,
   });
 }
 
@@ -86,6 +114,7 @@ class DocxToElementConverter {
   final FormatResolver _resolver;
   final NumberingCounters _counters;
   final List<String> _notes = [];
+  final List<DocxTextBox> _textBoxes = [];
 
   DocxToElementConverter._(this.file)
       : _resolver = FormatResolver(file.styles),
@@ -99,11 +128,15 @@ class DocxToElementConverter {
     final main = _convertBlocks(file.document.body,
         fromPart: mainPart, stampBlocks: true);
 
+    // Descarta text boxes coletadas no corpo (não renderizadas ainda); só as do
+    // cabeçalho são posicionadas (F4.8).
+    _textBoxes.clear();
     final headerBlocks = file.headersByType['default'];
     final footerBlocks = file.footersByType['default'];
     final header = headerBlocks == null
         ? <IElement>[]
         : _convertBlocks(headerBlocks.blocks, fromPart: headerBlocks.partName);
+    final headerTextBoxes = List<DocxTextBox>.from(_textBoxes);
 
     // F4.7: parágrafos do rodapé com campos PAGE/NUMPAGES viram o formato
     // dinâmico do pageNumber do editor (em vez do resultado em cache).
@@ -123,6 +156,7 @@ class DocxToElementConverter {
       header: header,
       main: main,
       footer: footer,
+      headerTextBoxes: headerTextBoxes,
       pageWidthPx: Units.twipToPx(section?.pageWidthTwips ?? 11906),
       pageHeightPx: Units.twipToPx(section?.pageHeightTwips ?? 16838),
       marginsPx: [
@@ -457,15 +491,35 @@ class DocxToElementConverter {
         case WpDrawing drawing:
           final image = _convertDrawing(drawing, fromPart);
           if (image != null) into.add(image);
+        case WpTextBox textBox:
+          // Caixa de texto flutuante (carimbo, F4.8): não flui inline — é
+          // coletada e renderizada como float posicionado (top-right do header).
+          _textBoxes.add(_convertTextBox(textBox, fromPart));
         case WpPreservedRunContent preserved:
           if (preserved.qname == 'mc:AlternateContent' ||
               preserved.qname == 'w:pict') {
-            _notes.add('text box (carimbo) preservado, sem render '
-                '(placeholder na Fase 4.8): ${preserved.qname}');
+            _notes.add('shape preservado, sem render (Fase 4.8): '
+                '${preserved.qname}');
           }
       }
     }
     return state;
+  }
+
+  /// Converte um [WpTextBox] em [DocxTextBox] renderizável: os blocos internos
+  /// viram IElement[] e a geometria EMU vira px.
+  DocxTextBox _convertTextBox(WpTextBox tb, String fromPart) {
+    return DocxTextBox(
+      elements: _convertBlocks(tb.blocks, fromPart: fromPart),
+      alignRight: tb.positionHAlign == 'right',
+      offsetYPx: tb.offsetYEmu == null ? 0 : Units.emuToPx(tb.offsetYEmu!),
+      widthPx: tb.extentCxEmu == null ? 180 : Units.emuToPx(tb.extentCxEmu!),
+      heightPx: tb.extentCyEmu == null ? 0 : Units.emuToPx(tb.extentCyEmu!),
+      borderColor: tb.borderColorHex == null ? null : '#${tb.borderColorHex}',
+      borderWidthPx:
+          tb.borderWidthEmu == null ? 1 : Units.emuToPx(tb.borderWidthEmu!),
+      fillColor: tb.fillColorHex == null ? null : '#${tb.fillColorHex}',
+    );
   }
 
   IElement _styledText(String text, WpRunProperties rPr, RowFlex? rowFlex,
