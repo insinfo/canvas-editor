@@ -1257,11 +1257,12 @@ void formatElementList(
         for (final tr in el.trList!) {
           final trId = tr.id ?? getUUID();
           tr.id = trId;
-          if (tr.minHeight == null ||
-              (defaultTrMinHeight != null &&
-                  tr.minHeight! < defaultTrMinHeight)) {
-            tr.minHeight = defaultTrMinHeight;
-          }
+          // Só aplica o piso do editor (42px) quando NÃO há minHeight explícito
+          // (tabelas criadas na mão têm minHeight=null e querem o piso). Uma
+          // tabela vinda do DOCX define minHeight por linha (altura do w:trHeight
+          // ou 20px); forçá-la para 42 inflava as linhas ~2× e o total de páginas
+          // (Word dimensiona a linha pelo conteúdo, com o w:trHeight como mínimo).
+          tr.minHeight ??= defaultTrMinHeight;
           if (tr.minHeight != null && tr.height < tr.minHeight!) {
             tr.height = tr.minHeight!;
           }

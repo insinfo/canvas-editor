@@ -1633,7 +1633,13 @@ class Draw {
       final IElement? preElement = i > 0 ? elementList[i - 1] : null;
       // Fonte resolvida no branch de texto e reutilizada no rowElement (A3).
       String? resolvedFontStyle;
-      final double rowMarginFactor = element.rowMargin ?? defaultRowMargin;
+      // Dentro de tabela o default é 0 (não `defaultRowMargin`): o Word não
+      // aplica o "basic row margin" do editor em células, e o ZERO que o editor
+      // injeta no início de cada célula vem com rowMargin=null — sem isto cada
+      // linha de célula ganhava ~16px (2×8), inflando as tabelas (~2,6× numa
+      // linha simples) e o total de páginas.
+      final double rowMarginFactor =
+          element.rowMargin ?? (isFromTable ? 0 : defaultRowMargin);
       final double rowMargin = defaultBasicRowMarginHeight * rowMarginFactor;
       final IElementMetrics metrics = IElementMetrics(
         width: 0,
