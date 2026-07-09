@@ -34,6 +34,26 @@ class Position {
   List<IElementPosition> positionList;
   List<IFloatPosition> floatPositionList;
 
+  // Cache de posições POR PÁGINA (perf de digitação): guarda, do último
+  // computePositionList, as rows e as posições de cada página. Como cada página
+  // começa sempre no mesmo startY, uma página cujas rows são as MESMAS (por
+  // referência — o fast path de edição reusa os objetos de row) tem posições
+  // idênticas; só o campo `index` (índice do elemento) desloca ao inserir/
+  // remover char. Reusa as posições e corrige só o index (barato) em vez de
+  // recomputar coordenadas (caro). Páginas com float não entram no cache.
+  List<List<IRow>> _cachedPageRows = <List<IRow>>[];
+  List<List<IElementPosition>> _cachedPagePositions =
+      <List<IElementPosition>>[];
+  double _cachedStartY = double.nan;
+  double _cachedInnerWidth = double.nan;
+
+  /// Invalida o cache de posições por página (chamar quando o layout muda de
+  /// forma não incremental — ex.: relayout completo, novo documento).
+  void invalidatePositionCache() {
+    _cachedPageRows = <List<IRow>>[];
+    _cachedPagePositions = <List<IElementPosition>>[];
+  }
+
   List<IFloatPosition> getFloatPositionList() {
     return floatPositionList;
   }
@@ -360,24 +380,83 @@ class Position {
     final double extraHeight = (header.getExtraHeight() as num).toDouble();
     final double startX = margins[3];
     final double startY = margins[0] + extraHeight;
+    // startY (altura do header) ou innerWidth mudou → coordenadas cacheadas não
+    // valem mais (as rows do corpo podem ser as mesmas, mas deslocadas).
+    if (startY != _cachedStartY || innerWidth != _cachedInnerWidth) {
+      _cachedPageRows = <List<IRow>>[];
+      _cachedPagePositions = <List<IElementPosition>>[];
+      _cachedStartY = startY;
+      _cachedInnerWidth = innerWidth;
+    }
     var startRowIndex = 0;
+    final List<List<IRow>> newCachedRows = <List<IRow>>[];
+    final List<List<IElementPosition>> newCachedPositions =
+        <List<IElementPosition>>[];
     for (var i = 0; i < pageRowList.length; i++) {
       final List<IRow> rowList = pageRowList[i];
       final int startIndex = rowList.isNotEmpty ? rowList[0].startIndex : 0;
-      computePageRowPosition(
-        IComputePageRowPositionPayload(
-          positionList: positionList,
-          rowList: rowList,
-          pageNo: i,
-          startRowIndex: startRowIndex,
-          startIndex: startIndex,
-          startX: startX,
-          startY: startY,
-          innerWidth: innerWidth,
-        ),
-      );
+      final List<IElementPosition>? reuse = _reusablePagePositions(i, rowList);
+      if (reuse != null) {
+        // Corrige apenas o índice do elemento (deslocado por edições antes
+        // desta página); as coordenadas são idênticas (mesmo startY, mesmas
+        // rows). Barato — sem realocar nem recomputar geometria.
+        final int shift =
+            startIndex - (reuse.isNotEmpty ? reuse.first.index : startIndex);
+        if (shift != 0) {
+          for (final IElementPosition p in reuse) {
+            p.index += shift;
+          }
+        }
+        positionList.addAll(reuse);
+        newCachedRows.add(rowList);
+        newCachedPositions.add(reuse);
+      } else {
+        final List<IElementPosition> pagePositions = <IElementPosition>[];
+        final int floatsBefore = floatPositionList.length;
+        computePageRowPosition(
+          IComputePageRowPositionPayload(
+            positionList: pagePositions,
+            rowList: rowList,
+            pageNo: i,
+            startRowIndex: startRowIndex,
+            startIndex: startIndex,
+            startX: startX,
+            startY: startY,
+            innerWidth: innerWidth,
+          ),
+        );
+        positionList.addAll(pagePositions);
+        newCachedRows.add(rowList);
+        // Só cacheia páginas SEM float (o reuse pula computePageRowPosition e
+        // perderia os floats). Página com float → cache vazio (sempre recomputa).
+        newCachedPositions.add(floatPositionList.length == floatsBefore
+            ? pagePositions
+            : const <IElementPosition>[]);
+      }
       startRowIndex += rowList.length;
     }
+    _cachedPageRows = newCachedRows;
+    _cachedPagePositions = newCachedPositions;
+  }
+
+  /// Retorna as posições cacheadas da página [i] se as suas rows são as MESMAS
+  /// (por referência) do último cálculo e a página foi cacheada (sem float);
+  /// senão null (recomputa).
+  List<IElementPosition>? _reusablePagePositions(int i, List<IRow> rowList) {
+    if (i >= _cachedPageRows.length || i >= _cachedPagePositions.length) {
+      return null;
+    }
+    final List<IRow> cachedRows = _cachedPageRows[i];
+    if (cachedRows.length != rowList.length || rowList.isEmpty) {
+      return null;
+    }
+    for (var k = 0; k < rowList.length; k++) {
+      if (!identical(cachedRows[k], rowList[k])) {
+        return null;
+      }
+    }
+    final List<IElementPosition> cached = _cachedPagePositions[i];
+    return cached.isEmpty ? null : cached;
   }
 
   List<IElementPosition> computeRowPosition(
