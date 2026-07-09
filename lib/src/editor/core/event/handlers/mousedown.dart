@@ -125,11 +125,26 @@ void mousedown(dynamic evt, dynamic host) {
   host.isAllowSelection = true;
   final IPositionContext oldPositionContext =
       _clonePositionContext(position.getPositionContext() as IPositionContext);
-  final ICurrentPosition? positionResult = position.adjustPositionContext(
-    IGetPositionByXYPayload(x: offsetX, y: offsetY),
-  ) as ICurrentPosition?;
+  final payload = IGetPositionByXYPayload(x: offsetX, y: offsetY);
+  var positionResult =
+      position.adjustPositionContext(payload) as ICurrentPosition?;
   if (positionResult == null) {
     return;
+  }
+
+  if (positionResult.index < 0 && positionResult.zone != null) {
+    final dynamic zoneManager = draw.getZone();
+    zoneManager?.setZone(positionResult.zone);
+    draw.clearSideEffect();
+    position.setPositionContext(IPositionContext(isTable: false));
+    positionResult =
+        position.adjustPositionContext(payload) as ICurrentPosition?;
+    if (positionResult == null || positionResult.index < 0) {
+      if (evt is html.Event) {
+        evt.preventDefault();
+      }
+      return;
+    }
   }
 
   final int index = positionResult.index;

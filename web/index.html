@@ -15,8 +15,8 @@
     <!-- Barra de título estilo Word (F6) -->
     <div class="word-titlebar">
       <div class="word-titlebar__left">
-        <span class="word-titlebar__autosave">Salvamento Automático</span>
-        <span class="word-titlebar__toggle" aria-hidden="true"></span>
+        <!-- <span class="word-titlebar__autosave">Salvamento Automático</span>
+        <span class="word-titlebar__toggle" aria-hidden="true"></span> -->
       </div>
       <div class="word-titlebar__doc" id="wordDocTitle">Documento — Editor Canvas</div>
       <div class="word-titlebar__right"></div>
@@ -238,6 +238,41 @@
         </div>
       </div>
       <div class="menu-divider"></div>
+      <div class="menu-item" data-label="Estilos">
+        <div class="menu-item__style-gallery">
+          <div class="style-gallery">
+            <div class="style-card" data-level="" title="Normal">
+              <div class="style-card__preview">AaBbCc</div>
+              <div class="style-card__name">Normal</div>
+            </div>
+            <div class="style-card" data-level="first" title="Título 1">
+              <div class="style-card__preview style-card__preview--h1">AaBbCc</div>
+              <div class="style-card__name">Título 1</div>
+            </div>
+            <div class="style-card" data-level="second" title="Título 2">
+              <div class="style-card__preview style-card__preview--h2">AaBbCc</div>
+              <div class="style-card__name">Título 2</div>
+            </div>
+            <div class="style-card" data-level="third" title="Título 3">
+              <div class="style-card__preview style-card__preview--h3">AaBbCc</div>
+              <div class="style-card__name">Título 3</div>
+            </div>
+            <div class="style-card" data-level="fourth" title="Título 4">
+              <div class="style-card__preview style-card__preview--h4">AaBbCc</div>
+              <div class="style-card__name">Título 4</div>
+            </div>
+            <div class="style-card" data-level="fifth" title="Título 5">
+              <div class="style-card__preview style-card__preview--h5">AaBbCc</div>
+              <div class="style-card__name">Título 5</div>
+            </div>
+            <div class="style-card" data-level="sixth" title="Título 6">
+              <div class="style-card__preview style-card__preview--h6">AaBbCc</div>
+              <div class="style-card__name">Título 6</div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="menu-divider"></div>
       <div class="menu-item" data-label="Inserir">
         <div class="menu-item__table">
           <i title="Tabela"></i>
@@ -333,6 +368,68 @@
         </div>
       </div>
       <div class="menu-divider"></div>
+      <div class="menu-item" data-label="Layout">
+        <div class="menu-item__paper-size">
+          <i title="Tamanho do papel"></i>
+          <div class="options">
+            <ul>
+              <li data-paper-size="794*1123" class="active">A4</li>
+              <li data-paper-size="1593*2251">A2</li>
+              <li data-paper-size="1125*1593">A3</li>
+              <li data-paper-size="565*796">A5</li>
+              <li data-paper-size="412*488">Envelope nº 5</li>
+              <li data-paper-size="450*866">Envelope nº 6</li>
+              <li data-paper-size="609*862">Envelope nº 7</li>
+              <li data-paper-size="862*1221">Envelope nº 9</li>
+              <li data-paper-size="813*1266">Papel legal</li>
+              <li data-paper-size="813*1054">Carta</li>
+            </ul>
+          </div>
+        </div>
+        <div class="menu-item__paper-direction">
+          <i title="Orientação do papel"></i>
+          <div class="options">
+            <ul>
+              <li data-paper-direction="vertical" class="active">Retrato</li>
+              <li data-paper-direction="horizontal">Paisagem</li>
+            </ul>
+          </div>
+        </div>
+        <div class="menu-item__paper-margin" title="Margens da página">
+          <i></i>
+          <div class="options">
+            <ul>
+              <li data-paper-margin="94.5,113.4,94.5,113.4">Normal</li>
+              <li data-paper-margin="48,48,48,48">Estreita</li>
+              <li data-paper-margin="96,72,96,72">Moderada</li>
+              <li data-paper-margin="96,192,96,192">Larga</li>
+              <li data-paper-margin="custom">Personalizadas...</li>
+            </ul>
+          </div>
+        </div>
+        <div class="menu-item__page-mode">
+          <i title="Modo de página (paginado, contínuo)"></i>
+          <div class="options">
+            <ul>
+              <li data-page-mode="paging" class="active">Paginado</li>
+              <li data-page-mode="continuity">Contínuo</li>
+            </ul>
+          </div>
+        </div>
+        <div class="menu-item__edit-header" title="Editar cabeçalho">
+          <i></i>
+        </div>
+        <div class="menu-item__edit-footer" title="Editar rodapé">
+          <i></i>
+        </div>
+        <div class="menu-item__close-zone" title="Fechar cabeçalho/rodapé">
+          <i></i>
+        </div>
+        <div class="menu-item__remove-header-textbox" title="Remover caixas de texto flutuantes do cabeçalho">
+          <i></i>
+        </div>
+      </div>
+      <div class="menu-divider"></div>
       <div class="menu-item">
         <div class="menu-item__search" data-menu="search">
           <i></i>
@@ -359,6 +456,14 @@
         </div>
       </div>
     </div>
+    <div class="word-rulers" aria-hidden="true">
+      <div class="word-ruler-horizontal">
+        <div class="word-ruler-horizontal__labels"></div>
+      </div>
+      <div class="word-ruler-vertical">
+        <div class="word-ruler-vertical__labels"></div>
+      </div>
+    </div>
     <div class="catalog" editor-component="catalog">
       <div class="catalog__header">
         <span>Catálogo</span>
@@ -367,6 +472,41 @@
         </div>
       </div>
       <div class="catalog__main"></div>
+    </div>
+    <div class="find-sidebar" editor-component="find-sidebar">
+      <div class="find-sidebar__header">
+        <span>Localizar e substituir</span>
+        <div class="find-sidebar__close" title="Fechar">
+          <i></i>
+        </div>
+      </div>
+      <div class="find-sidebar__body">
+        <div class="find-sidebar__field">
+          <div class="find-sidebar__label">Localizar</div>
+          <div class="find-sidebar__search-row">
+            <input type="text" class="find-sidebar__search"
+              placeholder="Localizar no documento" />
+            <span class="find-sidebar__count"></span>
+            <div class="find-sidebar__nav">
+              <div class="find-sidebar__prev" title="Anterior (Enter com Shift)">
+                <i></i>
+              </div>
+              <div class="find-sidebar__next" title="Próximo (Enter)">
+                <i></i>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="find-sidebar__field">
+          <div class="find-sidebar__label">Substituir por</div>
+          <input type="text" class="find-sidebar__replace"
+            placeholder="Substituir por" />
+          <div class="find-sidebar__actions">
+            <button class="find-sidebar__replace-one">Substituir</button>
+            <button class="find-sidebar__replace-all">Substituir tudo</button>
+          </div>
+        </div>
+      </div>
     </div>
     <div class="editor"></div>
     <div class="comment" editor-component="comment"></div>
@@ -390,7 +530,8 @@
         <span>Linha:<span class="row-no">0</span></span>
         <span>Coluna:<span class="col-no">0</span></span>
       </div>
-      <div class="editor-mode" title="Modo do editor (edição, limpo, somente leitura, formulário, impressão, design)">Modo de edição</div>
+      <div class="editor-mode" title="Modo do editor (edição, limpo, somente leitura, formulário, impressão, design)">
+        Modo de edição</div>
       <div>
         <div class="page-scale-minus" title="Reduzir zoom (Ctrl+-)">
           <i></i>
@@ -437,20 +578,6 @@
       </div>
     </div>
   </div>
-  <script>
-    // Troca visual de aba do ribbon (F6). Só "Página Inicial" tem controles
-    // hoje; as demais ficam ativas visualmente para o look do Word.
-    (function () {
-      var tabs = document.querySelectorAll('.ribbon-tab');
-      tabs.forEach(function (t) {
-        t.addEventListener('click', function () {
-          tabs.forEach(function (x) { x.classList.remove('ribbon-tab--active'); });
-          t.classList.add('ribbon-tab--active');
-        });
-      });
-    })();
-  </script>
 </body>
 
 </html>
-

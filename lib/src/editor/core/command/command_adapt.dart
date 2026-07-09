@@ -32,6 +32,7 @@ import '../../interface/watermark.dart';
 import '../../utils/element.dart' as element_utils;
 import '../../utils/index.dart';
 import '../../utils/print.dart';
+import '../cursor/cursor.dart' show IMoveCursorToVisibleOption;
 import '../event/handlers/paste.dart';
 
 /// Partial translation of the original TypeScript `CommandAdapt` class.
@@ -2929,10 +2930,28 @@ class CommandAdapt {
     draw.render(
       IDrawOption(
         curIndex: endIndex,
+        isSetCursor: true,
         isCompute: false,
         isSubmitHistory: false,
       ),
     );
+    // Rola a viewport até o título selecionado — igual ao Word: clicar em um
+    // item do catálogo navega para a página. Sem isto, o range/cursor muda mas
+    // a página visível não acompanha.
+    final List<dynamic> catalogPositionList =
+        position.getPositionList() as List<dynamic>;
+    if (endIndex >= 0 && endIndex < catalogPositionList.length) {
+      final dynamic cursorPosition = catalogPositionList[endIndex];
+      if (cursorPosition is IElementPosition) {
+        position.setCursorPosition(cursorPosition);
+        draw.getCursor().moveCursorToVisible(
+          IMoveCursorToVisibleOption(
+            cursorPosition: cursorPosition,
+            direction: MoveDirection.down,
+          ),
+        );
+      }
+    }
   }
 
   void wordTool() {
@@ -3487,9 +3506,11 @@ class CommandAdapt {
       if (curIndex < positionList.length) {
         final dynamic cursorPosition = positionList[curIndex];
         draw.getCursor().moveCursorToVisible(
-              cursorPosition: cursorPosition,
-              direction: MoveDirection.down,
-            );
+          IMoveCursorToVisibleOption(
+            cursorPosition: cursorPosition as IElementPosition,
+            direction: MoveDirection.down,
+          ),
+        );
       }
     }
   }
@@ -3565,9 +3586,11 @@ class CommandAdapt {
     );
     position.setCursorPosition(elementPosition);
     draw.getCursor().moveCursorToVisible(
-          cursorPosition: elementPosition,
-          direction: MoveDirection.up,
-        );
+      IMoveCursorToVisibleOption(
+        cursorPosition: elementPosition,
+        direction: MoveDirection.up,
+      ),
+    );
   }
 
   void jumpControl([IInitNextControlOption? option]) {
