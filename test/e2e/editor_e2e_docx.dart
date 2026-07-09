@@ -80,6 +80,11 @@ void _registerDocxE2ETests() {
       timeout: const Duration(minutes: 2),
     );
 
+    await page!.waitForFunction(
+      "() => document.querySelectorAll('.editor canvas').length > 10",
+      timeout: const Duration(minutes: 2),
+    );
+
     final canvasCount = await page!.evaluate<int?>(
         "() => document.querySelectorAll('.editor canvas').length");
     expect(canvasCount, isNotNull);

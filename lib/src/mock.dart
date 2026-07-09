@@ -270,4 +270,7 @@ final IEditorOption options = IEditorOption(
 	placeholder: IPlaceholder(data: 'Digite o conteúdo principal'),
 	zone: IZoneOption(tipDisabled: true),
 	maskMargin: [60, 0, 30, 0],
+	// Historico ativo: a performance de docs grandes deve vir do debounce e do
+	// limite de snapshots, nao de desligar undo/redo no editor de teste.
+	historyDisabled: false,
 );

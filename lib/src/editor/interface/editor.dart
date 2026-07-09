@@ -73,6 +73,10 @@ class IEditorOption {
   PaperDirection? paperDirection;
   double? inactiveAlpha;
   int? historyMaxRecordCount;
+  // Desliga completamente o histórico de undo/redo: nenhum snapshot é criado
+  // (sem deep-clone do documento por edição) e undo/redo viram no-op. Usado
+  // para isolar o custo de memória/tempo do histórico em docs grandes.
+  bool? historyDisabled;
   double? printPixelRatio;
   IMargin? maskMargin;
   List<String>? letterClass;
@@ -144,6 +148,7 @@ class IEditorOption {
     this.paperDirection,
     this.inactiveAlpha,
     this.historyMaxRecordCount,
+    this.historyDisabled,
     this.printPixelRatio,
     this.maskMargin,
     this.letterClass,

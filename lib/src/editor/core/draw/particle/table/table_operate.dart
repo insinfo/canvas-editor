@@ -635,13 +635,16 @@ class TableOperate {
 			}
 		}
 
-		elementList.removeRange(deleteStartIndex, deleteStartIndex + deleteCount);
 		final int curIndex = deleteStartIndex - 1;
 		_position?.setPositionContext(
 			IPositionContext(isTable: false, index: curIndex),
 		);
 		_range?.setRange(curIndex, curIndex);
-		_draw.render(IDrawOption(curIndex: curIndex));
+		_draw.deleteElementRangeWithDeltaHistory(
+			deleteStartIndex,
+			deleteCount,
+			curIndex: curIndex,
+		);
 		_tableTool?.dispose();
 	}
 

@@ -295,6 +295,136 @@ class CommandAdapt {
     canvasEvent.applyPainterStyle();
   }
 
+  List<int>? _mainSelectionIndexes() {
+    final IRange currentRange = range.getRange() as IRange;
+    if (currentRange.isCrossRowCol == true) {
+      return null;
+    }
+    final int startIndex = currentRange.startIndex;
+    final int endIndex = currentRange.endIndex;
+    if (startIndex == endIndex || startIndex < -1 || endIndex < 0) {
+      return null;
+    }
+    final List<IElement> elementList = _castElementList(draw.getElementList());
+    final int from = startIndex + 1;
+    final int to = endIndex;
+    if (from < 0 || to >= elementList.length || from > to) {
+      return null;
+    }
+    return List<int>.generate(to - from + 1, (int i) => from + i);
+  }
+
+  IRange _cloneRange(IRange source) => IRange(
+        startIndex: source.startIndex,
+        endIndex: source.endIndex,
+        tableId: source.tableId,
+        startTdIndex: source.startTdIndex,
+        endTdIndex: source.endTdIndex,
+        startTrIndex: source.startTrIndex,
+        endTrIndex: source.endTrIndex,
+        isCrossRowCol: source.isCrossRowCol,
+        zone: source.zone,
+      );
+
+  _ElementDeltaHistory? _prepareElementDeltaHistory(
+    List<int>? indexes, {
+    required bool metricsMayChange,
+    bool isSetCursor = false,
+  }) {
+    if (indexes == null || indexes.isEmpty || options.historyDisabled == true) {
+      return null;
+    }
+    final List<IElement> elementList = _castElementList(draw.getElementList());
+    final List<int> validIndexes = indexes
+        .where((int index) => index >= 0 && index < elementList.length)
+        .toList(growable: false);
+    if (validIndexes.isEmpty) {
+      return null;
+    }
+    final IRange beforeRange = _cloneRange(range.getRange() as IRange);
+    final _ElementDeltaHistory delta = _ElementDeltaHistory(
+      indexes: validIndexes,
+      beforeSnapshot: element_utils.cloneElementList(
+        validIndexes.map((int index) => elementList[index]).toList(),
+      ),
+      beforeRange: beforeRange,
+      metricsMayChange: metricsMayChange,
+      isSetCursor: isSetCursor,
+    );
+    historyManager.replaceCurrent(() {
+      _restoreElementDeltaHistory(delta, isAfter: false);
+    });
+    return delta;
+  }
+
+  void _recordElementDeltaHistoryAfter(_ElementDeltaHistory? delta) {
+    if (delta == null) {
+      return;
+    }
+    final List<IElement> elementList = _castElementList(draw.getElementList());
+    delta.afterSnapshot = element_utils.cloneElementList(
+      delta.indexes.map((int index) => elementList[index]).toList(),
+    );
+    delta.afterRange = _cloneRange(range.getRange() as IRange);
+    historyManager.execute(() {
+      _restoreElementDeltaHistory(delta, isAfter: true);
+    });
+  }
+
+  void _restoreElementDeltaHistory(
+    _ElementDeltaHistory delta, {
+    required bool isAfter,
+  }) {
+    final List<IElement>? snapshot =
+        isAfter ? delta.afterSnapshot : delta.beforeSnapshot;
+    if (snapshot == null || snapshot.length != delta.indexes.length) {
+      return;
+    }
+    final List<IElement> elementList = _castElementList(draw.getElementList());
+    for (int i = 0; i < delta.indexes.length; i++) {
+      final int index = delta.indexes[i];
+      if (index < 0 || index >= elementList.length) {
+        continue;
+      }
+      elementList[index] = element_utils.cloneElement(snapshot[i]);
+    }
+    final IRange? nextRange = isAfter ? delta.afterRange : delta.beforeRange;
+    if (nextRange != null) {
+      range.replaceRange(_cloneRange(nextRange));
+    }
+    _renderElementDelta(delta);
+  }
+
+  void _renderElementDelta(_ElementDeltaHistory delta) {
+    final int anchorIndex = delta.indexes.isNotEmpty ? delta.indexes.first : 0;
+    draw.render(
+      IDrawOption(
+        curIndex: anchorIndex,
+        isSetCursor: delta.isSetCursor,
+        isSubmitHistory: false,
+        isCompute: delta.metricsMayChange,
+        fastLayoutIndex: delta.metricsMayChange ? anchorIndex : null,
+      ),
+    );
+  }
+
+  void _renderSelectionMutation(
+    _ElementDeltaHistory? delta, {
+    required bool metricsMayChange,
+  }) {
+    _recordElementDeltaHistoryAfter(delta);
+    if (delta != null) {
+      _renderElementDelta(delta);
+      return;
+    }
+    draw.render(
+      IDrawOption(
+        isSetCursor: false,
+        isCompute: metricsMayChange,
+      ),
+    );
+  }
+
   void format([IRichtextOption? options]) {
     final bool isIgnoreDisabledRule = options?.isIgnoreDisabledRule ?? false;
     final bool isDisabled =
@@ -329,12 +459,22 @@ class CommandAdapt {
       return;
     }
 
+    final _ElementDeltaHistory? delta = selection.isNotEmpty
+        ? _prepareElementDeltaHistory(
+            _mainSelectionIndexes(),
+            metricsMayChange: true,
+          )
+        : null;
     for (final IElement element in changeElementList) {
       for (final String attr in editorElementStyleAttr) {
         _clearElementAttr(element, attr);
       }
     }
-    draw.render(renderOption);
+    if (selection.isNotEmpty) {
+      _renderSelectionMutation(delta, metricsMayChange: true);
+    } else {
+      draw.render(renderOption);
+    }
   }
 
   void font(String payload, [IRichtextOption? options]) {
@@ -348,10 +488,14 @@ class CommandAdapt {
     final List<IElement> selection =
         _castElementList(range.getSelectionElementList());
     if (selection.isNotEmpty) {
+      final _ElementDeltaHistory? delta = _prepareElementDeltaHistory(
+        _mainSelectionIndexes(),
+        metricsMayChange: true,
+      );
       for (final IElement element in selection) {
         element.font = payload;
       }
-      draw.render(IDrawOption(isSetCursor: false));
+      _renderSelectionMutation(delta, metricsMayChange: true);
       return;
     }
 
@@ -429,6 +573,12 @@ class CommandAdapt {
       return;
     }
 
+    final _ElementDeltaHistory? delta = selection.isNotEmpty
+        ? _prepareElementDeltaHistory(
+            _mainSelectionIndexes(),
+            metricsMayChange: true,
+          )
+        : null;
     bool isExistUpdate = false;
     for (final IElement element in changeElementList) {
       final int? currentSize = element.size;
@@ -441,7 +591,11 @@ class CommandAdapt {
     }
 
     if (isExistUpdate) {
-      draw.render(renderOption);
+      if (selection.isNotEmpty) {
+        _renderSelectionMutation(delta, metricsMayChange: true);
+      } else {
+        draw.render(renderOption);
+      }
     }
   }
 
@@ -495,6 +649,12 @@ class CommandAdapt {
       return;
     }
 
+    final _ElementDeltaHistory? delta = selection.isNotEmpty
+        ? _prepareElementDeltaHistory(
+            _mainSelectionIndexes(),
+            metricsMayChange: true,
+          )
+        : null;
     bool isExistUpdate = false;
     for (final IElement element in changeElementList) {
       element.size ??= defaultSize;
@@ -507,7 +667,11 @@ class CommandAdapt {
     }
 
     if (isExistUpdate) {
-      draw.render(renderOption);
+      if (selection.isNotEmpty) {
+        _renderSelectionMutation(delta, metricsMayChange: true);
+      } else {
+        draw.render(renderOption);
+      }
     }
   }
 
@@ -561,6 +725,12 @@ class CommandAdapt {
       return;
     }
 
+    final _ElementDeltaHistory? delta = selection.isNotEmpty
+        ? _prepareElementDeltaHistory(
+            _mainSelectionIndexes(),
+            metricsMayChange: true,
+          )
+        : null;
     bool isExistUpdate = false;
     for (final IElement element in changeElementList) {
       element.size ??= defaultSize;
@@ -573,7 +743,11 @@ class CommandAdapt {
     }
 
     if (isExistUpdate) {
-      draw.render(renderOption);
+      if (selection.isNotEmpty) {
+        _renderSelectionMutation(delta, metricsMayChange: true);
+      } else {
+        draw.render(renderOption);
+      }
     }
   }
 
@@ -588,11 +762,15 @@ class CommandAdapt {
     final List<IElement> selection =
         _castElementList(range.getSelectionElementList());
     if (selection.isNotEmpty) {
+      final _ElementDeltaHistory? delta = _prepareElementDeltaHistory(
+        _mainSelectionIndexes(),
+        metricsMayChange: true,
+      );
       final bool toggleValue = selection.any((IElement s) => s.bold != true);
       for (final IElement element in selection) {
         element.bold = toggleValue;
       }
-      draw.render(IDrawOption(isSetCursor: false));
+      _renderSelectionMutation(delta, metricsMayChange: true);
       return;
     }
 
@@ -633,11 +811,15 @@ class CommandAdapt {
     final List<IElement> selection =
         _castElementList(range.getSelectionElementList());
     if (selection.isNotEmpty) {
+      final _ElementDeltaHistory? delta = _prepareElementDeltaHistory(
+        _mainSelectionIndexes(),
+        metricsMayChange: true,
+      );
       final bool toggleValue = selection.any((IElement s) => s.italic != true);
       for (final IElement element in selection) {
         element.italic = toggleValue;
       }
-      draw.render(IDrawOption(isSetCursor: false));
+      _renderSelectionMutation(delta, metricsMayChange: true);
       return;
     }
 
@@ -681,6 +863,10 @@ class CommandAdapt {
     final List<IElement> selection =
         _castElementList(range.getSelectionElementList());
     if (selection.isNotEmpty) {
+      final _ElementDeltaHistory? delta = _prepareElementDeltaHistory(
+        _mainSelectionIndexes(),
+        metricsMayChange: false,
+      );
       final bool isSetUnderline = selection.any((IElement s) {
         final bool hasUnderline = s.underline == true;
         final ITextDecoration? sDecoration = s.textDecoration;
@@ -712,12 +898,7 @@ class CommandAdapt {
           element.textDecoration = null;
         }
       }
-      draw.render(
-        IDrawOption(
-          isSetCursor: false,
-          isCompute: false,
-        ),
-      );
+      _renderSelectionMutation(delta, metricsMayChange: false);
       return;
     }
 
@@ -757,17 +938,16 @@ class CommandAdapt {
     final List<IElement> selection =
         _castElementList(range.getSelectionElementList());
     if (selection.isNotEmpty) {
+      final _ElementDeltaHistory? delta = _prepareElementDeltaHistory(
+        _mainSelectionIndexes(),
+        metricsMayChange: false,
+      );
       final bool toggleValue =
           selection.any((IElement s) => s.strikeout != true);
       for (final IElement element in selection) {
         element.strikeout = toggleValue;
       }
-      draw.render(
-        IDrawOption(
-          isSetCursor: false,
-          isCompute: false,
-        ),
-      );
+      _renderSelectionMutation(delta, metricsMayChange: false);
       return;
     }
 
@@ -814,6 +994,10 @@ class CommandAdapt {
       (IElement s) => s.type == ElementType.superscript,
     );
 
+    final _ElementDeltaHistory? delta = _prepareElementDeltaHistory(
+      _mainSelectionIndexes(),
+      metricsMayChange: true,
+    );
     for (final IElement element in selection) {
       if (superscriptIndex >= 0) {
         if (element.type == ElementType.superscript) {
@@ -828,7 +1012,7 @@ class CommandAdapt {
         }
       }
     }
-    draw.render(IDrawOption(isSetCursor: false));
+    _renderSelectionMutation(delta, metricsMayChange: true);
   }
 
   void subscript([IRichtextOption? options]) {
@@ -849,6 +1033,10 @@ class CommandAdapt {
       (IElement s) => s.type == ElementType.subscript,
     );
 
+    final _ElementDeltaHistory? delta = _prepareElementDeltaHistory(
+      _mainSelectionIndexes(),
+      metricsMayChange: true,
+    );
     for (final IElement element in selection) {
       if (subscriptIndex >= 0) {
         if (element.type == ElementType.subscript) {
@@ -863,7 +1051,7 @@ class CommandAdapt {
         }
       }
     }
-    draw.render(IDrawOption(isSetCursor: false));
+    _renderSelectionMutation(delta, metricsMayChange: true);
   }
 
   void color(String? payload, [IRichtextOption? options]) {
@@ -877,6 +1065,10 @@ class CommandAdapt {
     final List<IElement> selection =
         _castElementList(range.getSelectionElementList());
     if (selection.isNotEmpty) {
+      final _ElementDeltaHistory? delta = _prepareElementDeltaHistory(
+        _mainSelectionIndexes(),
+        metricsMayChange: false,
+      );
       for (final IElement element in selection) {
         if (payload != null) {
           element.color = payload;
@@ -884,12 +1076,7 @@ class CommandAdapt {
           element.color = null;
         }
       }
-      draw.render(
-        IDrawOption(
-          isSetCursor: false,
-          isCompute: false,
-        ),
-      );
+      _renderSelectionMutation(delta, metricsMayChange: false);
       return;
     }
 
@@ -931,6 +1118,10 @@ class CommandAdapt {
     final List<IElement> selection =
         _castElementList(range.getSelectionElementList());
     if (selection.isNotEmpty) {
+      final _ElementDeltaHistory? delta = _prepareElementDeltaHistory(
+        _mainSelectionIndexes(),
+        metricsMayChange: false,
+      );
       for (final IElement element in selection) {
         if (payload != null) {
           element.highlight = payload;
@@ -938,12 +1129,7 @@ class CommandAdapt {
           element.highlight = null;
         }
       }
-      draw.render(
-        IDrawOption(
-          isSetCursor: false,
-          isCompute: false,
-        ),
-      );
+      _renderSelectionMutation(delta, metricsMayChange: false);
       return;
     }
 
@@ -3967,4 +4153,22 @@ class CommandAdapt {
     }
     return 0;
   }
+}
+
+class _ElementDeltaHistory {
+  _ElementDeltaHistory({
+    required this.indexes,
+    required this.beforeSnapshot,
+    required this.beforeRange,
+    required this.metricsMayChange,
+    required this.isSetCursor,
+  });
+
+  final List<int> indexes;
+  final List<IElement> beforeSnapshot;
+  final IRange beforeRange;
+  final bool metricsMayChange;
+  final bool isSetCursor;
+  List<IElement>? afterSnapshot;
+  IRange? afterRange;
 }
