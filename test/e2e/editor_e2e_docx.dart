@@ -37,14 +37,14 @@ void _registerDocxE2ETests() {
         reason: 'ETP tem ~19 páginas no Word; render deve paginar');
 
     // Geometria vinda do arquivo (794×1123 px é o A4 do sectPr).
-    final width = await page!.evaluate<num?>(
-        "() => document.querySelector('.editor canvas').width");
+    final width = await page!
+        .evaluate<num?>("() => document.querySelector('.editor canvas').width");
     expect(width, isNotNull);
     expect(width!.toDouble(), greaterThan(700));
 
     // Sem erros de runtime no console durante a conversão.
-    final hadError = await page!.evaluate<bool?>(
-        '() => window.__lastPageError !== undefined');
+    final hadError = await page!
+        .evaluate<bool?>('() => window.__lastPageError !== undefined');
     expect(hadError ?? false, isFalse);
 
     // F3.3: salvar sem edição no browser = mesmo tamanho do arquivo
@@ -81,14 +81,28 @@ void _registerDocxE2ETests() {
     );
 
     await page!.waitForFunction(
-      "() => document.querySelectorAll('.editor canvas').length > 10",
+      "() => document.querySelectorAll('.editor canvas').length > 0",
       timeout: const Duration(minutes: 2),
     );
 
-    final canvasCount = await page!.evaluate<int?>(
+    final initialCanvasCount = await page!.evaluate<int?>(
         "() => document.querySelectorAll('.editor canvas').length");
-    expect(canvasCount, isNotNull);
-    expect(canvasCount!, greaterThan(10),
-        reason: 'TR tem 140 páginas no Word');
+    expect(initialCanvasCount, isNotNull);
+    expect(initialCanvasCount!, greaterThan(0));
+
+    // Modelo Google Docs/Kix: a abertura materializa uma janela inicial; o
+    // total cresce quando a rolagem chega perto do fim conhecido.
+    await page!.evaluate<void>(
+        "() => window.scrollTo(0, document.documentElement.scrollHeight)");
+    await page!.waitForFunction(
+      "() => document.querySelectorAll('.editor canvas').length > "
+      "$initialCanvasCount",
+      timeout: const Duration(minutes: 2),
+    );
+
+    final expandedCanvasCount = await page!.evaluate<int?>(
+        "() => document.querySelectorAll('.editor canvas').length");
+    expect(expandedCanvasCount, greaterThan(initialCanvasCount),
+        reason: 'TR deve descobrir mais páginas sob demanda ao rolar');
   }, timeout: const Timeout(Duration(minutes: 5)));
 }

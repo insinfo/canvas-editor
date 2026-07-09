@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:html';
+import 'dart:math' as math;
 
 import '../../../../dataset/constant/editor.dart';
 import '../../../../dataset/enum/table/table_tool.dart';
@@ -125,7 +126,8 @@ class TableTool {
 
     final double height = _draw.getHeight();
     final double pageGap = _draw.getPageGap();
-    final double pageOffset = _draw.getPageNo() * (height + pageGap);
+    final int tablePageNo = currentPosition.pageNo;
+    final double pageOffset = tablePageNo * (height + pageGap);
     final double tableX = leftTop[0];
     final double tableY = leftTop[1] + pageOffset;
     if (trIndex < 0 || trIndex >= trList.length) {
@@ -144,6 +146,11 @@ class TableTool {
 
     final double tableHeight = (element.height ?? 0) * scale;
     final double tableWidth = (element.width ?? 0) * scale;
+    final double visibleHeight =
+        math.max(0, math.min(tableHeight, height - leftTop[1]));
+    if (visibleHeight <= 0 || tableWidth <= 0) {
+      return;
+    }
 
     _canvas = _resolveCurrentCanvas();
     if (_canvas == null) {
@@ -151,8 +158,7 @@ class TableTool {
     }
 
     final DivElement tableSelectBtn = DivElement()
-  ..classes.add('$editorPrefix-table-tool__select')
-      ..style.height = '${tableHeight * scale}px'
+      ..classes.add('$editorPrefix-table-tool__select')
       ..style.left = '${tableX}px'
       ..style.top = '${tableY}px'
       ..style.transform =
@@ -165,16 +171,18 @@ class TableTool {
     _toolTableSelectBtn = tableSelectBtn;
 
     final DivElement rowContainer = DivElement()
-  ..classes.add('$editorPrefix-table-tool__row')
+      ..classes.add('$editorPrefix-table-tool__row')
       ..style.transform = 'translateX(-${_rowColOffset * scale}px)'
       ..style.left = '${tableX}px'
-      ..style.top = '${tableY}px';
+      ..style.top = '${tableY}px'
+      ..style.maxHeight = '${visibleHeight}px'
+      ..style.overflow = 'hidden';
     final List<double> rowHeightList =
         trList.map((ITr entry) => entry.height).toList();
     for (int r = 0; r < rowHeightList.length; r++) {
       final double rowHeight = rowHeightList[r] * scale;
       final DivElement rowItem = DivElement()
-  ..classes.add('$editorPrefix-table-tool__row__item')
+        ..classes.add('$editorPrefix-table-tool__row__item')
         ..style.height = '${rowHeight}px';
       if (r == rowIndex) {
         rowItem.classes.add('active');
@@ -234,10 +242,9 @@ class TableTool {
     final double rowQuickPosition =
         _rowColOffset + (_rowColOffset - _rowColQuickWidth) / 2;
     final DivElement rowAddBtn = DivElement()
-  ..classes.add('$editorPrefix-table-tool__quick__add')
-      ..style.height = '${tableHeight * scale}px'
+      ..classes.add('$editorPrefix-table-tool__quick__add')
       ..style.left = '${tableX}px'
-      ..style.top = '${tableY + tableHeight}px'
+      ..style.top = '${tableY + visibleHeight}px'
       ..style.transform =
           'translate(-${rowQuickPosition * scale}px, ${_rowColQuickOffset * scale}px)';
     rowAddBtn.onClick.listen((_) {
@@ -256,7 +263,7 @@ class TableTool {
     _toolRowAddBtn = rowAddBtn;
 
     final DivElement colContainer = DivElement()
-  ..classes.add('$editorPrefix-table-tool__col')
+      ..classes.add('$editorPrefix-table-tool__col')
       ..style.transform = 'translateY(-${_rowColOffset * scale}px)'
       ..style.left = '${tableX}px'
       ..style.top = '${tableY}px';
@@ -265,7 +272,7 @@ class TableTool {
     for (int c = 0; c < colWidthList.length; c++) {
       final double colWidth = colWidthList[c] * scale;
       final DivElement colItem = DivElement()
-  ..classes.add('$editorPrefix-table-tool__col__item')
+        ..classes.add('$editorPrefix-table-tool__col__item')
         ..style.width = '${colWidth}px';
       if (c == colIndex) {
         colItem.classes.add('active');
@@ -324,8 +331,7 @@ class TableTool {
     _toolColContainer = colContainer;
 
     final DivElement colAddBtn = DivElement()
-  ..classes.add('$editorPrefix-table-tool__quick__add')
-      ..style.height = '${tableHeight * scale}px'
+      ..classes.add('$editorPrefix-table-tool__quick__add')
       ..style.left = '${tableX + tableWidth}px'
       ..style.top = '${tableY}px'
       ..style.transform =
@@ -351,11 +357,12 @@ class TableTool {
     _toolColAddBtn = colAddBtn;
 
     final DivElement borderContainer = DivElement()
-  ..classes.add('$editorPrefix-table-tool__border')
-      ..style.height = '${tableHeight}px'
+      ..classes.add('$editorPrefix-table-tool__border')
+      ..style.height = '${visibleHeight}px'
       ..style.width = '${tableWidth}px'
       ..style.left = '${tableX}px'
-      ..style.top = '${tableY}px';
+      ..style.top = '${tableY}px'
+      ..style.overflow = 'hidden';
 
     for (final ITr currentTr in trList) {
       for (final ITd currentTd in currentTr.tdList) {
@@ -422,7 +429,7 @@ class TableTool {
 
   void _setAnchorActive(DivElement container, int index) {
     for (int i = 0; i < container.children.length; i++) {
-    final Element child = container.children[i];
+      final Element child = container.children[i];
       if (i == index) {
         child.classes.add('active');
       } else {
@@ -449,7 +456,17 @@ class TableTool {
     final double width = _draw.getWidth();
     final double height = _draw.getHeight();
     final double pageGap = _draw.getPageGap();
-    final double pageOffset = _draw.getPageNo() * (height + pageGap);
+    final dynamic positionContext = _position?.getPositionContext();
+    final int? tableIndex = positionContext?.index as int?;
+    final List<IElementPosition> positionList =
+        _position?.getOriginalPositionList() as List<IElementPosition>? ??
+            <IElementPosition>[];
+    final int tablePageNo = tableIndex != null &&
+            tableIndex >= 0 &&
+            tableIndex < positionList.length
+        ? positionList[tableIndex].pageNo
+        : _draw.getPageNo();
+    final double pageOffset = tablePageNo * (height + pageGap);
     _mousedownX = evt.client.x.toDouble();
     _mousedownY = evt.client.y.toDouble();
 
@@ -465,12 +482,12 @@ class TableTool {
     double startX = 0;
     double startY = 0;
     if (order == TableOrder.row) {
-  anchorLine.classes.add('$editorPrefix-table-anchor__line__row');
+      anchorLine.classes.add('$editorPrefix-table-anchor__line__row');
       anchorLine.style.width = '${width}px';
       startX = 0;
       startY = pageOffset + _mousedownY - canvasRect.top;
     } else {
-  anchorLine.classes.add('$editorPrefix-table-anchor__line__col');
+      anchorLine.classes.add('$editorPrefix-table-anchor__line__col');
       anchorLine.style.height = '${height}px';
       startX = _mousedownX - canvasRect.left;
       startY = pageOffset;
@@ -498,8 +515,9 @@ class TableTool {
       if (order == TableOrder.row) {
         final List<ITr>? trList = element.trList;
         if (trList != null && trList.isNotEmpty) {
-          final ITr? targetTr =
-              trList.length > index ? trList[index] : (index > 0 ? trList[index - 1] : null);
+          final ITr? targetTr = trList.length > index
+              ? trList[index]
+              : (index > 0 ? trList[index - 1] : null);
           if (targetTr != null) {
             final double defaultTrMinHeight =
                 (_options.table?.defaultTrMinHeight ?? 0).toDouble();
@@ -514,12 +532,11 @@ class TableTool {
           }
         }
       } else {
-    final List<IColgroup>? colgroup = element.colgroup;
+        final List<IColgroup>? colgroup = element.colgroup;
         if (colgroup != null && colgroup.isNotEmpty) {
           if (overflow && isLeftStartBorder) {
             if (index >= 0 && index < colgroup.length) {
-              final double adjustedWidth =
-                  colgroup[index].width - dx / scale;
+              final double adjustedWidth = colgroup[index].width - dx / scale;
               if (adjustedWidth <= _minTdWidth) {
                 dx = (colgroup[index].width - _minTdWidth) * scale;
               }

@@ -12,6 +12,7 @@ import 'editor/interface/draw.dart';
 import 'editor/interface/footer.dart';
 import 'editor/interface/header.dart' as header_model;
 import 'editor/interface/page_number.dart';
+import 'editor/interface/search.dart' show IReplaceOption;
 import 'editor/utils/index.dart' as editor_utils;
 import 'mock.dart';
 import 'utils/index.dart' as app_utils;
@@ -82,8 +83,7 @@ class EditorApp {
 
   final List<EditorComment> _commentData =
       List<EditorComment>.from(commentList);
-  final List<List<TableCellElement>> _tableCellList =
-      <List<TableCellElement>>[];
+  final List<List<DivElement>> _tableCellList = <List<DivElement>>[];
 
   // Documento DOCX aberto (roteiro_editor_profissional, F2.4/F3.3).
   DocxFile? _openedDocx;
@@ -124,10 +124,14 @@ class EditorApp {
     _setupSearchAndReplace();
     _setupPrintControl();
     _setupCatalogControls();
+    _setupFindSidebar();
     _setupPageControls();
     _setupPaperControls();
+    _setupHeaderFooterControls();
     _setupFullscreenControl();
     _setupModeControl();
+    _setupStyleGallery();
+    _setupRibbonTabs();
     _setupOptionsDialog();
     commentDom = _requireElement<DivElement>('.comment');
 
@@ -883,7 +887,7 @@ class EditorApp {
 
   void _setupSearchAndReplace() {
     searchDom = _requireElement<DivElement>('.menu-item__search');
-        searchDom.title = 'Buscar e substituir (${isApple ? '⌘' : 'Ctrl'}+F)';
+    searchDom.title = 'Buscar e substituir (${isApple ? '⌘' : 'Ctrl'}+F)';
     searchCollapseDom =
         _requireElement<DivElement>('.menu-item__search__collapse');
     searchInputDom = _requireElement<InputElement>(
@@ -900,12 +904,9 @@ class EditorApp {
         searchCollapseDom.querySelector('.arrow-right') as DivElement?;
 
     void updateResult() {
-      final info = command.getSearchNavigateInfo();
-      if (info is Map) {
-        final index = info['index'];
-        final count = info['count'];
-            searchResultDom.text =
-                (index != null && count != null) ? '$index/$count' : '';
+      final dynamic info = command.getSearchNavigateInfo();
+      if (info != null && info.index is int && info.count is int) {
+        searchResultDom.text = '${info.index}/${info.count}';
       } else {
         searchResultDom.text = '';
       }
@@ -1002,6 +1003,247 @@ class EditorApp {
     catalogCloseDom.onClick.listen((_) => toggleCatalog());
   }
 
+  /// Painel lateral de Localizar/Substituir (estilo Painel de Navegação do
+  /// Word). Reaproveita todo o backend de busca já pronto (`Search`) e adiciona
+  /// "Substituir" (só o resultado atual) e "Substituir tudo", além dos atalhos
+  /// Ctrl/⌘+F e Ctrl/⌘+H. Tudo em Dart — sem JavaScript.
+  void _setupFindSidebar() {
+    final findSidebar = _requireElement<DivElement>('.find-sidebar');
+    final closeDom = _requireElement<DivElement>('.find-sidebar__close');
+    final searchInput =
+        _requireElement<InputElement>('.find-sidebar__search');
+    final replaceInput =
+        _requireElement<InputElement>('.find-sidebar__replace');
+    final countDom = _requireElement<SpanElement>('.find-sidebar__count');
+    final prevDom = _requireElement<DivElement>('.find-sidebar__prev');
+    final nextDom = _requireElement<DivElement>('.find-sidebar__next');
+    final replaceOneButton =
+        _requireElement<ButtonElement>('.find-sidebar__replace-one');
+    final replaceAllButton =
+        _requireElement<ButtonElement>('.find-sidebar__replace-all');
+
+    findSidebar.style.display = 'none';
+
+    // Índice 0-based do grupo atualmente destacado, usado pelo "Substituir".
+    int? currentGroupIndex;
+
+    void updateCount() {
+      final dynamic info = command.getSearchNavigateInfo();
+      if (info != null) {
+        final dynamic index = info.index;
+        final dynamic count = info.count;
+        if (index is int && count is int && count > 0) {
+          countDom.text = '$index/$count';
+          currentGroupIndex = index - 1;
+          return;
+        }
+      }
+      final hasQuery = searchInput.value?.isNotEmpty == true;
+      countDom.text = hasQuery ? '0/0' : '';
+      currentGroupIndex = null;
+    }
+
+    void runSearch() {
+      final value = searchInput.value;
+      command.executeSearch(value != null && value.isNotEmpty ? value : null);
+      updateCount();
+    }
+
+    void openFind({bool focusReplace = false}) {
+      // Só uma sidebar à esquerda por vez: fecha o catálogo se estiver aberto.
+      if (_isCatalogVisible) {
+        catalogDom.style.display = 'none';
+        _isCatalogVisible = false;
+      }
+      findSidebar.style.display = 'flex';
+      if (focusReplace) {
+        replaceInput.focus();
+      } else {
+        searchInput
+          ..focus()
+          ..select();
+      }
+      if (searchInput.value?.isNotEmpty == true) {
+        runSearch();
+      }
+    }
+
+    void closeFind() {
+      findSidebar.style.display = 'none';
+      command.executeSearch(null);
+      countDom.text = '';
+    }
+
+    closeDom.onClick.listen((_) => closeFind());
+    searchInput.onInput.listen((_) => runSearch());
+    searchInput.onKeyDown.listen((event) {
+      if (event.key == 'Enter') {
+        event.preventDefault();
+        if (event.shiftKey) {
+          command.executeSearchNavigatePre();
+        } else {
+          command.executeSearchNavigateNext();
+        }
+        updateCount();
+      } else if (event.key == 'Escape') {
+        closeFind();
+      }
+    });
+
+    prevDom.onClick.listen((_) {
+      command.executeSearchNavigatePre();
+      updateCount();
+    });
+    nextDom.onClick.listen((_) {
+      command.executeSearchNavigateNext();
+      updateCount();
+    });
+
+    replaceOneButton.onClick.listen((_) {
+      if (searchInput.value?.isNotEmpty != true) {
+        return;
+      }
+      final replaceValue = replaceInput.value ?? '';
+      final idx = currentGroupIndex;
+      if (idx != null && idx >= 0) {
+        command.executeReplace(replaceValue, IReplaceOption(index: idx));
+      } else {
+        command.executeReplace(replaceValue);
+      }
+      runSearch();
+    });
+
+    replaceAllButton.onClick.listen((_) {
+      if (searchInput.value?.isNotEmpty != true) {
+        return;
+      }
+      command.executeReplace(replaceInput.value ?? '');
+      runSearch();
+    });
+
+    // Atalhos estilo Word: Ctrl/⌘+F abre localizar, Ctrl/⌘+H foca substituir.
+    window.onKeyDown.listen((event) {
+      final isMod = isApple ? event.metaKey : event.ctrlKey;
+      if (!isMod) {
+        return;
+      }
+      final key = event.key?.toLowerCase();
+      if (key == 'f') {
+        event.preventDefault();
+        openFind();
+      } else if (key == 'h') {
+        event.preventDefault();
+        openFind(focusReplace: true);
+      }
+    });
+  }
+
+  /// Galeria de estilos estilo Word (grupo "Estilos" da aba Página Inicial).
+  /// Cada card aplica um nível de título reutilizando `executeTitle`, o mesmo
+  /// backend do dropdown "Normal/Título 1..6".
+  void _setupStyleGallery() {
+    final gallery = document.querySelector('.style-gallery');
+    if (gallery == null) {
+      return;
+    }
+    gallery.onClick.listen((event) {
+      final target = event.target;
+      final card = target is Element ? target.closest('.style-card') : null;
+      if (card == null) {
+        return;
+      }
+      final levelValue = card.dataset['level'];
+      final level = _parseTitleLevel(
+        levelValue != null && levelValue.isNotEmpty ? levelValue : null,
+      );
+      command.executeTitle(level);
+    });
+  }
+
+  /// Porte para Dart do antigo `<script>` inline do index.html: cada aba do
+  /// ribbon mostra apenas os comandos do seu grupo (regra do projeto: sem JS).
+  void _setupRibbonTabs() {
+    const tabControls = <String, List<String>>{
+      'arquivo': <String>['docx', 'docx-save', 'print'],
+      'inicial': <String>[
+        'undo', 'redo', 'painter', 'format', 'font', 'size', 'size-add',
+        'size-minus', 'bold', 'italic', 'underline', 'strikeout',
+        'superscript', 'subscript', 'color', 'highlight', 'title', 'left',
+        'center', 'right', 'alignment', 'justify', 'row-margin', 'list',
+        'style-gallery',
+      ],
+      'inserir': <String>[
+        'table', 'table__collapse', 'image', 'hyperlink', 'separator',
+        'watermark', 'codeblock', 'page-break', 'control', 'checkbox',
+        'radio', 'latex', 'date', 'block',
+      ],
+      'layout': <String>[
+        'page-break', 'paper-size', 'paper-direction', 'paper-margin',
+        'page-mode', 'edit-header', 'edit-footer', 'close-zone',
+        'remove-header-textbox',
+      ],
+      'revisao': <String>['search', 'search__collapse'],
+      'exibir': <String>['search', 'search__collapse', 'print'],
+    };
+
+    String commandName(Element el) {
+      for (final cls in el.classes) {
+        if (cls.startsWith('menu-item__')) {
+          return cls.substring('menu-item__'.length);
+        }
+      }
+      return '';
+    }
+
+    void applyTab(String tabName) {
+      final allowed = tabControls[tabName] ?? tabControls['inicial']!;
+      final visibleGroups = <Element>[];
+      for (final node in document.querySelectorAll('.visible')) {
+        node.classes.remove('visible');
+      }
+      for (final group in document.querySelectorAll('.menu-item')) {
+        var visible = 0;
+        for (final child in group.children) {
+          final name = commandName(child);
+          if (name.isEmpty) {
+            continue;
+          }
+          final show = allowed.contains(name);
+          child.classes.toggle('ribbon-hidden', !show);
+          if (show) {
+            visible += 1;
+          }
+        }
+        group.classes.toggle('ribbon-hidden', visible == 0);
+        if (visible > 0) {
+          visibleGroups.add(group);
+        }
+      }
+      for (final divider in document.querySelectorAll('.menu-divider')) {
+        divider.classes.add('ribbon-hidden');
+      }
+      for (var i = 0; i < visibleGroups.length - 1; i++) {
+        var node = visibleGroups[i].nextElementSibling;
+        while (node != null && !node.classes.contains('menu-divider')) {
+          node = node.nextElementSibling;
+        }
+        node?.classes.remove('ribbon-hidden');
+      }
+    }
+
+    final tabs = document.querySelectorAll('.ribbon-tab');
+    for (final t in tabs) {
+      t.onClick.listen((_) {
+        for (final x in tabs) {
+          x.classes.remove('ribbon-tab--active');
+        }
+        t.classes.add('ribbon-tab--active');
+        applyTab(t.dataset['tab'] ?? 'inicial');
+      });
+    }
+    applyTab('inicial');
+  }
+
   void _setupPageControls() {
     pageScalePercentageDom =
         _requireElement<SpanElement>('.page-scale-percentage');
@@ -1014,136 +1256,259 @@ class EditorApp {
         .onClick
         .listen((_) => command.executePageScaleAdd());
 
-    final pageModeDom = _requireElement<DivElement>('.page-mode');
-    pageModeOptionsDom =
-        _requireElementFrom<DivElement>(pageModeDom, '.options');
-    pageModeDom.onClick
-        .listen((_) => pageModeOptionsDom.classes.toggle('visible'));
-    pageModeOptionsDom.onClick.listen((event) {
-      final target = event.target;
-      if (target is! LIElement) {
-        return;
-      }
-      final pageMode = _parsePageMode(target.dataset['pageMode']);
-      if (pageMode != null) {
-        command.executePageMode(pageMode);
-      }
-    });
+    final pageModeControls =
+        document.querySelectorAll('.page-mode, .menu-item__page-mode');
+    pageModeOptionsDom = _requireElementFrom<DivElement>(
+      pageModeControls.first as DivElement,
+      '.options',
+    );
+    for (final pageModeDom in pageModeControls.whereType<DivElement>()) {
+      final options = _requireElementFrom<DivElement>(pageModeDom, '.options');
+      pageModeDom.onClick.listen((_) => options.classes.toggle('visible'));
+      options.onClick.listen((event) {
+        final target = event.target;
+        if (target is! LIElement) {
+          return;
+        }
+        final pageMode = _parsePageMode(target.dataset['pageMode']);
+        if (pageMode != null) {
+          command.executePageMode(pageMode);
+          _setActiveDataset(
+            '.page-mode .options, .menu-item__page-mode .options',
+            'pageMode',
+            target.dataset['pageMode'],
+          );
+        }
+      });
+    }
   }
 
   void _setupPaperControls() {
-    final paperSizeDom = _requireElement<DivElement>('.paper-size');
-    final paperSizeOptions =
-        _requireElementFrom<DivElement>(paperSizeDom, '.options');
-    paperSizeDom.onClick
-        .listen((_) => paperSizeOptions.classes.toggle('visible'));
-    paperSizeOptions.onClick.listen((event) {
-      final target = event.target;
-      if (target is! LIElement) {
-        return;
-      }
-      final paperType = target.dataset['paperSize'];
-      if (paperType == null) {
-        return;
-      }
-      final parts = paperType.split('*');
-      if (parts.length != 2) {
-        return;
-      }
-      final width = double.tryParse(parts.first);
-      final height = double.tryParse(parts.last);
-      if (width != null && height != null) {
-        command.executePaperSize(width, height);
-      }
-      for (final li in paperSizeOptions.children.whereType<LIElement>()) {
-        li.classes.remove('active');
-      }
-      target.classes.add('active');
-    });
+    final paperSizeControls =
+        document.querySelectorAll('.paper-size, .menu-item__paper-size');
+    for (final paperSizeDom in paperSizeControls.whereType<DivElement>()) {
+      final paperSizeOptions =
+          _requireElementFrom<DivElement>(paperSizeDom, '.options');
+      paperSizeDom.onClick
+          .listen((_) => paperSizeOptions.classes.toggle('visible'));
+      paperSizeOptions.onClick.listen((event) {
+        final target = event.target;
+        if (target is! LIElement) {
+          return;
+        }
+        final paperType = target.dataset['paperSize'];
+        if (paperType == null) {
+          return;
+        }
+        final parts = paperType.split('*');
+        if (parts.length != 2) {
+          return;
+        }
+        final width = double.tryParse(parts.first);
+        final height = double.tryParse(parts.last);
+        if (width != null && height != null) {
+          command.executePaperSize(width, height);
+          _setActiveDataset(
+            '.paper-size .options, .menu-item__paper-size .options',
+            'paperSize',
+            paperType,
+          );
+        }
+      });
+    }
 
-    final paperDirectionDom = _requireElement<DivElement>('.paper-direction');
-    final paperDirectionOptions =
-        _requireElementFrom<DivElement>(paperDirectionDom, '.options');
-    paperDirectionDom.onClick
-        .listen((_) => paperDirectionOptions.classes.toggle('visible'));
-    paperDirectionOptions.onClick.listen((event) {
-      final target = event.target;
-      if (target is! LIElement) {
+    final paperDirectionControls = document
+        .querySelectorAll('.paper-direction, .menu-item__paper-direction');
+    for (final paperDirectionDom
+        in paperDirectionControls.whereType<DivElement>()) {
+      final paperDirectionOptions =
+          _requireElementFrom<DivElement>(paperDirectionDom, '.options');
+      paperDirectionDom.onClick
+          .listen((_) => paperDirectionOptions.classes.toggle('visible'));
+      paperDirectionOptions.onClick.listen((event) {
+        final target = event.target;
+        if (target is! LIElement) {
+          return;
+        }
+        final direction =
+            _parsePaperDirection(target.dataset['paperDirection']);
+        if (direction != null) {
+          command.executePaperDirection(direction);
+          _setActiveDataset(
+            '.paper-direction .options, .menu-item__paper-direction .options',
+            'paperDirection',
+            target.dataset['paperDirection'],
+          );
+        }
+      });
+    }
+
+    final paperMarginControls =
+        document.querySelectorAll('.paper-margin, .menu-item__paper-margin');
+    for (final paperMarginDom in paperMarginControls.whereType<DivElement>()) {
+      final paperMarginOptions =
+          paperMarginDom.querySelector('.options') as DivElement?;
+      if (paperMarginOptions == null) {
+        paperMarginDom.onClick.listen((_) => _showPaperMarginDialog());
+        continue;
+      }
+      paperMarginDom.onClick
+          .listen((_) => paperMarginOptions.classes.toggle('visible'));
+      paperMarginOptions.onClick.listen((event) {
+        final target = event.target;
+        if (target is! LIElement) {
+          return;
+        }
+        final preset = target.dataset['paperMargin'];
+        if (preset == null) {
+          return;
+        }
+        if (preset == 'custom') {
+          _showPaperMarginDialog();
+          return;
+        }
+        final values = preset
+            .split(',')
+            .map((value) => double.tryParse(value.trim()))
+            .toList();
+        if (values.length != 4 || values.any((value) => value == null)) {
+          return;
+        }
+        command.executeSetPaperMargin(values.cast<double>());
+        _setActiveDataset(
+          '.menu-item__paper-margin .options',
+          'paperMargin',
+          preset,
+        );
+      });
+    }
+  }
+
+  void _showPaperMarginDialog() {
+    final margin = command.getPaperMargin();
+    final top = margin.isNotEmpty ? margin[0] : 0;
+    final right = margin.length > 1 ? margin[1] : 0;
+    final bottom = margin.length > 2 ? margin[2] : 0;
+    final left = margin.length > 3 ? margin[3] : 0;
+    Dialog(
+      DialogOptions(
+        title: 'Margens da página',
+        data: [
+          DialogData(
+            type: 'text',
+            label: 'Margem superior',
+            name: 'top',
+            required: true,
+            value: '$top',
+            placeholder: 'Digite a margem superior',
+          ),
+          DialogData(
+            type: 'text',
+            label: 'Margem inferior',
+            name: 'bottom',
+            required: true,
+            value: '$bottom',
+            placeholder: 'Digite a margem inferior',
+          ),
+          DialogData(
+            type: 'text',
+            label: 'Margem esquerda',
+            name: 'left',
+            required: true,
+            value: '$left',
+            placeholder: 'Digite a margem esquerda',
+          ),
+          DialogData(
+            type: 'text',
+            label: 'Margem direita',
+            name: 'right',
+            required: true,
+            value: '$right',
+            placeholder: 'Digite a margem direita',
+          ),
+        ],
+        onConfirm: (payload) {
+          final topValue = _findPayloadValue(payload, 'top');
+          final bottomValue = _findPayloadValue(payload, 'bottom');
+          final leftValue = _findPayloadValue(payload, 'left');
+          final rightValue = _findPayloadValue(payload, 'right');
+          if ([topValue, bottomValue, leftValue, rightValue]
+              .any((value) => value?.isEmpty ?? true)) {
+            return;
+          }
+          command.executeSetPaperMargin([
+            double.tryParse(topValue!) ?? 0,
+            double.tryParse(rightValue!) ?? 0,
+            double.tryParse(bottomValue!) ?? 0,
+            double.tryParse(leftValue!) ?? 0,
+          ]);
+        },
+      ),
+    );
+  }
+
+  void _setActiveDataset(
+      String optionsSelector, String dataName, String? value) {
+    if (value == null) {
+      return;
+    }
+    for (final options
+        in document.querySelectorAll(optionsSelector).whereType<DivElement>()) {
+      for (final li in options.querySelectorAll('li').whereType<LIElement>()) {
+        li.classes.toggle('active', li.dataset[dataName] == value);
+      }
+    }
+  }
+
+  void _setupHeaderFooterControls() {
+    (document.querySelector('.menu-item__edit-header') as DivElement?)
+        ?.onClick
+        .listen((_) {
+      _switchEditorZone(EditorZone.header);
+    });
+    (document.querySelector('.menu-item__edit-footer') as DivElement?)
+        ?.onClick
+        .listen((_) {
+      _switchEditorZone(EditorZone.footer);
+    });
+    (document.querySelector('.menu-item__close-zone') as DivElement?)
+        ?.onClick
+        .listen((_) {
+      _switchEditorZone(EditorZone.main);
+    });
+    (document.querySelector('.menu-item__remove-header-textbox') as DivElement?)
+        ?.onClick
+        .listen((_) {
+      final draw = editor.getDraw();
+      final header = draw.getHeader();
+      if (!header.hasTextBoxes()) {
+        window.alert('Este documento não tem caixas flutuantes no cabeçalho.');
         return;
       }
-      final direction = _parsePaperDirection(target.dataset['paperDirection']);
-      if (direction != null) {
-        command.executePaperDirection(direction);
+      if (window.confirm('Remover caixas de texto flutuantes do cabeçalho?') !=
+          true) {
+        return;
       }
-      for (final li in paperDirectionOptions.children.whereType<LIElement>()) {
-        li.classes.remove('active');
-      }
-      target.classes.add('active');
-    });
-
-    final paperMarginDom = _requireElement<DivElement>('.paper-margin');
-    paperMarginDom.onClick.listen((_) {
-      final margin = command.getPaperMargin();
-      final top = margin.isNotEmpty ? margin[0] : 0;
-      final right = margin.length > 1 ? margin[1] : 0;
-      final bottom = margin.length > 2 ? margin[2] : 0;
-      final left = margin.length > 3 ? margin[3] : 0;
-      Dialog(
-        DialogOptions(
-          title: 'Margens da página',
-          data: [
-            DialogData(
-              type: 'text',
-              label: 'Margem superior',
-              name: 'top',
-              required: true,
-              value: '$top',
-              placeholder: 'Digite a margem superior',
-            ),
-            DialogData(
-              type: 'text',
-              label: 'Margem inferior',
-              name: 'bottom',
-              required: true,
-              value: '$bottom',
-              placeholder: 'Digite a margem inferior',
-            ),
-            DialogData(
-              type: 'text',
-              label: 'Margem esquerda',
-              name: 'left',
-              required: true,
-              value: '$left',
-              placeholder: 'Digite a margem esquerda',
-            ),
-            DialogData(
-              type: 'text',
-              label: 'Margem direita',
-              name: 'right',
-              required: true,
-              value: '$right',
-              placeholder: 'Digite a margem direita',
-            ),
-          ],
-          onConfirm: (payload) {
-            final topValue = _findPayloadValue(payload, 'top');
-            final bottomValue = _findPayloadValue(payload, 'bottom');
-            final leftValue = _findPayloadValue(payload, 'left');
-            final rightValue = _findPayloadValue(payload, 'right');
-            if ([topValue, bottomValue, leftValue, rightValue]
-                .any((value) => value?.isEmpty ?? true)) {
-              return;
-            }
-            command.executeSetPaperMargin([
-              double.tryParse(topValue!) ?? 0,
-              double.tryParse(rightValue!) ?? 0,
-              double.tryParse(bottomValue!) ?? 0,
-              double.tryParse(leftValue!) ?? 0,
-            ]);
-          },
+      header.clearTextBoxes();
+      draw.render(
+        IDrawOption(
+          isCompute: false,
+          isSetCursor: false,
+          isSubmitHistory: false,
         ),
       );
     });
+  }
+
+  void _switchEditorZone(EditorZone zone) {
+    command.executeSetZone(zone);
+    editor.getDraw().render(
+          IDrawOption(
+            isCompute: false,
+            isSetCursor: false,
+            isSubmitHistory: false,
+          ),
+        );
   }
 
   void _setupFullscreenControl() {
@@ -1413,6 +1778,21 @@ class EditorApp {
             .add('active');
       }
 
+      // Espelha o estilo atual no card ativo da galeria de Estilos.
+      final styleGallery = document.querySelector('.style-gallery');
+      if (styleGallery != null) {
+        for (final card in styleGallery.querySelectorAll('.style-card')) {
+          card.classes.remove('style-card--active');
+        }
+        final levelName = levelValue == null
+            ? ''
+            : (levelValue is Enum ? levelValue.name : '$levelValue');
+        styleGallery
+            .querySelector(".style-card[data-level='$levelName']")
+            ?.classes
+            .add('style-card--active');
+      }
+
       for (final li
           in listOptionDom.querySelectorAll('li').whereType<LIElement>()) {
         li.classes.remove('active');
@@ -1509,13 +1889,11 @@ class EditorApp {
         return;
       }
       final modeName = payload is Enum ? payload.name : '$payload';
-      for (final li
-          in pageModeOptionsDom.querySelectorAll('li').whereType<LIElement>()) {
-        li.classes.remove('active');
-      }
-      final active = pageModeOptionsDom
-          .querySelector("[data-page-mode='$modeName']") as LIElement?;
-      active?.classes.add('active');
+      _setActiveDataset(
+        '.page-mode .options, .menu-item__page-mode .options',
+        'pageMode',
+        modeName,
+      );
     };
 
     listener.saved = (dynamic payload) {
@@ -1970,11 +2348,11 @@ class EditorApp {
     final container = _requireElement<DivElement>('.editor');
     final header = <IElement>[
       IElement(value: 'Hospital Municipal', size: 32, rowFlex: RowFlex.center),
-        IElement(
+      IElement(
           value: '\nProntuário ambulatorial',
           size: 18,
           rowFlex: RowFlex.center),
-        IElement(value: '\n', type: ElementType.separator),
+      IElement(value: '\n', type: ElementType.separator),
     ];
     final footer = <IElement>[
       IElement(value: 'canvas-editor', size: 12),
@@ -1993,15 +2371,19 @@ class EditorApp {
 
   void _bindGlobalListeners() {
     window.addEventListener('click', (event) {
-      final visibleDom = document.querySelector('.visible');
-      if (visibleDom == null) {
-        return;
-      }
       final target = event.target;
-      if (target is Node && visibleDom.contains(target)) {
+      if (target is! Node) {
         return;
       }
-      visibleDom.classes.remove('visible');
+      final visibleList =
+          document.querySelectorAll('.visible').whereType<Element>().toList();
+      for (final visibleDom in visibleList) {
+        final owner = visibleDom.parent;
+        if (visibleDom.contains(target) || owner?.contains(target) == true) {
+          continue;
+        }
+        visibleDom.classes.remove('visible');
+      }
     }, true);
   }
 
@@ -2304,9 +2686,9 @@ class EditorApp {
 
     for (var r = 0; r < 10; r += 1) {
       final row = DivElement()..classes.add('table-row');
-      final cells = <TableCellElement>[];
+      final cells = <DivElement>[];
       for (var c = 0; c < 10; c += 1) {
-        final cell = TableCellElement()..classes.add('table-cel');
+        final cell = DivElement()..classes.add('table-cel');
         row.append(cell);
         cells.add(cell);
       }
@@ -2623,8 +3005,9 @@ class EditorApp {
           window.alert('Abra um DOCX antes de salvar.');
           return;
         }
-        final blob = Blob([bytes],
-            'application/vnd.openxmlformats-officedocument.wordprocessingml.document');
+        final blob = Blob([
+          bytes
+        ], 'application/vnd.openxmlformats-officedocument.wordprocessingml.document');
         final url = Url.createObjectUrlFromBlob(blob);
         AnchorElement(href: url)
           ..download = _openedDocxName ?? 'documento.docx'

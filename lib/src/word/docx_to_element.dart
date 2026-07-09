@@ -146,6 +146,9 @@ class DocxToElementConverter {
         ? <IElement>[]
         : _convertFooterBlocks(footerBlocks.blocks, footerBlocks.partName,
             pageNumber?.paragraphs ?? const <WpParagraph>{});
+    if (pageNumber != null) {
+      _stripCachedPageNumberLines(footer);
+    }
     if (file.headersByType.length > 1) {
       _notes.add('headers first/even convertidos apenas como default '
           '(seleção por tipo na Fase 4.6)');
@@ -187,38 +190,65 @@ class DocxToElementConverter {
       String instruction = '';
       WpRunProperties? styleRun;
 
-      for (final run in block.allRuns) {
-        for (final content in run.content) {
-          switch (content) {
-            case WpFieldChar fieldChar:
-              switch (fieldChar.fldCharType) {
-                case 'begin':
-                  state = _FieldState.instruction;
-                  instruction = '';
-                case 'separate':
-                  state = _FieldState.result;
-                case _: // end
-                  if (instruction.contains('NUMPAGES')) {
-                    format.write('{pageCount}');
-                    hasField = true;
-                  } else if (instruction.contains('PAGE')) {
-                    format.write('{pageNo}');
-                    hasField = true;
-                  }
-                  state = _FieldState.none;
-              }
-            case WpInstrText instr:
-              if (state == _FieldState.instruction) {
-                instruction += instr.text;
-              }
-            case WpText text:
-              if (state == _FieldState.none) {
-                format.write(text.text);
+      for (final inline in block.inlines) {
+        switch (inline) {
+          case WpSimpleField field:
+            final instr = field.instruction.toUpperCase();
+            if (instr.contains('NUMPAGES')) {
+              format.write('{pageCount}');
+              hasField = true;
+            } else if (instr.contains('PAGE')) {
+              format.write('{pageNo}');
+              hasField = true;
+            } else {
+              for (final run in field.runs) {
+                format.write(run.text);
                 styleRun ??= _resolver.resolveRun(block, run.properties);
               }
-            case _:
-              break;
-          }
+            }
+          case WpRun run:
+            for (final content in run.content) {
+              switch (content) {
+                case WpFieldChar fieldChar:
+                  switch (fieldChar.fldCharType) {
+                    case 'begin':
+                      state = _FieldState.instruction;
+                      instruction = '';
+                    case 'separate':
+                      state = _FieldState.result;
+                    case _: // end
+                      final instr = instruction.toUpperCase();
+                      if (instr.contains('NUMPAGES')) {
+                        format.write('{pageCount}');
+                        hasField = true;
+                      } else if (instr.contains('PAGE')) {
+                        format.write('{pageNo}');
+                        hasField = true;
+                      }
+                      state = _FieldState.none;
+                  }
+                case WpInstrText instr:
+                  if (state == _FieldState.instruction) {
+                    instruction += instr.text;
+                  }
+                case WpText text:
+                  if (state == _FieldState.none) {
+                    format.write(text.text);
+                    styleRun ??= _resolver.resolveRun(block, run.properties);
+                  }
+                case _:
+                  break;
+              }
+            }
+          case WpHyperlink link:
+            for (final run in link.runs) {
+              if (state == _FieldState.none) {
+                format.write(run.text);
+                styleRun ??= _resolver.resolveRun(block, run.properties);
+              }
+            }
+          case WpPreservedInline _:
+            break;
         }
       }
 
@@ -315,6 +345,64 @@ class DocxToElementConverter {
     }
     if (result.isEmpty) result.add(IElement(value: ''));
     return result;
+  }
+
+  /// Remove resultados em cache de PAGE/NUMPAGES que o Word deixa como texto
+  /// visível ("Página 2 | 15"). A numeração real já é desenhada pelo
+  /// PageNumber dinâmico do editor; manter o cache cria dois rodapés.
+  void _stripCachedPageNumberLines(List<IElement> elements) {
+    var lineStart = 0;
+    for (var i = 0; i <= elements.length; i++) {
+      final isBreak = i == elements.length || elements[i].value == '\n';
+      if (!isBreak) continue;
+
+      final lineEnd = i;
+      final text = _lineText(elements, lineStart, lineEnd)
+          .replaceAll('\u00a0', ' ')
+          .trim();
+      if (_looksLikeCachedPageNumber(text)) {
+        final removeStart =
+            lineStart > 0 && elements[lineStart - 1].value == '\n'
+                ? lineStart - 1
+                : lineStart;
+        final removeEnd = i < elements.length ? i + 1 : i;
+        elements.removeRange(removeStart, removeEnd);
+        i = removeStart - 1;
+        lineStart = removeStart;
+        continue;
+      }
+
+      lineStart = i + 1;
+    }
+
+    if (elements.isEmpty) {
+      elements.add(IElement(value: ''));
+    }
+  }
+
+  String _lineText(List<IElement> elements, int start, int end) {
+    final buffer = StringBuffer();
+    for (var i = start; i < end; i++) {
+      final element = elements[i];
+      if (element.type == null ||
+          element.type == ElementType.superscript ||
+          element.type == ElementType.subscript ||
+          element.type == ElementType.hyperlink) {
+        buffer.write(element.value);
+      }
+      final children = element.valueList;
+      if (children != null) {
+        buffer.write(_lineText(children, 0, children.length));
+      }
+    }
+    return buffer.toString();
+  }
+
+  bool _looksLikeCachedPageNumber(String text) {
+    if (text.isEmpty) return false;
+    return RegExp(r'^(?:Página|Page)\s+\d+\s*(?:\||/|de|of)\s*\d+$',
+            caseSensitive: false)
+        .hasMatch(text);
   }
 
   /// Marca o elemento (e descendentes) com o índice do bloco de origem no
@@ -467,8 +555,8 @@ class DocxToElementConverter {
             into.add(_styledText(text.text, rPr, rowFlex, spacing));
           }
         case WpTabChar _:
-          final tab = IElement(
-              type: ElementType.tab, value: '', rowFlex: rowFlex);
+          final tab =
+              IElement(type: ElementType.tab, value: '', rowFlex: rowFlex);
           _applySpacing(tab, spacing);
           into.add(tab);
         case WpBreak brk:
@@ -479,8 +567,7 @@ class DocxToElementConverter {
             // bridge editor→docx não dividir o parágrafo no save. Recebe o
             // line spacing (altura da linha), mas o layout NÃO aplica
             // before/after nela (guarda pelo extension wpBr).
-            final br = IElement(value: '\n')
-              ..extension = const {'wpBr': true};
+            final br = IElement(value: '\n')..extension = const {'wpBr': true};
             _applySpacing(br, spacing);
             into.add(br);
           }
@@ -494,6 +581,8 @@ class DocxToElementConverter {
         case WpTextBox textBox:
           // Caixa de texto flutuante (carimbo, F4.8): não flui inline — é
           // coletada e renderizada como float posicionado (top-right do header).
+          _notes.add('text box (carimbo) renderizado como caixa flutuante '
+              '(edição direta fica para F4.8)');
           _textBoxes.add(_convertTextBox(textBox, fromPart));
         case WpPreservedRunContent preserved:
           if (preserved.qname == 'mc:AlternateContent' ||
@@ -569,12 +658,9 @@ class DocxToElementConverter {
     return IElement(
       type: ElementType.image,
       value: 'data:$contentType;base64,${base64Encode(bytes)}',
-      width: drawing.widthEmu == null
-          ? 100
-          : Units.emuToPx(drawing.widthEmu!),
-      height: drawing.heightEmu == null
-          ? 100
-          : Units.emuToPx(drawing.heightEmu!),
+      width: drawing.widthEmu == null ? 100 : Units.emuToPx(drawing.widthEmu!),
+      height:
+          drawing.heightEmu == null ? 100 : Units.emuToPx(drawing.heightEmu!),
     )..extension = {'wpDrawing': drawing.rawXml};
   }
 
@@ -625,9 +711,8 @@ class DocxToElementConverter {
     for (var r = 0; r < table.rows.length; r++) {
       final row = table.rows[r];
       final trPr = row.properties;
-      final heightPx = trPr?.heightTwips != null
-          ? Units.twipToPx(trPr!.heightTwips!)
-          : 40.0;
+      final heightPx =
+          trPr?.heightTwips != null ? Units.twipToPx(trPr!.heightTwips!) : 40.0;
       final tdList = <ITd>[];
       for (var i = 0; i < row.cells.length; i++) {
         final cell = row.cells[i];
@@ -667,7 +752,9 @@ class DocxToElementConverter {
     // as próprias bordas via borderTypes (TableBorder.empty).
     final effectiveBorders = _resolver.resolveTableBorders(table);
     bool visible(WpBorder? side) =>
-        side != null && side.val != null && side.val != 'none' &&
+        side != null &&
+        side.val != null &&
+        side.val != 'none' &&
         side.val != 'nil';
     final hasTableBorders = effectiveBorders != null &&
         (visible(effectiveBorders.top) ||
@@ -720,7 +807,9 @@ class DocxToElementConverter {
   List<TdBorder>? _borderTypes(WpBorders? borders) {
     if (borders == null) return null;
     bool visible(WpBorder? side) =>
-        side != null && side.val != null && side.val != 'none' &&
+        side != null &&
+        side.val != null &&
+        side.val != 'none' &&
         side.val != 'nil';
     final types = <TdBorder>[
       if (visible(borders.top)) TdBorder.top,
@@ -775,13 +864,11 @@ class DocxToElementConverter {
       lineSpacingValue: lineValue,
       beforePx:
           spacing?.beforeTwips == null ? null : spacing!.beforeTwips! / 15.0,
-      afterPx:
-          spacing?.afterTwips == null ? null : spacing!.afterTwips! / 15.0,
+      afterPx: spacing?.afterTwips == null ? null : spacing!.afterTwips! / 15.0,
       indentLeftPx: leftTwips == null ? null : leftTwips / 15.0,
-      indentFirstLinePx:
-          ((firstLineTwips ?? 0) - (hangingTwips ?? 0)) == 0
-              ? null
-              : ((firstLineTwips ?? 0) - (hangingTwips ?? 0)) / 15.0,
+      indentFirstLinePx: ((firstLineTwips ?? 0) - (hangingTwips ?? 0)) == 0
+          ? null
+          : ((firstLineTwips ?? 0) - (hangingTwips ?? 0)) / 15.0,
     );
   }
 
@@ -827,9 +914,7 @@ class DocxToElementConverter {
       0xF06F => '○',
       0xF0FC => '✓',
       0xF0D8 => '➢',
-      _ => code >= 0xF000 && code <= 0xF0FF
-          ? '•'
-          : String.fromCharCode(code),
+      _ => code >= 0xF000 && code <= 0xF0FF ? '•' : String.fromCharCode(code),
     };
   }
 }

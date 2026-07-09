@@ -37,6 +37,12 @@ class Header {
 
 	void setTextBoxes(List<IHeaderTextBox> boxes) => _textBoxes = boxes;
 
+	bool hasTextBoxes() => _textBoxes.isNotEmpty;
+
+	void clearTextBoxes() {
+		_textBoxes = const <IHeaderTextBox>[];
+	}
+
 	dynamic _drawDynamic<T>(T Function(dynamic target) callback) {
 		try {
 			return callback(_draw as dynamic);

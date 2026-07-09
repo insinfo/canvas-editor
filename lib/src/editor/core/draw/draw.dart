@@ -243,18 +243,21 @@ class Draw {
   static bool debugRenderTiming = false;
   double _tPhase = 0;
 
-  // Layout progressivo/fatiado (F5.5, modelo OnlyOffice): a 1ª fatia é
-  // síncrona (viewport), o resto pagina em ticks de Timer com orçamento de
-  // tempo. `_progressiveLayoutVersion` versiona o job — qualquer novo render
-  // cancela o laço em voo (edição durante a paginação).
+  // Layout progressivo/fatiado (F5.5): a 1ª fatia é síncrona (viewport) e o
+  // restante fica pendente. Inspirado no Google Docs/Kix, novas páginas só são
+  // descobertas quando a rolagem encosta no fim já conhecido; não há corrida
+  // em background para paginar o documento inteiro logo após abrir.
   Timer? _progressiveTimer;
   int _progressiveLayoutVersion = 0;
   _RowLayoutState? _progressiveResume;
   IComputeRowListPayload? _progressiveRowPayload;
+  int? _progressiveTargetPage;
   // Rows da 1ª fatia síncrona (~viewport + folga p/ E2E) e de cada tick.
   static const int _progressiveFirstChunkRows = 120;
   static const int _progressiveTickRows = 80;
   static const Duration _progressiveTickDelay = Duration(milliseconds: 10);
+  static const int _progressiveAheadPages = 8;
+  static const int _progressiveNearEndPages = 3;
   // Só ativa em docs grandes o bastante para valer o custo do fatiamento.
   static const int _progressiveMinElements = 3000;
   double? _pagePixelRatio;
@@ -427,10 +430,34 @@ class Draw {
 
   int getRenderCount() => _renderCount;
 
-  /// True enquanto a paginação progressiva (layout fatiado) ainda não terminou.
-  /// Consumidores async (ex.: imagens que carregam) esperam terminar antes de
-  /// forçar um re-render, para não interromper a paginação em andamento.
-  bool isProgressiveLayoutActive() => _progressiveResume != null;
+  /// True apenas enquanto um tick progressivo está rodando/agendado. Quando há
+  /// mais documento pendente, mas a paginação está pausada esperando rolagem,
+  /// consumidores async podem redesenhar as páginas conhecidas normalmente.
+  bool isProgressiveLayoutActive() => _progressiveTimer != null;
+
+  /// Garante que a paginação progressiva descubra páginas até [pageNo] +
+  /// uma folga. Chamado pelo ScrollObserver quando o usuário se aproxima do
+  /// fim conhecido, no mesmo espírito do Google Docs: o total cresce conforme
+  /// a rolagem, em vez de ser calculado inteiro na abertura.
+  void ensureProgressiveLayoutForPage(int pageNo) {
+    if (_progressiveResume == null || _progressiveRowPayload == null) {
+      return;
+    }
+    if (pageNo < _pageRowList.length - _progressiveNearEndPages) {
+      return;
+    }
+    final int targetPage = pageNo + _progressiveAheadPages;
+    final int? currentTarget = _progressiveTargetPage;
+    if (currentTarget == null || targetPage > currentTarget) {
+      _progressiveTargetPage = targetPage;
+    }
+    if (_progressiveTimer != null) {
+      return;
+    }
+    final int version = _progressiveLayoutVersion;
+    _progressiveTimer =
+        Timer(_progressiveTickDelay, () => _progressiveTick(version));
+  }
 
   List<int> getVisiblePageNoList() => List<int>.from(_visiblePageNoList);
 
@@ -4236,7 +4263,7 @@ class Draw {
     _progressiveTimer = null;
     _progressiveResume = null;
     _progressiveRowPayload = null;
-    final int layoutVersion = _progressiveLayoutVersion;
+    _progressiveTargetPage = null;
     final IDrawOption renderOption = option ?? IDrawOption();
     final bool isCompute = renderOption.isCompute ?? true;
     final bool isLazy = renderOption.isLazy ?? true;
@@ -4449,21 +4476,23 @@ class Draw {
       }
     });
 
-    // F5.5: se a 1ª fatia não cobriu o doc inteiro, agenda a paginação do
-    // restante em ticks (após esta pintura da 1ª fatia).
+    // F5.5/Kix: se a 1ª fatia não cobriu o documento inteiro, fica pendente.
+    // O ScrollObserver chamará ensureProgressiveLayoutForPage ao se aproximar
+    // do fim conhecido, fazendo o total de páginas crescer sob demanda.
     if (_progressiveResume != null && _progressiveRowPayload != null) {
-      _progressiveTimer =
-          Timer(_progressiveTickDelay, () => _progressiveTick(layoutVersion));
+      _progressiveTargetPage = null;
     }
   }
 
-  /// Um tick do layout progressivo (F5.5): pagina mais uma fatia do documento,
-  /// re-pagina/reposiciona o acumulado, redesenha e agenda o próximo tick até
-  /// terminar. Aborta se um novo render assumiu (versão mudou).
+  /// Um tick do layout progressivo (F5.5/Kix): pagina mais algumas rows até
+  /// atingir o alvo pedido pela rolagem (ou terminar), re-pagina/reposiciona o
+  /// acumulado e redesenha. Se ainda há documento, mas o alvo foi atingido,
+  /// pausa em vez de continuar até o fim.
   void _progressiveTick(int version) {
     if (version != _progressiveLayoutVersion) {
       return; // um novo render cancelou este job
     }
+    _progressiveTimer = null;
     final _RowLayoutState? state = _progressiveResume;
     final IComputeRowListPayload? payload = _progressiveRowPayload;
     if (state == null || payload == null) {
@@ -4494,8 +4523,18 @@ class Draw {
     } else {
       _immediateRender();
     }
+    _listener?.pageSizeChange?.call(_pageRowList.length);
+    if (_eventBus?.isSubscribe?.call('pageSizeChange') == true) {
+      _eventBus.emit('pageSizeChange', _pageRowList.length);
+    }
 
     if (!state.done) {
+      final int? targetPage = _progressiveTargetPage;
+      final bool targetReached =
+          targetPage == null || _pageRowList.length > targetPage;
+      if (targetReached) {
+        return;
+      }
       _progressiveTimer =
           Timer(_progressiveTickDelay, () => _progressiveTick(version));
       return;
@@ -4503,6 +4542,7 @@ class Draw {
     // Terminou: computa o que precisava do documento inteiro e avisa listeners.
     _progressiveResume = null;
     _progressiveRowPayload = null;
+    _progressiveTargetPage = null;
     _progressiveTimer = null;
     (_area as Area?)?.compute();
     if (_mode != EditorMode.print) {
@@ -4512,10 +4552,6 @@ class Draw {
         search?.compute(keyword);
       }
       (_control as Control?)?.computeHighlightList();
-    }
-    _listener?.pageSizeChange?.call(_pageRowList.length);
-    if (_eventBus?.isSubscribe?.call('pageSizeChange') == true) {
-      _eventBus.emit('pageSizeChange', _pageRowList.length);
     }
   }
 

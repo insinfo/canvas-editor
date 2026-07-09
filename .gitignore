@@ -10,3 +10,8 @@ build/
 build_test/
 resources/Trace-*.json
 resources/*profile.json
+
+# Capturas do Google Docs usadas só para análise (doc/analise_google_docs_kix_resources01.md).
+# Pesadas (~49 MB) e conteúdo proprietário de terceiros — mantidas em disco, fora do git.
+resources/01/
+resources/01.zip

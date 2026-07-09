@@ -31,8 +31,11 @@ import 'package:canvas_text_editor/src/mock.dart' as mock_data;
 import 'package:canvas_text_editor/src/editor/utils/clipboard.dart'
   as clipboard_utils;
 
+import 'tabler_icons.dart';
+
 void main() {
   html.window.onLoad.listen((_) async {
+    setupTablerIcons();
     final userAgent = html.window.navigator.userAgent;
     final isApple = userAgent.contains('Mac OS X');
     final app = EditorApp(isApple: isApple);
