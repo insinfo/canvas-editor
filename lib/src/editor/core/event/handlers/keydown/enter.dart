@@ -129,7 +129,17 @@ void enter(KeyboardEvent evt, CanvasEvent host) {
 
   if (curIndex != null && curIndex >= 0) {
     rangeManager.setRange(curIndex, curIndex);
-    draw.render(IDrawOption(curIndex: curIndex));
+    draw.render(IDrawOption(
+      curIndex: curIndex,
+      // Enter em docs grandes travava por 2 motivos: (1) snapshot de undo
+      // síncrono (clone O(doc)) a cada Enter e (2) relayout completo
+      // (computeRowList medindo ~122k elementos). Espelha o input: adia o
+      // snapshot para o fim da rajada e recorta o relayout ao parágrafo do
+      // cursor. O fast path retorna false com segurança dentro de
+      // tabela/lista/área/controle/float, caindo no caminho completo.
+      isSubmitHistoryDeferred: true,
+      fastLayoutIndex: curIndex,
+    ));
   }
 
   evt.preventDefault();

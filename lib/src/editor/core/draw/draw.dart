@@ -247,8 +247,9 @@ class Draw {
   _RowLayoutState? _progressiveResume;
   IComputeRowListPayload? _progressiveRowPayload;
   // Rows da 1ª fatia síncrona (~viewport + folga p/ E2E) e de cada tick.
-  static const int _progressiveFirstChunkRows = 220;
-  static const int _progressiveTickRows = 400;
+  static const int _progressiveFirstChunkRows = 120;
+  static const int _progressiveTickRows = 80;
+  static const Duration _progressiveTickDelay = Duration(milliseconds: 10);
   // Só ativa em docs grandes o bastante para valer o custo do fatiamento.
   static const int _progressiveMinElements = 3000;
   double? _pagePixelRatio;
@@ -1022,6 +1023,11 @@ class Draw {
       return;
     }
     final bool isSubmitHistory = options?.isSubmitHistory ?? true;
+    final bool isSubmitHistoryDeferred =
+        options?.isSubmitHistoryDeferred ?? false;
+    final bool isFastLayout = options?.isFastLayout == true;
+    final bool isDeltaHistory =
+        isSubmitHistory && options?.isDeltaHistory == true;
     element_utils.formatElementList(
       payload,
       element_utils.FormatElementListOption(
@@ -1029,6 +1035,21 @@ class Draw {
         isHandleFirstElement: false,
       ),
     );
+    final _InsertDeltaHistory? deltaHistory = isDeltaHistory
+        ? _prepareInsertDeltaHistory(
+            payload: payload,
+            startIndex: startIndex,
+            endIndex: endIndex,
+            isFastLayout: isFastLayout,
+          )
+        : null;
+    if (!isDeltaHistory) {
+      _prepareHistoryForMutation(
+        isSubmitHistory: isSubmitHistory,
+        isDeferred: isSubmitHistoryDeferred,
+        curIndex: startIndex,
+      );
+    }
     int curIndex = -1;
 
     final Control? control = _control as Control?;
@@ -1076,10 +1097,15 @@ class Draw {
 
     if (curIndex >= 0) {
       rangeManager.setRange(curIndex, curIndex);
+      if (deltaHistory != null) {
+        _recordInsertDeltaHistoryAfter(deltaHistory, curIndex);
+      }
       render(
         IDrawOption(
           curIndex: curIndex,
-          isSubmitHistory: isSubmitHistory,
+          isSubmitHistory: isSubmitHistory && deltaHistory == null,
+          isSubmitHistoryDeferred: isSubmitHistoryDeferred,
+          fastLayoutIndex: isFastLayout ? curIndex : null,
         ),
       );
     }
@@ -1220,6 +1246,50 @@ class Draw {
     }
   }
 
+  void deleteElementRangeWithDeltaHistory(
+    int start,
+    int deleteCount, {
+    int? curIndex,
+  }) {
+    if (deleteCount <= 0) {
+      return;
+    }
+    final List<IElement> elementList = getElementList();
+    if (start < 0 || start >= elementList.length) {
+      return;
+    }
+    final int safeDeleteCount =
+        deleteCount > elementList.length - start ? elementList.length - start : deleteCount;
+    final _ElementRangeDeltaHistory? delta = _prepareElementRangeDeleteDelta(
+      start,
+      safeDeleteCount,
+      curIndex: curIndex,
+    );
+    spliceElementList(
+      elementList,
+      start,
+      safeDeleteCount,
+      null,
+      ISpliceElementListOption(isIgnoreDeletedRule: true),
+    );
+    if (curIndex != null) {
+      (_rangeManager as RangeManager?)?.setRange(curIndex, curIndex);
+    }
+    if (delta != null) {
+      _applyElementRangeRowDelta(delta, isAfter: true);
+      _recordElementRangeDeleteDeltaAfter(delta);
+      render(
+        IDrawOption(
+          curIndex: curIndex,
+          isSubmitHistory: false,
+          isRowListPrecomputed: true,
+        ),
+      );
+    } else {
+      render(IDrawOption(curIndex: curIndex));
+    }
+  }
+
   // Snapshot de histórico adiado por rajada de digitação (P1 do plano de
   // otimização): clonar main+header+footer a cada tecla era O(documento) por
   // keystroke. Com o adiamento, o clone acontece uma vez por rajada (debounce)
@@ -1248,7 +1318,271 @@ class Draw {
     _deferredHistoryIndex = null;
   }
 
+  void _prepareHistoryForMutation({
+    required bool isSubmitHistory,
+    required bool isDeferred,
+    int? curIndex,
+  }) {
+    if (!isSubmitHistory || _options.historyDisabled == true) {
+      return;
+    }
+    final HistoryManager? historyManager = _historyManager as HistoryManager?;
+    if (historyManager == null) {
+      return;
+    }
+    if (!isDeferred) {
+      flushDeferredHistory();
+    }
+    if (historyManager.isStackEmpty()) {
+      submitHistory(curIndex);
+    }
+  }
+
+  _InsertDeltaHistory? _prepareInsertDeltaHistory({
+    required List<IElement> payload,
+    required int startIndex,
+    required int endIndex,
+    required bool isFastLayout,
+  }) {
+    final HistoryManager? historyManager = _historyManager as HistoryManager?;
+    final RangeManager? rangeManager = _rangeManager as RangeManager?;
+    if (historyManager == null || rangeManager == null) {
+      return null;
+    }
+    cancelDeferredHistory();
+    final List<IElement> elementList = getElementList();
+    final int insertStart = startIndex + 1;
+    if (insertStart < 0 || insertStart > elementList.length) {
+      return null;
+    }
+    final int deleteCount = startIndex == endIndex
+        ? 0
+        : (endIndex - startIndex).clamp(0, elementList.length - insertStart);
+    final List<IElement> removedSnapshot = deleteCount > 0
+        ? element_utils.cloneElementList(
+            elementList.sublist(insertStart, insertStart + deleteCount),
+          )
+        : <IElement>[];
+    final List<IElement> insertedSnapshot =
+        element_utils.cloneElementList(payload);
+    final IRange beforeRange = _cloneRange(rangeManager.getRange());
+    final _InsertDeltaHistory delta = _InsertDeltaHistory(
+      insertStart: insertStart,
+      removedSnapshot: removedSnapshot,
+      insertedSnapshot: insertedSnapshot,
+      beforeRange: beforeRange,
+      isFastLayout: isFastLayout,
+    );
+    historyManager.replaceCurrent(() {
+      _restoreInsertDeltaHistory(delta, isAfter: false);
+    });
+    return delta;
+  }
+
+  void _recordInsertDeltaHistoryAfter(
+    _InsertDeltaHistory delta,
+    int curIndex,
+  ) {
+    final HistoryManager? historyManager = _historyManager as HistoryManager?;
+    final RangeManager? rangeManager = _rangeManager as RangeManager?;
+    if (historyManager == null || rangeManager == null) {
+      return;
+    }
+    delta.afterRange = _cloneRange(rangeManager.getRange());
+    delta.afterCurIndex = curIndex;
+    historyManager.execute(() {
+      _restoreInsertDeltaHistory(delta, isAfter: true);
+    });
+  }
+
+  void _restoreInsertDeltaHistory(
+    _InsertDeltaHistory delta, {
+    required bool isAfter,
+  }) {
+    final RangeManager? rangeManager = _rangeManager as RangeManager?;
+    if (rangeManager == null) {
+      return;
+    }
+    final List<IElement> elementList = getElementList();
+    final int replaceCount =
+        isAfter ? delta.removedSnapshot.length : delta.insertedSnapshot.length;
+    final List<IElement> replacement = element_utils.cloneElementList(
+      isAfter ? delta.insertedSnapshot : delta.removedSnapshot,
+    );
+    spliceElementList(
+      elementList,
+      delta.insertStart,
+      replaceCount,
+      replacement,
+      ISpliceElementListOption(isIgnoreDeletedRule: true),
+    );
+    final IRange? nextRange = isAfter ? delta.afterRange : delta.beforeRange;
+    if (nextRange != null) {
+      rangeManager.replaceRange(_cloneRange(nextRange));
+    }
+    final int curIndex = isAfter
+        ? (delta.afterCurIndex ?? delta.insertStart + replacement.length - 1)
+        : delta.beforeRange.endIndex;
+    render(
+      IDrawOption(
+        curIndex: curIndex,
+        isSubmitHistory: false,
+        fastLayoutIndex: delta.isFastLayout ? curIndex : null,
+      ),
+    );
+  }
+
+  _ElementRangeDeltaHistory? _prepareElementRangeDeleteDelta(
+    int start,
+    int deleteCount, {
+    int? curIndex,
+  }) {
+    final HistoryManager? historyManager = _historyManager as HistoryManager?;
+    final RangeManager? rangeManager = _rangeManager as RangeManager?;
+    if (historyManager == null || rangeManager == null) {
+      return null;
+    }
+    cancelDeferredHistory();
+    final List<IElement> elementList = getElementList();
+    if (start < 0 || start + deleteCount > elementList.length) {
+      return null;
+    }
+    final int rowStart = _lowerBoundRowByStartIndex(start);
+    final int rowEnd = _lowerBoundRowByStartIndex(start + deleteCount);
+    if (rowStart < 0 ||
+        rowStart > rowEnd ||
+        rowEnd > _rowList.length ||
+        elementList.length != _computedElementCount) {
+      return null;
+    }
+    final _ElementRangeDeltaHistory delta = _ElementRangeDeltaHistory(
+      start: start,
+      deleteCount: deleteCount,
+      removedSnapshot: element_utils.cloneElementList(
+        elementList.sublist(start, start + deleteCount),
+      ),
+      removedRows: _cloneRows(_rowList.sublist(rowStart, rowEnd)),
+      rowStart: rowStart,
+      beforeRange: _cloneRange(rangeManager.getRange()),
+      beforeCurIndex: rangeManager.getRange().endIndex,
+      afterCurIndex: curIndex,
+    );
+    historyManager.replaceCurrent(() {
+      _restoreElementRangeDeleteDelta(delta, isAfter: false);
+    });
+    return delta;
+  }
+
+  void _recordElementRangeDeleteDeltaAfter(_ElementRangeDeltaHistory delta) {
+    final HistoryManager? historyManager = _historyManager as HistoryManager?;
+    final RangeManager? rangeManager = _rangeManager as RangeManager?;
+    if (historyManager == null || rangeManager == null) {
+      return;
+    }
+    delta.afterRange = _cloneRange(rangeManager.getRange());
+    historyManager.execute(() {
+      _restoreElementRangeDeleteDelta(delta, isAfter: true);
+    });
+  }
+
+  void _restoreElementRangeDeleteDelta(
+    _ElementRangeDeltaHistory delta, {
+    required bool isAfter,
+  }) {
+    final RangeManager? rangeManager = _rangeManager as RangeManager?;
+    if (rangeManager == null) {
+      return;
+    }
+    final List<IElement> elementList = getElementList();
+    if (isAfter) {
+      spliceElementList(
+        elementList,
+        delta.start,
+        delta.deleteCount,
+        null,
+        ISpliceElementListOption(isIgnoreDeletedRule: true),
+      );
+    } else {
+      spliceElementList(
+        elementList,
+        delta.start,
+        0,
+        element_utils.cloneElementList(delta.removedSnapshot),
+        ISpliceElementListOption(isIgnoreDeletedRule: true),
+      );
+    }
+    _applyElementRangeRowDelta(delta, isAfter: isAfter);
+    final IRange? nextRange = isAfter ? delta.afterRange : delta.beforeRange;
+    if (nextRange != null) {
+      rangeManager.replaceRange(_cloneRange(nextRange));
+    }
+    render(
+      IDrawOption(
+        curIndex: isAfter ? delta.afterCurIndex : delta.beforeCurIndex,
+        isSubmitHistory: false,
+        isRowListPrecomputed: true,
+      ),
+    );
+  }
+
+  void _applyElementRangeRowDelta(
+    _ElementRangeDeltaHistory delta, {
+    required bool isAfter,
+  }) {
+    if (delta.removedRows.isEmpty) {
+      _computedElementCount = getElementList().length;
+      return;
+    }
+    final int rowCount = delta.removedRows.length;
+    if (isAfter) {
+      final int removeEnd = delta.rowStart + rowCount;
+      if (delta.rowStart <= _rowList.length && removeEnd <= _rowList.length) {
+        _rowList.removeRange(delta.rowStart, removeEnd);
+      }
+      for (int i = delta.rowStart; i < _rowList.length; i++) {
+        _rowList[i].startIndex -= delta.deleteCount;
+        _rowList[i].rowIndex -= rowCount;
+      }
+    } else {
+      for (int i = delta.rowStart; i < _rowList.length; i++) {
+        _rowList[i].startIndex += delta.deleteCount;
+        _rowList[i].rowIndex += rowCount;
+      }
+      _rowList.insertAll(delta.rowStart, _cloneRows(delta.removedRows));
+    }
+    _computedElementCount = getElementList().length;
+  }
+
+  List<IRow> _cloneRows(List<IRow> rows) {
+    return rows
+        .map(
+          (IRow row) => IRow(
+            width: row.width,
+            height: row.height,
+            ascent: row.ascent,
+            rowFlex: row.rowFlex,
+            startIndex: row.startIndex,
+            isPageBreak: row.isPageBreak,
+            isList: row.isList,
+            listIndex: row.listIndex,
+            offsetX: row.offsetX,
+            offsetY: row.offsetY,
+            elementList: List<IRowElement>.from(row.elementList),
+            isWidthNotEnough: row.isWidthNotEnough,
+            rowIndex: row.rowIndex,
+            isSurround: row.isSurround,
+          ),
+        )
+        .toList(growable: false);
+  }
+
   void submitHistory([int? curIndex, bool defer = false]) {
+    // Flag de teste: histórico desligado => nenhum snapshot (zero deep-clone do
+    // documento por edição, que é a fonte da tempestade de alocação/OOM em docs
+    // grandes). Retornamos antes de agendar o timer adiado.
+    if (_options.historyDisabled == true) {
+      return;
+    }
     if (defer) {
       _deferredHistoryIndex = curIndex;
       _deferredHistoryTimer?.cancel();
@@ -1572,9 +1906,9 @@ class Draw {
   /// de onde parou (mesmo elementList) e cede o thread ao produzir
   /// `resume.budgetRows` rows, num limite de parágrafo, salvando o cursor.
   /// Com [resume] == null o comportamento é idêntico ao layout completo.
-  // ignore: library_private_types_in_public_api
   List<IRow> computeRowList(
     IComputeRowListPayload payload, {
+    // ignore: library_private_types_in_public_api
     _RowLayoutState? resume,
   }) {
     final double innerWidth = payload.innerWidth;
@@ -2843,14 +3177,6 @@ class Draw {
     if (anchorIndex < 0 || anchorIndex >= elementList.length) {
       return false;
     }
-    // Floats mudam o fluxo de qualquer parágrafo (surround) — só o caminho
-    // completo os trata. floatPositionList ainda reflete o último render.
-    if (position.getFloatPositionList().isNotEmpty) {
-      return false;
-    }
-    if (element_utils.pickSurroundElementList(elementList).isNotEmpty) {
-      return false;
-    }
     final int delta = elementList.length - _computedElementCount;
 
     // Limites do parágrafo NOVO (rows quebram sempre em ZERO, então um
@@ -3863,6 +4189,8 @@ class Draw {
     final bool isSourceHistory = renderOption.isSourceHistory ?? false;
     final bool isSetCursor = renderOption.isSetCursor ?? true;
     final bool isFirstRender = renderOption.isFirstRender ?? false;
+    final bool isRowListPrecomputed =
+        renderOption.isRowListPrecomputed == true;
     int? curIndex = renderOption.curIndex;
     final double innerWidth = getInnerWidth();
     if (innerWidth <= 0) {
@@ -3886,8 +4214,10 @@ class Draw {
       // Recalculate_FastWholeParagraph do OnlyOffice): recomputa só as rows do
       // parágrafo editado e reusa todas as outras. Precisa rodar ANTES do
       // reset de floatPositionList (usa a lista como guarda).
-      bool fastLayoutDone = false;
-      if (renderOption.fastLayoutIndex != null && !isSourceHistory) {
+      bool fastLayoutDone = isRowListPrecomputed;
+      if (!fastLayoutDone &&
+          renderOption.fastLayoutIndex != null &&
+          !isSourceHistory) {
         fastLayoutDone = _tryFastParagraphLayout(renderOption.fastLayoutIndex!);
       }
       position?.setFloatPositionList(<IFloatPosition>[]);
@@ -4068,7 +4398,7 @@ class Draw {
     // restante em ticks (após esta pintura da 1ª fatia).
     if (_progressiveResume != null && _progressiveRowPayload != null) {
       _progressiveTimer =
-          Timer(Duration.zero, () => _progressiveTick(layoutVersion));
+          Timer(_progressiveTickDelay, () => _progressiveTick(layoutVersion));
     }
   }
 
@@ -4112,7 +4442,7 @@ class Draw {
 
     if (!state.done) {
       _progressiveTimer =
-          Timer(Duration.zero, () => _progressiveTick(version));
+          Timer(_progressiveTickDelay, () => _progressiveTick(version));
       return;
     }
     // Terminou: computa o que precisava do documento inteiro e avisa listeners.
@@ -4686,4 +5016,45 @@ class _RowLayoutState {
   int budgetRows = 1 << 30;
   bool started = false;
   bool done = false;
+}
+
+class _InsertDeltaHistory {
+  _InsertDeltaHistory({
+    required this.insertStart,
+    required this.removedSnapshot,
+    required this.insertedSnapshot,
+    required this.beforeRange,
+    required this.isFastLayout,
+  });
+
+  final int insertStart;
+  final List<IElement> removedSnapshot;
+  final List<IElement> insertedSnapshot;
+  final IRange beforeRange;
+  final bool isFastLayout;
+  IRange? afterRange;
+  int? afterCurIndex;
+}
+
+class _ElementRangeDeltaHistory {
+  _ElementRangeDeltaHistory({
+    required this.start,
+    required this.deleteCount,
+    required this.removedSnapshot,
+    required this.removedRows,
+    required this.rowStart,
+    required this.beforeRange,
+    required this.beforeCurIndex,
+    this.afterCurIndex,
+  });
+
+  final int start;
+  final int deleteCount;
+  final List<IElement> removedSnapshot;
+  final List<IRow> removedRows;
+  final int rowStart;
+  final IRange beforeRange;
+  final int beforeCurIndex;
+  int? afterCurIndex;
+  IRange? afterRange;
 }

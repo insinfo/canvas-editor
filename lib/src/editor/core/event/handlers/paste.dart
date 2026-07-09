@@ -23,6 +23,7 @@ void pasteElement(dynamic canvasEvent, List<IElement> elementList) {
   final dynamic rangeManager = draw.getRange();
   final IRange range = rangeManager.getRange() as IRange;
   final int startIndex = range.startIndex;
+  final bool isCollapsed = range.startIndex == range.endIndex;
   final List<IElement> originalElementList =
       (draw.getElementList() as List).cast<IElement>();
   if (startIndex != -1 && rangeManager.getIsSelectAll() != true) {
@@ -65,7 +66,39 @@ void pasteElement(dynamic canvasEvent, List<IElement> elementList) {
           .copyWith(editorOptions: draw.getOptions() as IEditorOption?),
     );
   }
-  draw.insertElementList(elementList);
+  draw.insertElementList(
+    elementList,
+    IInsertElementListOption(
+      isDeltaHistory: true,
+      isFastLayout: isCollapsed && _isInlineFastPastePayload(elementList),
+    ),
+  );
+}
+
+bool _isInlineFastPastePayload(List<IElement> elementList) {
+  if (elementList.isEmpty) {
+    return false;
+  }
+  for (final IElement element in elementList) {
+    if (element.value == ZERO) {
+      return false;
+    }
+    final ElementType? type = element.type;
+    if (type != null && type != ElementType.text) {
+      return false;
+    }
+    if (element.listId != null ||
+        element.areaId != null ||
+        element.controlId != null ||
+        element.imgDisplay != null ||
+        element.pagingId != null ||
+        element.valueList != null ||
+        element.trList != null ||
+        element.colgroup != null) {
+      return false;
+    }
+  }
+  return true;
 }
 
 void pasteHTML(dynamic canvasEvent, String htmlText) {

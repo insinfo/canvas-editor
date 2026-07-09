@@ -856,10 +856,16 @@ class IGetElementByIdOption {
 class IInsertElementListOption {
   bool? isReplace;
   bool? isSubmitHistory;
+  bool? isSubmitHistoryDeferred;
+  bool? isFastLayout;
+  bool? isDeltaHistory;
 
   IInsertElementListOption({
     this.isReplace,
     this.isSubmitHistory,
+    this.isSubmitHistoryDeferred,
+    this.isFastLayout,
+    this.isDeltaHistory,
   });
 }
 

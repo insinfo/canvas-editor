@@ -154,6 +154,16 @@ Importante: não avalie desempenho com webdev serve — é DDC, sem otimização
 Próximos passos (registrados no roteiro F5)
 Os 281 ms do TR ainda são dominados pelo computePositionList/paginação O(documento) — a continuação é posições incrementais + convergência por EndInfo + recálculo fatiado em timer (F5.3/F5.5) e histórico por deltas. E o TR paginar em 82 págs (Word: 140) é o gap de fidelidade de spacing (F4.3), não de performance — é o próximo item natural do roteiro para a sua queixa de "respeitar os dados do arquivo".
 
+## 7. Continuação arquitetural
+
+A análise mais detalhada do DocumentServer/OnlyOffice e o plano de extração dos
+monolitos `draw.dart` e `editor.dart` foram separados em
+[plano_arquitetura_performance_onlyoffice.md](plano_arquitetura_performance_onlyoffice.md).
+Esse plano registra os padrões de produção observados no OnlyOffice
+(`History` por deltas, `TextPr.Check_NeedRecalc`, fast run-range/paragraph,
+`FullRecalc` fatiado e repaint por página) e a ordem segura para migrar o editor
+para módulos de documento, layout, renderização, histórico e controllers de UI.
+
 Confirmei o bug do espaçamento e ele muda meu conselho. Preciso te passar o que encontrei antes de gastar dias no Web Worker.
 
 Olhei suas capturas com atenção e diagnostiquei bugs de fidelidade concretos e corrigíveis:

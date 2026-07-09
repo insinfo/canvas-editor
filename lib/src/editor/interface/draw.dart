@@ -19,6 +19,7 @@ class IDrawOption {
   /// (Draw._tryFastParagraphLayout). Ignorado quando as guardas do fast path
   /// não valem — o render cai no relayout completo normal.
   int? fastLayoutIndex;
+  bool? isRowListPrecomputed;
   bool? isCompute;
   bool? isLazy;
   bool? isInit;
@@ -31,6 +32,7 @@ class IDrawOption {
     this.isSubmitHistory,
     this.isSubmitHistoryDeferred,
     this.fastLayoutIndex,
+    this.isRowListPrecomputed,
     this.isCompute,
     this.isLazy,
     this.isInit,

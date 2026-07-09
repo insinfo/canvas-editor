@@ -121,6 +121,7 @@ IEditorOption mergeOption([IEditorOption? options]) {
     paperDirection: options?.paperDirection ?? PaperDirection.vertical,
     inactiveAlpha: options?.inactiveAlpha ?? 0.6,
     historyMaxRecordCount: options?.historyMaxRecordCount ?? 100,
+    historyDisabled: options?.historyDisabled ?? false,
     printPixelRatio: options?.printPixelRatio ?? 3,
     maskMargin: _resolveList(options?.maskMargin, const <double>[0, 0, 0, 0]),
     letterClass: _resolveStringList(

@@ -12,7 +12,14 @@ class HistoryManager {
 	final List<HistoryCallback> _undoStack = <HistoryCallback>[];
 	final List<HistoryCallback> _redoStack = <HistoryCallback>[];
 
+	// Flag de teste (IEditorOption.historyDisabled): quando ligada, undo/redo
+	// viram no-op e nada é empilhado. Ver submitHistory em draw.dart.
+	bool get _isDisabled => _draw.getOptions().historyDisabled == true;
+
 	void undo() {
+		if (_isDisabled) {
+			return;
+		}
 		// A rajada de digitação pendente precisa entrar na pilha antes do undo,
 		// senão o estado corrente (fim da rajada) seria perdido para o redo.
 		_draw.flushDeferredHistory();
@@ -27,6 +34,9 @@ class HistoryManager {
 	}
 
 	void redo() {
+		if (_isDisabled) {
+			return;
+		}
 		_draw.flushDeferredHistory();
 		if (_redoStack.isNotEmpty) {
 			final HistoryCallback pop = _redoStack.removeLast();
@@ -35,13 +45,51 @@ class HistoryManager {
 		}
 	}
 
+	// Cada snapshot de undo é um deep-clone do documento inteiro (edições mutam
+	// IElement in-place, então clone raso corromperia snapshots antigos). Num
+	// DOCX de 150 páginas (~122k elementos) reter os 100 snapshots default
+	// estourava a memória do navegador (~6 GB). Limitamos o total de elementos
+	// retidos a um orçamento, mantendo pelo menos alguns níveis de undo.
+	static const int _retainedElementBudget = 400000;
+	static const int _minRecordCount = 4;
+
+	int _effectiveMaxRecords() {
+		final int docSize = _draw.getElementList().length;
+		if (docSize <= 0) {
+			return _maxRecordCount;
+		}
+		final int byBudget = _retainedElementBudget ~/ docSize;
+		if (byBudget >= _maxRecordCount) {
+			return _maxRecordCount;
+		}
+		return byBudget < _minRecordCount ? _minRecordCount : byBudget;
+	}
+
 	void execute(HistoryCallback callback) {
+		if (_isDisabled) {
+			return;
+		}
 		_undoStack.add(callback);
 		if (_redoStack.isNotEmpty) {
 			_redoStack.clear();
 		}
-		while (_undoStack.length > _maxRecordCount) {
+		final int limit = _effectiveMaxRecords();
+		while (_undoStack.length > limit) {
 			_undoStack.removeAt(0);
+		}
+	}
+
+	void replaceCurrent(HistoryCallback callback) {
+		if (_isDisabled) {
+			return;
+		}
+		if (_undoStack.isEmpty) {
+			execute(callback);
+			return;
+		}
+		_undoStack[_undoStack.length - 1] = callback;
+		if (_redoStack.isNotEmpty) {
+			_redoStack.clear();
 		}
 	}
 

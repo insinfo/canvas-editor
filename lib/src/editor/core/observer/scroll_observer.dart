@@ -92,6 +92,10 @@ class ScrollObserver {
 	}
 
 	IPageVisibleInfo getPageVisibleInfo() {
+		final IPageVisibleInfo? fastInfo = _getPagingVisibleInfo();
+		if (fastInfo != null) {
+			return fastInfo;
+		}
 		final pageList = draw.getPageList();
 		final visiblePageNoList = <int>[];
 		var intersectionPageNo = 0;
@@ -106,6 +110,80 @@ class ScrollObserver {
 			if (intersectionHeight > 0) {
 				visiblePageNoList.add(i);
 			}
+			if (intersectionHeight > intersectionMaxHeight) {
+				intersectionMaxHeight = intersectionHeight;
+				intersectionPageNo = i;
+			}
+		}
+		return IPageVisibleInfo(
+			intersectionPageNo: intersectionPageNo,
+			visiblePageNoList: visiblePageNoList,
+		);
+	}
+
+	IPageVisibleInfo? _getPagingVisibleInfo() {
+		if (draw.getIsPagingMode() != true) {
+			return null;
+		}
+		final int pageCount = draw.getPageCount();
+		if (pageCount <= 0) {
+			return IPageVisibleInfo(
+				intersectionPageNo: 0,
+				visiblePageNoList: const <int>[],
+			);
+		}
+		final double pageHeight = (draw.getHeight() as num).toDouble();
+		final double pageGap = (draw.getPageGap() as num).toDouble();
+		final double pageStride = pageHeight + pageGap;
+		if (pageHeight <= 0 || pageStride <= 0) {
+			return null;
+		}
+
+		final Rectangle<num> pageContainerRect =
+				draw.getPageContainer().getBoundingClientRect();
+		final double viewportTop;
+		final double viewportBottom;
+		if (identical(_scrollContainer, document)) {
+			final docElement = document.documentElement;
+			final docClientHeight = (docElement?.clientHeight ?? 0).toDouble();
+			final windowHeight = (window.innerHeight ?? 0).toDouble();
+			viewportTop = -pageContainerRect.top.toDouble();
+			viewportBottom = viewportTop + math.max(docClientHeight, windowHeight);
+		} else if (_scrollContainer is Element) {
+			final Rectangle<num> containerRect =
+					_scrollContainer.getBoundingClientRect();
+			viewportTop = containerRect.top.toDouble() -
+					pageContainerRect.top.toDouble();
+			viewportBottom = containerRect.bottom.toDouble() -
+					pageContainerRect.top.toDouble();
+		} else {
+			return null;
+		}
+
+		if (viewportBottom <= 0 || viewportTop >= pageCount * pageStride) {
+			return IPageVisibleInfo(
+				intersectionPageNo: viewportTop < 0 ? 0 : pageCount - 1,
+				visiblePageNoList: const <int>[],
+			);
+		}
+
+		int first = (viewportTop / pageStride).floor();
+		int last = (viewportBottom / pageStride).floor();
+		first = first.clamp(0, pageCount - 1);
+		last = last.clamp(0, pageCount - 1);
+		final visiblePageNoList = <int>[];
+		var intersectionPageNo = first;
+		var intersectionMaxHeight = 0.0;
+		for (var i = first; i <= last; i++) {
+			final double pageTop = i * pageStride;
+			final double pageBottom = pageTop + pageHeight;
+			final double intersectionHeight =
+					math.min(pageBottom, viewportBottom) -
+							math.max(pageTop, viewportTop);
+			if (intersectionHeight <= 0) {
+				continue;
+			}
+			visiblePageNoList.add(i);
 			if (intersectionHeight > intersectionMaxHeight) {
 				intersectionMaxHeight = intersectionHeight;
 				intersectionPageNo = i;
