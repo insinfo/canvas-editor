@@ -184,12 +184,18 @@ registra lifecycle. Isso torna plugins e testes mais simples.
 
 - Manter `tool/bench/command_latency_bench.dart` e `tool/bench/typing_bench.dart`
   como gates manuais antes de grandes refactors.
+- O `command_latency_bench` deve continuar medindo matriz fast path vs fallback:
+  formatação de texto, inserção inline, backspace e comandos estruturais de
+  tabela. Isso evita esconder regressões por medir só o caso feliz.
 - Adicionar orçamento explícito: nenhum comando comum no TR deve passar de
   100 ms; comandos estruturais grandes devem fatiar UI antes de 50 ms.
 
 ### P1 - Dirty pages reais
 
-- Transformar `_renderSelectionMutation` e deltas em `DirtyPageQueue`.
+- `DirtyPageQueue` extraído para `core/rendering/` no primeiro incremento:
+  scroll agora enfileira páginas e o drain respeita orçamento de frame.
+- Próximo passo: transformar `_renderSelectionMutation` e deltas em
+  `DirtyPageQueue`.
 - Para repaint-only, redesenhar somente páginas afetadas pela seleção.
 - Evitar `_syncPageCanvases` quando page count não mudou.
 

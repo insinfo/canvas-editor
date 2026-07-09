@@ -20,6 +20,12 @@
   OnlyOffice `TextPr.Check_NeedRecalc` pattern.
 - Optimized full table deletion with range/row deltas so undo/redo avoids a
   full document snapshot and skips `computeRowList` for the whole TR document.
+- Extracted scroll-triggered page painting into a reusable `DirtyPageQueue`,
+  matching the OnlyOffice-style separation between invalidating a page and
+  painting it within a frame budget.
+- Kept superscript/subscript inside the paragraph fast path and moved inline
+  text backspace to delta history, avoiding full-document undo snapshots for
+  the common backspace case.
 - Added command-latency benchmark coverage in
   `tool/bench/command_latency_bench.dart`.
 
@@ -32,6 +38,13 @@
   - inline paste 3x: 371.8 ms total;
   - undo/redo paste: 31.5 ms / 46.8 ms;
   - delete table / undo delete table: 256.0 ms / 180.3 ms.
+- Expanded command benchmark matrix now measures formatting commands
+  (`font`, `size`, `bold`, `italic`, `underline`, `strikeout`,
+  `superscript`, `subscript`, `color`, `highlight`) in fast-path and fallback
+  selections, plus inline insert, backspace, and table row/column/table edits.
+  Latest TR run: fast backspace / undo 31.5 ms / 38.4 ms; fast
+  superscript/subscript 36.9 ms / 66.1 ms. Fallback/full layout and table
+  row/column operations still expose multi-second global-layout work.
 - Full E2E smoke suite passes: 39/39.
 
 ### Architecture

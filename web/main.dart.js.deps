@@ -106,6 +106,7 @@ file:///C:/MyDartProjects/canvas-editor-port/lib/src/editor/core/plugin/plugin.d
 file:///C:/MyDartProjects/canvas-editor-port/lib/src/editor/core/position/position.dart
 file:///C:/MyDartProjects/canvas-editor-port/lib/src/editor/core/range/range_manager.dart
 file:///C:/MyDartProjects/canvas-editor-port/lib/src/editor/core/register/register.dart
+file:///C:/MyDartProjects/canvas-editor-port/lib/src/editor/core/rendering/dirty_page_queue.dart
 file:///C:/MyDartProjects/canvas-editor-port/lib/src/editor/core/shortcut/keys/list_keys.dart
 file:///C:/MyDartProjects/canvas-editor-port/lib/src/editor/core/shortcut/keys/richtext_keys.dart
 file:///C:/MyDartProjects/canvas-editor-port/lib/src/editor/core/shortcut/keys/title_keys.dart

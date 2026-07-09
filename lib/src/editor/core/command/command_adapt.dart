@@ -115,6 +115,19 @@ class CommandAdapt {
       return;
     }
 
+    final int deleteStart = isCollapsed ? startIndex : startIndex + 1;
+    final int deleteCount = isCollapsed ? 1 : endIndex - startIndex;
+    final int curIndex = isCollapsed ? startIndex - 1 : startIndex;
+    if (_canUseInlineDeleteDelta(elementList, deleteStart, deleteCount)) {
+      draw.deleteTextRangeWithDeltaHistory(
+        deleteStart,
+        deleteCount,
+        curIndex: curIndex,
+        isFastLayout: true,
+      );
+      return;
+    }
+
     if (!isCollapsed) {
       draw.spliceElementList(
         elementList,
@@ -124,9 +137,49 @@ class CommandAdapt {
     } else {
       draw.spliceElementList(elementList, startIndex, 1);
     }
-    final int curIndex = isCollapsed ? startIndex - 1 : startIndex;
     range.setRange(curIndex, curIndex);
-    draw.render(IDrawOption(curIndex: curIndex));
+    draw.render(
+      IDrawOption(
+        curIndex: curIndex,
+        isSubmitHistoryDeferred: true,
+        fastLayoutIndex: curIndex >= 0 ? curIndex : null,
+      ),
+    );
+  }
+
+  bool _canUseInlineDeleteDelta(
+    List<IElement> elementList,
+    int start,
+    int deleteCount,
+  ) {
+    if (deleteCount <= 0 ||
+        start < 0 ||
+        start + deleteCount > elementList.length) {
+      return false;
+    }
+    for (int i = start; i < start + deleteCount; i++) {
+      final IElement element = elementList[i];
+      final ElementType? type = element.type;
+      if (type != null &&
+          type != ElementType.text &&
+          type != ElementType.superscript &&
+          type != ElementType.subscript) {
+        return false;
+      }
+      if (element.value == ZERO ||
+          element.listId != null ||
+          element.titleId != null ||
+          element.areaId != null ||
+          element.controlId != null ||
+          element.imgDisplay != null ||
+          element.pagingId != null ||
+          element.valueList != null ||
+          element.trList != null ||
+          element.colgroup != null) {
+        return false;
+      }
+    }
+    return true;
   }
 
   void setRange(
@@ -2050,13 +2103,13 @@ class CommandAdapt {
     }
     final List<dynamic> rowList =
         (pageRowList.last as List<dynamic>? ?? <dynamic>[]).toList();
-    final double usedHeight = rowList.fold<double>(0, (double previous, dynamic row) {
+    final double usedHeight =
+        rowList.fold<double>(0, (double previous, dynamic row) {
       final double height = (row?.height as num?)?.toDouble() ?? 0;
       final double offsetY = (row?.offsetY as num?)?.toDouble() ?? 0;
       return previous + height + offsetY;
     });
-    final double remaining =
-        (draw.getHeight() as num).toDouble() -
+    final double remaining = (draw.getHeight() as num).toDouble() -
         (draw.getMainOuterHeight() as num).toDouble() -
         usedHeight;
     return remaining > 0 ? remaining : 0;
@@ -2082,12 +2135,12 @@ class CommandAdapt {
     final List<IElement> surroundElementList =
         element_utils.pickSurroundElementList(targetElementList);
     final List<dynamic> rowList = draw.computeRowList(
-          IComputeRowListPayload(
-            innerWidth: innerWidth,
-            elementList: targetElementList,
-            surroundElementList: surroundElementList,
-          ),
-        ) as List<dynamic>;
+      IComputeRowListPayload(
+        innerWidth: innerWidth,
+        elementList: targetElementList,
+        surroundElementList: surroundElementList,
+      ),
+    ) as List<dynamic>;
     return rowList.fold<double>(0, (double previous, dynamic row) {
       final double height = (row?.height as num?)?.toDouble() ?? 0;
       final double offsetY = (row?.offsetY as num?)?.toDouble() ?? 0;

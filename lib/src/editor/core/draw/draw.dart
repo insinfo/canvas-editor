@@ -37,6 +37,7 @@ import '../observer/scroll_observer.dart';
 import '../observer/selection_observer.dart';
 import '../position/position.dart';
 import '../range/range_manager.dart';
+import '../rendering/dirty_page_queue.dart';
 import '../worker/worker_manager.dart';
 import '../zone/zone.dart';
 import 'control/control.dart';
@@ -170,6 +171,10 @@ class Draw {
     _imageObserver = ImageObserver();
     _tableTool = TableTool(this);
     _tableOperate = TableOperate(this);
+    _scrollDrawQueue = DirtyPageQueue(
+      paint: _drawQueuedScrollPage,
+      shouldPaint: _shouldDrawQueuedScrollPage,
+    );
     final CanvasEvent canvasEvent = CanvasEvent(this);
     _canvasEvent = canvasEvent;
     _cursor = Cursor(this, canvasEvent);
@@ -313,11 +318,7 @@ class Draw {
   // recria o observer; só redesenha as páginas vivas.
   final Set<int> _livePages = <int>{};
   int _observedPageCount = -1;
-  // Fila de páginas a desenhar por causa do scroll (via IntersectionObserver).
-  // O desenho é fatiado em frames (rAF, ~8ms/frame) para a rolagem rápida não
-  // travar a main thread desenhando N páginas de uma vez.
-  final List<int> _pendingScrollDraw = <int>[];
-  bool _scrollDrawScheduled = false;
+  late final DirtyPageQueue _scrollDrawQueue;
   ScrollObserver? _scrollObserver;
   SelectionObserver? _selectionObserver;
   MouseObserver? _mouseObserver;
@@ -518,8 +519,8 @@ class Draw {
 
   bool isReadonly() {
     return _mode == EditorMode.readonly ||
-      _mode == EditorMode.print ||
-      _mode == EditorMode.graffiti;
+        _mode == EditorMode.print ||
+        _mode == EditorMode.graffiti;
   }
 
   bool isDisabled() {
@@ -804,8 +805,7 @@ class Draw {
   /// elementos no TR) — isso é adiado para o 1º save (ação do usuário, com
   /// spinner). `convertedMain` não é mutado por `setValue` (que clona a
   /// entrada), então guardá-lo por referência é seguro.
-  List<IElement> buildSaveReferenceFromConverted(
-      List<IElement> convertedMain) {
+  List<IElement> buildSaveReferenceFromConverted(List<IElement> convertedMain) {
     final List<IElement> main = element_utils.cloneElementList(convertedMain);
     element_utils.formatElementList(
       main,
@@ -1055,11 +1055,9 @@ class Draw {
     final Control? control = _control as Control?;
     final bool isRangeWithinControl =
         control?.getIsRangeWithinControl() == true;
-    final dynamic activeControl = isRangeWithinControl
-        ? control?.ensureActiveControl()
-        : null;
-    if (activeControl != null &&
-        control?.getIsRangeWithinControl() == true) {
+    final dynamic activeControl =
+        isRangeWithinControl ? control?.ensureActiveControl() : null;
+    if (activeControl != null && control?.getIsRangeWithinControl() == true) {
       try {
         final int? controlIndex = control?.setValue(payload);
         if (controlIndex != null) {
@@ -1258,8 +1256,9 @@ class Draw {
     if (start < 0 || start >= elementList.length) {
       return;
     }
-    final int safeDeleteCount =
-        deleteCount > elementList.length - start ? elementList.length - start : deleteCount;
+    final int safeDeleteCount = deleteCount > elementList.length - start
+        ? elementList.length - start
+        : deleteCount;
     final _ElementRangeDeltaHistory? delta = _prepareElementRangeDeleteDelta(
       start,
       safeDeleteCount,
@@ -1288,6 +1287,50 @@ class Draw {
     } else {
       render(IDrawOption(curIndex: curIndex));
     }
+  }
+
+  void deleteTextRangeWithDeltaHistory(
+    int start,
+    int deleteCount, {
+    int? curIndex,
+    bool isFastLayout = true,
+  }) {
+    if (deleteCount <= 0) {
+      return;
+    }
+    final List<IElement> elementList = getElementList();
+    if (start < 0 || start >= elementList.length) {
+      return;
+    }
+    final int safeDeleteCount = deleteCount > elementList.length - start
+        ? elementList.length - start
+        : deleteCount;
+    final _InsertDeltaHistory? delta = _prepareTextDeleteDeltaHistory(
+      start: start,
+      deleteCount: safeDeleteCount,
+      isFastLayout: isFastLayout,
+    );
+    spliceElementList(
+      elementList,
+      start,
+      safeDeleteCount,
+      null,
+      ISpliceElementListOption(isIgnoreDeletedRule: true),
+    );
+    if (curIndex != null) {
+      (_rangeManager as RangeManager?)?.setRange(curIndex, curIndex);
+    }
+    if (delta != null) {
+      _recordInsertDeltaHistoryAfter(delta, curIndex ?? start);
+    }
+    render(
+      IDrawOption(
+        curIndex: curIndex,
+        isSubmitHistory: delta == null,
+        isSubmitHistoryDeferred: delta == null,
+        fastLayoutIndex: isFastLayout ? curIndex : null,
+      ),
+    );
   }
 
   // Snapshot de histórico adiado por rajada de digitação (P1 do plano de
@@ -1371,6 +1414,36 @@ class Draw {
       removedSnapshot: removedSnapshot,
       insertedSnapshot: insertedSnapshot,
       beforeRange: beforeRange,
+      isFastLayout: isFastLayout,
+    );
+    historyManager.replaceCurrent(() {
+      _restoreInsertDeltaHistory(delta, isAfter: false);
+    });
+    return delta;
+  }
+
+  _InsertDeltaHistory? _prepareTextDeleteDeltaHistory({
+    required int start,
+    required int deleteCount,
+    required bool isFastLayout,
+  }) {
+    final HistoryManager? historyManager = _historyManager as HistoryManager?;
+    final RangeManager? rangeManager = _rangeManager as RangeManager?;
+    if (historyManager == null || rangeManager == null) {
+      return null;
+    }
+    cancelDeferredHistory();
+    final List<IElement> elementList = getElementList();
+    if (start < 0 || start + deleteCount > elementList.length) {
+      return null;
+    }
+    final _InsertDeltaHistory delta = _InsertDeltaHistory(
+      insertStart: start,
+      removedSnapshot: element_utils.cloneElementList(
+        elementList.sublist(start, start + deleteCount),
+      ),
+      insertedSnapshot: const <IElement>[],
+      beforeRange: _cloneRange(rangeManager.getRange()),
       isFastLayout: isFastLayout,
     );
     historyManager.replaceCurrent(() {
@@ -2077,25 +2150,26 @@ class Draw {
             metrics.boundingBoxAscent = (captionSize + captionTop) * scale;
           }
         }
-        } else if (element.type == ElementType.label) {
+      } else if (element.type == ElementType.label) {
         final IPadding padding = _options.label?.defaultPadding ??
-          IPadding(top: 4, right: 4, bottom: 4, left: 4);
+            IPadding(top: 4, right: 4, bottom: 4, left: 4);
         final String labelFont = getElementFont(element);
         final ITextMetrics fontMetrics =
-          textParticle!.measureTextWithFont(ctx, element, labelFont);
+            textParticle!.measureTextWithFont(ctx, element, labelFont);
         metrics.width =
-          fontMetrics.width + (padding.right + padding.left) * scale;
+            fontMetrics.width + (padding.right + padding.left) * scale;
         metrics.height = ((element.size ?? defaultSize).toDouble()) * scale;
         metrics.boundingBoxDescent = 0;
         metrics.boundingBoxAscent =
-          (padding.top + fontMetrics.actualBoundingBoxAscent) * scale;
+            (padding.top + fontMetrics.actualBoundingBoxAscent) * scale;
       } else if (element.type == ElementType.table &&
           element.tablePartRenderId == _renderCount) {
         // Parte de tabela já particionada NESTE render (F4.5/F5): o setup
         // completo (computeRowColInfo, layout de célula, redução, split) já
         // rodou uma vez sobre a tabela inteira; aqui só emitimos a geometria
         // desta parte, evitando o custo O(partes×linhas).
-        final double partHeight = element.tablePartHeight ?? element.height ?? 0;
+        final double partHeight =
+            element.tablePartHeight ?? element.height ?? 0;
         element.height = partHeight;
         metrics.width = (element.width ?? 0) * scale;
         metrics.height = partHeight * scale;
@@ -2370,7 +2444,8 @@ class Draw {
         double fontAscent;
         double fontDescent;
         if (ttf != null) {
-          metrics.width = isZero ? 0 : ttf.measureWidth(element.value, scaledSize);
+          metrics.width =
+              isZero ? 0 : ttf.measureWidth(element.value, scaledSize);
           glyphAscent = isZero ? scaledSize : ttf.ascentPx(scaledSize);
           glyphDescent = ttf.descentPx(scaledSize);
           // lineGap todo acima (baseline ancorada pelo descent embaixo).
@@ -2492,8 +2567,8 @@ class Draw {
           final bool preIsLetter = preElement != null &&
               effectiveLetterReg.hasMatch(preElement.value);
           if (curIsLetter && !preIsLetter) {
-            final IMeasureWordResult measureResult =
-                textParticle.measureWord(ctx, elementList, i, resolvedFontStyle);
+            final IMeasureWordResult measureResult = textParticle.measureWord(
+                ctx, elementList, i, resolvedFontStyle);
             final IElement? endElement = measureResult.endElement;
             final double wordWidth = measureResult.width * scale;
             // NÃO exigir endElement != null: a última palavra da célula não
@@ -2610,9 +2685,7 @@ class Draw {
           // entra negativo); linhas de continuação (wrap) = left.
           final bool isParagraphStart = element.value == ZERO;
           final double indent = ((element.paraIndentLeft ?? 0) +
-                  (isParagraphStart
-                      ? (element.paraIndentFirstLine ?? 0)
-                      : 0)) *
+                  (isParagraphStart ? (element.paraIndentFirstLine ?? 0) : 0)) *
               scale;
           if (indent > 0) {
             newRow.offsetX = indent;
@@ -2930,7 +3003,9 @@ class Draw {
           break;
         }
         final int spanEnd = r0 + td.rowspan;
-        for (int rr = r0; rr < (spanEnd < prevCount ? spanEnd : prevCount); rr++) {
+        for (int rr = r0;
+            rr < (spanEnd < prevCount ? spanEnd : prevCount);
+            rr++) {
           for (int cc = col; cc < col + td.colspan && cc < gridCols; cc++) {
             owners[rr][cc] = td;
           }
@@ -3028,17 +3103,16 @@ class Draw {
       }
     }
     final double firstTrHeight = fullTrList.first.height * scale;
-    if (curPagePreHeight + firstTrHeight + rowMarginHeight > pageContentHeight ||
-        (index > 0 &&
-            elementList[index - 1].type == ElementType.pageBreak)) {
+    if (curPagePreHeight + firstTrHeight + rowMarginHeight >
+            pageContentHeight ||
+        (index > 0 && elementList[index - 1].type == ElementType.pageBreak)) {
       curPagePreHeight = marginHeight;
     }
 
     // 2) Fronteiras de corte em um passo (altura acumulada, sem re-varrer).
     final List<ITr> repeatHeaders =
         fullTrList.where((ITr t) => t.pagingRepeat == true).toList();
-    final double repeatHeadersHeight =
-        _sumTrHeight(repeatHeaders) * scale;
+    final double repeatHeadersHeight = _sumTrHeight(repeatHeaders) * scale;
     final List<int> cutIndices = <int>[];
     int partStart = 0;
     double pageFill = curPagePreHeight;
@@ -3160,7 +3234,7 @@ class Draw {
   /// chamador como de costume. Retorna `false` (cai no relayout completo)
   /// em qualquer situação fora do caso trivial:
   /// zona ≠ main, cursor em tabela, floats/surround no documento, parágrafo
-  /// com lista/área/controle/título de lista/elemento não-textual, rowFlex
+  /// com lista/área/controle/título de lista/elemento não-inline, rowFlex
   /// misto no parágrafo, ou fronteiras de rows desalinhadas.
   bool _tryFastParagraphLayout(int anchorIndex) {
     final Position? position = _position as Position?;
@@ -3196,7 +3270,10 @@ class Draw {
     for (int i = pStart; i < pEnd; i++) {
       final IElement el = elementList[i];
       final ElementType? type = el.type;
-      if (type != null && type != ElementType.text) {
+      if (type != null &&
+          type != ElementType.text &&
+          type != ElementType.superscript &&
+          type != ElementType.subscript) {
         return false;
       }
       if (el.listId != null ||
@@ -3420,7 +3497,7 @@ class Draw {
     final bool isDrawLineBreak =
         payload.isDrawLineBreak ?? (_options.lineBreak?.disabled != true);
     final bool isDrawWhiteSpace =
-      payload.isDrawWhiteSpace ?? (_options.whiteSpace?.disabled != true);
+        payload.isDrawWhiteSpace ?? (_options.whiteSpace?.disabled != true);
     final List<IRow> rowList = payload.rowList;
     final List<IElementPosition> positionList = payload.positionList;
     final List<IElement> elementList = payload.elementList;
@@ -3453,7 +3530,7 @@ class Draw {
     final LineBreakParticle? lineBreakParticle =
         _lineBreakParticle as LineBreakParticle?;
     final WhiteSpaceParticle? whiteSpaceParticle =
-      _whiteSpaceParticle as WhiteSpaceParticle?;
+        _whiteSpaceParticle as WhiteSpaceParticle?;
     final Control? control = _control as Control?;
     final Underline? underline = _underline as Underline?;
     final Strikeout? strikeout = _strikeout as Strikeout?;
@@ -3959,49 +4036,30 @@ class Draw {
     _lazyRenderObserver = null;
     _observedPageCount = -1;
     _livePages.clear();
-    _pendingScrollDraw.clear();
+    _scrollDrawQueue.clear();
   }
 
-  /// Agenda o dreno da fila de desenho de scroll num frame (rAF), coalescendo
-  /// múltiplas mudanças de visibilidade num só drain fatiado.
-  void _scheduleScrollDraw() {
-    if (_scrollDrawScheduled) {
-      return;
-    }
-    _scrollDrawScheduled = true;
-    window.requestAnimationFrame((_) => _drainScrollDraw());
-  }
+  bool _shouldDrawQueuedScrollPage(int pageIndex) =>
+      pageIndex >= 0 &&
+      pageIndex < _pageRowList.length &&
+      _livePages.contains(pageIndex);
 
-  /// Desenha as páginas pendentes do scroll com time-budget (~8ms/frame),
-  /// cedendo entre frames para a rolagem não travar.
-  void _drainScrollDraw() {
-    _scrollDrawScheduled = false;
+  void _drawQueuedScrollPage(int pageIndex) {
     final Position? position = _position as Position?;
-    if (position == null || _pendingScrollDraw.isEmpty) {
+    if (position == null) {
       return;
     }
     final List<IElementPosition> positionList =
         position.getOriginalMainPositionList();
     final List<IElement> elementList = getOriginalMainElementList();
-    final double start = window.performance.now();
-    while (_pendingScrollDraw.isNotEmpty) {
-      final int i = _pendingScrollDraw.removeAt(0);
-      if (i >= 0 && i < _pageRowList.length && _livePages.contains(i)) {
-        _drawPage(
-          IDrawPagePayload(
-            elementList: elementList,
-            positionList: positionList,
-            rowList: _pageRowList[i],
-            pageNo: i,
-          ),
-        );
-      }
-      if (_pendingScrollDraw.isNotEmpty &&
-          window.performance.now() - start > 8) {
-        _scheduleScrollDraw();
-        break;
-      }
-    }
+    _drawPage(
+      IDrawPagePayload(
+        elementList: elementList,
+        positionList: positionList,
+        rowList: _pageRowList[pageIndex],
+        pageNo: pageIndex,
+      ),
+    );
   }
 
   /// Mantém/libera o backing store do canvas da página [i] (F5.4a —
@@ -4113,16 +4171,13 @@ class Draw {
           if (isIntersecting) {
             _livePages.add(pageIndex);
             _setPageCanvasLive(pageIndex, true);
-            if (!_pendingScrollDraw.contains(pageIndex)) {
-              _pendingScrollDraw.add(pageIndex);
-            }
+            _scrollDrawQueue.enqueue(pageIndex);
           } else {
             _livePages.remove(pageIndex);
-            _pendingScrollDraw.remove(pageIndex);
+            _scrollDrawQueue.remove(pageIndex);
             _setPageCanvasLive(pageIndex, false);
           }
         }
-        _scheduleScrollDraw();
       },
       <String, dynamic>{'rootMargin': '${bufferPx}px 0px ${bufferPx}px 0px'},
     );
@@ -4130,7 +4185,8 @@ class Draw {
     // Estado inicial síncrono (F5.4a): desenha as páginas atualmente no
     // viewport (± buffer) e libera as demais, para a memória já nascer plana
     // e a 1ª página visível ficar pronta antes de qualquer assert de teste.
-    final double viewportBottom = (window.innerHeight ?? 800) + bufferPx.toDouble();
+    final double viewportBottom =
+        (window.innerHeight ?? 800) + bufferPx.toDouble();
     final double viewportTop = -bufferPx.toDouble();
     _livePages.clear();
     for (int i = 0; i < _pageList.length; i++) {
@@ -4189,8 +4245,7 @@ class Draw {
     final bool isSourceHistory = renderOption.isSourceHistory ?? false;
     final bool isSetCursor = renderOption.isSetCursor ?? true;
     final bool isFirstRender = renderOption.isFirstRender ?? false;
-    final bool isRowListPrecomputed =
-        renderOption.isRowListPrecomputed == true;
+    final bool isRowListPrecomputed = renderOption.isRowListPrecomputed == true;
     int? curIndex = renderOption.curIndex;
     final double innerWidth = getInnerWidth();
     if (innerWidth <= 0) {
@@ -4988,8 +5043,7 @@ class Draw {
   /// latinos (0xC0-0x24F: à á â ã ç é ê í ó ô õ ú etc.). Sem os acentos, o
   /// `[A-Za-z]` quebrava palavras em português no meio ("Implanta|ção"),
   /// porque a medição de palavra parava no 1º caractere acentuado.
-  static final RegExp _defaultLetterReg =
-      RegExp('[A-Za-zÀ-ɏ]');
+  static final RegExp _defaultLetterReg = RegExp('[A-Za-zÀ-ɏ]');
 
   static const double _defaultOriginalWidth = 794; // px ~ A4 portrait (210mm)
   static const double _defaultOriginalHeight = 1123; // px ~ A4 portrait (297mm)
