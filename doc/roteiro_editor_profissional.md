@@ -24,7 +24,9 @@
 | F4.10 fontes TTF | 🔶 parcial (2026-07-08) | **`ce_fonts`** (Dart puro, D4): parser TTF compacto (`head`/`hhea`/`OS2`/`hmtx`/`cmap` formato 4) + `FontMetrics` (largura por codepoint, altura de linha ascent/descent/lineGap) + `FontRegistry` (família→métricas, substituição Ecofont/Calibri→Arial) + gerador `tool/gen_font_metrics.dart` que extrai as métricas dos TTF do sistema para `metrics_data.dart` embarcado (Arial/Times/Courier; ~99,9% dos DOCX de resources/ é Arial). Layout usa medição TTF **determinística** (largura + altura) quando a família é conhecida — independe das fontes que o browser tem —, com fallback canvas. 9 testes ce_fonts. Nota: as larguras exatas do Arial confirmaram que o overshoot do TR (184 vs 140 Word) **não é largura** e sim altura de linha/linha de tabela (F4.3/F4.5 fino, pendente). Pendente: métricas próprias de Calibri/Cambria, kerning, upload de TTF do usuário na UI |
 | F5 desempenho | 🔶 parcial (2026-07-08) | **Abertura do TR: 63s→6,3s (10×) nesta leva.** Quatro gargalos removidos, medidos com timing por fase (`Draw.debugRenderTiming`): (1) **table paging em passo único** — particiona a tabela inteira de uma vez (setup O(linhas) 1×) em vez de cortar uma parte por iteração re-executando o setup (era O(partes×linhas)); reconstituição limpa células-continuação e restaura rowspans (63→20s); (2) **unzip com `replaceRange`** — o `formatElementList` fazia `removeAt`+N `insert` no meio de uma lista de 514k (O(chars×runs) ≈ 2 bi ops), agora desloca a cauda 1× por run (20→11s); (3) **fast-clone de texto simples** em `_cloneElement` (evita tocar ~60 campos+subclones por elemento — pesa em histórico/save/getValue); (4) **referência de save adiada** — o `getValue` (zip de 514k = pickElementAttr+merge, ~7s) só é materializado no 1º save; a abertura guarda um snapshot fast-clone (11→6,3s). ETP abre em ~0,8s; digitação ETP ~30ms. Ainda acima do orçamento G4 (<3s): falta **F5.4 virtualização** (o Word renderiza sob demanda ao rolar — layout/canvas só das páginas no viewport, altura total estimada). |
 | F5 (1º incremento) | 🔶 parcial (2026-07-07) | Plano dedicado em [plano_otimizacao_performance.md](plano_otimizacao_performance.md) (antecipado por digitação ~1 s/tecla e travada ao abrir o TR). **F5.1 parcial**: benchmark `tool/bench/typing_bench.dart` (dart2js -O2 + puppeteer, abre ETP/TR reais e digita no meio do doc). **F5.5 parcial** (mecanismo estudado no OnlyOffice sdkjs — ver §5 do plano): fast path de digitação com relayout **só do parágrafo do cursor** (`Draw._tryFastParagraphLayout` + `IDrawOption.fastLayoutIndex` em input/backspace/delete, com guardas p/ lista/tabela/float/controle) e **undo agrupado por rajada** (snapshot de histórico adiado com debounce 300 ms — elimina o clone O(doc) por tecla). **F5.6 parcial**: medição sem interop DOM por elemento (`TextParticle.measureTextWithFont`), `IElementPosition.coordinate` lazy, abertura DOCX em **1 render** (era 4) + spinner `.ce-loading-overlay`; `tool/serve_web.dart` (release -O2 em :8080 — DDC/`webdev serve` só p/ depurar). **Resultados** (release, DOCX reais): digitação ETP 339→39 ms/tecla (8,6×); TR congelava (>3 min/tecla)→281 ms; abrir ETP 1,75→1,13 s; TR 16,8→10,7 s. Pendentes: F5.2 (SAX direto), F5.3 (layout incremental com EndInfo/convergência), F5.4 (virtualização de canvases), F5.5 restante (fast path intra-linha, posições incrementais, recálculo fatiado em timer), histórico por deltas |
-| F6–F8 | ⬜ | — |
+| F6 shell Word | 🔶 em andamento | ribbon dinâmica, status bar, navegação, localizar/substituir, comentários, régua, page setup e mini-toolbar contextual de texto no `CanvasEditorWidget` |
+| F7 PDF | 🔶 parcial | exportação multipágina page-faithful via canvas/JPEG + `RasterPdfEncoder`; pendente backend vetorial/pesquisável com subset TTF |
+| F8 robustez | ⬜ | — |
 
 CI local: `dart run tool/ci.dart` (packages + raiz + inventário; `--e2e` opcional).
 
@@ -348,6 +350,14 @@ busca, comentários, paginação — reorganizar no padrão Word/Fluent):
    novos recursos da Fase 4.
 6. Atalhos Word (Ctrl+B/I/U, Ctrl+E/L/R/J, Ctrl+Enter quebra de página, F12 salvar como…).
 
+**Incremento pós-reestruturação (2026-07-10):** `CanvasEditorWidget` passou a
+compor ribbon, status bar e painéis como `UiComponent`s descartáveis. A seleção
+textual não colapsada abre uma mini-toolbar contextual posicionada pelo canvas,
+com formatação rápida e cópia; as atualizações passam pelo `UiScheduler` e o
+componente não é criado no modo viewer. Próximo incremento: variantes
+contextuais específicas para tabela e imagem, sem duplicar o context menu do
+core.
+
 **Aceite:** checklist visual comparativa com o Word (screenshots lado a lado); E2E de ribbon
 (aplicar estilo, mudar margem, inserir quebra) verde.
 
@@ -369,6 +379,13 @@ paralelo do TS:
    (c) tamanho: TR em PDF < ~10 MB com subsetting; (d) abrir em Acrobat/Chrome/SumatraPDF.
 
 **Aceite:** G6 nos 2 DOCX; texto selecionável/pesquisável; paginação idêntica à tela.
+
+**Incremento pós-reestruturação (2026-07-10):** entregue exportação raster
+multipágina fiel ao canvas, sem dependências externas, incluindo tabelas,
+imagens, shapes e headers/footers. O arquivo foi validado estruturalmente com
+`pypdf` e renderizado página a página com PyMuPDF. Este incremento resolve a
+exportação visual; ainda não satisfaz o aceite G6 de texto selecionável, que
+permanece dependente de `PdfRenderContext` vetorial e subset TTF.
 
 ### Fase 8 — Robustez, corpus e regressão contínua
 1. Ampliar o corpus: gerar variações no Word (documento com even/first headers ativos, floating

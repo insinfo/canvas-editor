@@ -55,6 +55,10 @@ shell wiring into the new component architecture:
 - **Comments sidebar restored**: host-provided `CanvasEditorComment` data is
   matched against live document `groupIds`, with navigation, keyboard access,
   deletion callbacks and read-only viewer behavior.
+- **Contextual text mini-toolbar**: non-collapsed canvas selections now show a
+  lightweight floating toolbar for bold, italic, underline, strikeout, copy
+  and clear-formatting. Positioning follows the selected page and zoom, DOM
+  updates are frame-coalesced, and the component is omitted in viewer mode.
 - **Loading overlay restored** (`widget_loading_overlay.dart`), shown on DOCX
   open/save and page-image export, yielding two animation frames before the
   heavy synchronous work.

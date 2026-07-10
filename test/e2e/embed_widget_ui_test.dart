@@ -56,6 +56,9 @@ void main() {
     'setViewer': js_util.allowInterop(() {
       widget.setMode(CanvasEditorWidgetMode.viewer);
     }),
+    'refreshFloatingToolbar': js_util.allowInterop(() {
+      widget.refreshFloatingToolbar();
+    }),
   }));
   js_util.setProperty(window, '__embedReady', true);
 }
@@ -189,6 +192,23 @@ void main() {
     await Future<void>.delayed(const Duration(milliseconds: 120));
     expect(await _hasBold(page!), isTrue);
     expect(await _canvasData(page!), boldCanvas);
+  });
+
+  test('mini-toolbar aparece na seleção e aplica formatação rápida', () async {
+    await page!.evaluate<void>('() => window.__embedTest.reset()');
+    await Future<void>.delayed(const Duration(milliseconds: 180));
+    await page!
+        .evaluate<void>('() => window.__embedTest.refreshFloatingToolbar()');
+    await Future<void>.delayed(const Duration(milliseconds: 120));
+    expect(
+      await page!.evaluate<String>(
+        "() => getComputedStyle(document.querySelector('.ce-floating-toolbar')).display",
+      ),
+      'flex',
+    );
+    await page!.click('.ce-floating-toolbar [aria-label="Negrito"]');
+    await Future<void>.delayed(const Duration(milliseconds: 120));
+    expect(await _hasBold(page!), isTrue);
   });
 
   test('modo viewer oculta ribbon e entrada de edição', () async {
