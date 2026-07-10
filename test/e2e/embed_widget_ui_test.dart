@@ -139,7 +139,10 @@ void main() {
   tearDown(() async => page?.close());
 
   test('renderiza a aparência Word completa com ribbon dinâmica', () async {
-    expect(await page!.$$('.ce-word-tabs [data-ce-tab]'), hasLength(5));
+    expect(await page!.$$('.ce-word-tabs [data-ce-tab]'), hasLength(6));
+    expect(await page!.$$('[data-ce-tab="review"]'), hasLength(1));
+    await page!.click('[data-ce-tab="review"]');
+    expect(await page!.$$('[data-ce-command="comments"]'), hasLength(1));
     expect(await page!.$$('.ce-word-panel.active .ce-word-group'), isNotEmpty);
     expect(await page!.$$('.ce-embed__scroll'), hasLength(1));
   });

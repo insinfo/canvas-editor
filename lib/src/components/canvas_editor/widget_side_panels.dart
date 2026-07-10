@@ -5,6 +5,137 @@ import '../../editor/index.dart';
 import '../../editor/interface/search.dart' show IReplaceOption;
 import '../core/ui_component.dart';
 
+/// Comentário associado a um grupo de elementos do documento.
+///
+/// [id] deve corresponder ao `groupId` gravado nos elementos comentados. A
+/// aplicação hospedeira mantém o conteúdo/autoria; o editor cuida apenas da
+/// navegação e da remoção da marcação no documento.
+class CanvasEditorComment {
+  const CanvasEditorComment({
+    required this.id,
+    required this.content,
+    this.author,
+    this.quotedText,
+    this.createdAt,
+  });
+
+  final String id;
+  final String content;
+  final String? author;
+  final String? quotedText;
+  final DateTime? createdAt;
+}
+
+/// Sidebar de comentários desacoplada de mocks. Somente comentários cujos
+/// grupos ainda existem no documento são mostrados.
+class WidgetCommentsPanel extends UiComponent {
+  WidgetCommentsPanel(
+    this._command, {
+    required List<CanvasEditorComment> comments,
+    required void Function() onClose,
+    this.onDelete,
+    this.readOnly = false,
+  })  : _comments = List<CanvasEditorComment>.from(comments),
+        _onClose = onClose {
+    _main = DivElement()..classes.add('ce-panel__main');
+    root = DivElement()
+      ..classes.addAll(<String>['ce-panel', 'ce-panel--comments'])
+      ..style.display = 'none'
+      ..children.addAll(<Element>[
+        _buildHeader('Comentários', hide),
+        _main,
+      ]);
+  }
+
+  final Command _command;
+  final void Function() _onClose;
+  final void Function(CanvasEditorComment comment)? onDelete;
+  final bool readOnly;
+  final List<CanvasEditorComment> _comments;
+
+  @override
+  late final DivElement root;
+  late final DivElement _main;
+
+  bool get isVisible => root.style.display != 'none';
+
+  Future<void> show() async {
+    root.style.display = 'flex';
+    await refresh();
+  }
+
+  void hide() {
+    root.style.display = 'none';
+    _onClose();
+  }
+
+  void setComments(Iterable<CanvasEditorComment> comments) {
+    _comments
+      ..clear()
+      ..addAll(comments);
+    if (isVisible) unawaited(refresh());
+  }
+
+  Future<void> refresh() async {
+    final Set<String> groupIds = (await _command.getGroupIds()).toSet();
+    final List<CanvasEditorComment> visible = _comments
+        .where((CanvasEditorComment comment) => groupIds.contains(comment.id))
+        .toList(growable: false);
+    _main.children.clear();
+    if (visible.isEmpty) {
+      _main.append(DivElement()
+        ..classes.add('ce-panel__empty')
+        ..text = 'O documento não tem comentários.');
+      return;
+    }
+    for (final CanvasEditorComment comment in visible) {
+      _main.append(_buildComment(comment));
+    }
+  }
+
+  Element _buildComment(CanvasEditorComment comment) {
+    final DivElement card = DivElement()
+      ..classes.add('ce-comment')
+      ..tabIndex = 0
+      ..onClick.listen((_) => _command.executeLocationGroup(comment.id))
+      ..onKeyDown.listen((KeyboardEvent event) {
+        if (event.key == 'Enter' || event.key == ' ') {
+          event.preventDefault();
+          _command.executeLocationGroup(comment.id);
+        }
+      });
+    if (comment.author?.isNotEmpty == true) {
+      card.append(SpanElement()
+        ..classes.add('ce-comment__author')
+        ..text = comment.author);
+    }
+    if (comment.quotedText?.isNotEmpty == true) {
+      card.append(DivElement()
+        ..classes.add('ce-comment__quote')
+        ..text = comment.quotedText);
+    }
+    card.append(DivElement()
+      ..classes.add('ce-comment__content')
+      ..text = comment.content);
+    if (!readOnly) {
+      card.append(ButtonElement()
+        ..type = 'button'
+        ..classes.add('ce-comment__delete')
+        ..title = 'Excluir comentário'
+        ..setAttribute('aria-label', 'Excluir comentário')
+        ..append(SpanElement()..classes.addAll(<String>['ti', 'ti-trash']))
+        ..onClick.listen((MouseEvent event) {
+          event.stopPropagation();
+          _command.executeDeleteGroup(comment.id);
+          _comments.removeWhere((item) => item.id == comment.id);
+          onDelete?.call(comment);
+          unawaited(refresh());
+        }));
+    }
+    return card;
+  }
+}
+
 /// Painel de navegação (catálogo/sumário) estilo Word: lista os títulos do
 /// documento e navega até eles via `executeLocationCatalog`.
 class WidgetCatalogPanel extends UiComponent {

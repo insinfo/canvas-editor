@@ -38,6 +38,8 @@ class CanvasEditorConfig {
     this.onError,
     this.data,
     this.editorOptions,
+    this.comments = const <CanvasEditorComment>[],
+    this.onCommentDeleted,
   });
 
   final CanvasEditorWidgetMode mode;
@@ -51,6 +53,8 @@ class CanvasEditorConfig {
   final void Function(Object error)? onError;
   final IEditorData? data;
   final IEditorOption? editorOptions;
+  final List<CanvasEditorComment> comments;
+  final void Function(CanvasEditorComment comment)? onCommentDeleted;
 }
 
 /// Embeddable facade for Dart Web and AngularDart applications.
@@ -89,6 +93,7 @@ class CanvasEditorWidget implements CanvasEditorShellActions {
   late final WidgetStatusBar statusBar;
   late final WidgetCatalogPanel catalogPanel;
   late final WidgetFindPanel findPanel;
+  late final WidgetCommentsPanel commentsPanel;
   WidgetRibbon? _ribbon;
   WidgetCompactToolbar? _compactToolbar;
 
@@ -172,9 +177,17 @@ class CanvasEditorWidget implements CanvasEditorShellActions {
 
     catalogPanel = WidgetCatalogPanel(command, onClose: closeCatalog);
     findPanel = WidgetFindPanel(command, onClose: () {});
+    commentsPanel = WidgetCommentsPanel(
+      command,
+      comments: config.comments,
+      onClose: () {},
+      onDelete: config.onCommentDeleted,
+      readOnly: config.mode == CanvasEditorWidgetMode.viewer,
+    );
     body
       ..insertBefore(findPanel.root, scrollContainer)
-      ..insertBefore(catalogPanel.root, findPanel.root);
+      ..insertBefore(catalogPanel.root, findPanel.root)
+      ..insertBefore(commentsPanel.root, catalogPanel.root);
 
     statusBar = WidgetStatusBar(command)..setVisible(config.showStatusBar);
     root.append(statusBar.root);
@@ -227,6 +240,9 @@ class CanvasEditorWidget implements CanvasEditorShellActions {
     if (catalogPanel.isVisible) {
       unawaited(catalogPanel.refresh());
     }
+    if (commentsPanel.isVisible) {
+      unawaited(commentsPanel.refresh());
+    }
   }
 
   void _scheduleWordCount() {
@@ -265,6 +281,7 @@ class CanvasEditorWidget implements CanvasEditorShellActions {
       closeCatalog();
     } else {
       if (findPanel.isVisible) findPanel.close();
+      if (commentsPanel.isVisible) commentsPanel.hide();
       catalogPanel.show();
       unawaited(catalogPanel.refresh());
     }
@@ -272,10 +289,26 @@ class CanvasEditorWidget implements CanvasEditorShellActions {
 
   void closeCatalog() => catalogPanel.hide();
 
+  /// Abre/fecha os comentários associados aos `groupIds` do documento.
+  @override
+  void toggleComments() {
+    if (commentsPanel.isVisible) {
+      commentsPanel.hide();
+      return;
+    }
+    if (catalogPanel.isVisible) catalogPanel.hide();
+    if (findPanel.isVisible) findPanel.close();
+    unawaited(commentsPanel.show());
+  }
+
+  void setComments(Iterable<CanvasEditorComment> comments) =>
+      commentsPanel.setComments(comments);
+
   /// Abre o painel Localizar/Substituir (Ctrl+F / Ctrl+H).
   @override
   void openFind({bool focusReplace = false}) {
     if (catalogPanel.isVisible) catalogPanel.hide();
+    if (commentsPanel.isVisible) commentsPanel.hide();
     findPanel.open(focusReplace: focusReplace);
   }
 
@@ -519,6 +552,7 @@ class CanvasEditorWidget implements CanvasEditorShellActions {
     _compactToolbar?.dispose();
     catalogPanel.dispose();
     findPanel.dispose();
+    commentsPanel.dispose();
     statusBar.dispose();
     loading.dispose();
     editor.destroy();

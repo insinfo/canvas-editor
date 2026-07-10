@@ -52,6 +52,9 @@ shell wiring into the new component architecture:
   (`getSearchNavigateInfo`), prev/next navigation, replace-one (indexed) and
   replace-all, wired to Ctrl+F / Ctrl+H inside the widget (works in viewer
   mode too via focusable scroll container).
+- **Comments sidebar restored**: host-provided `CanvasEditorComment` data is
+  matched against live document `groupIds`, with navigation, keyboard access,
+  deletion callbacks and read-only viewer behavior.
 - **Loading overlay restored** (`widget_loading_overlay.dart`), shown on DOCX
   open/save and page-image export, yielding two animation frames before the
   heavy synchronous work.
@@ -80,8 +83,9 @@ shell wiring into the new component architecture:
 - `example/` now uses the real widget APIs for the catalog and status bar
   toggles instead of the temporary DOM-class hacks.
 
-Still pending from the original regression list: the comments sidebar and the
-remaining Word-mode dialogs; PDF export was never implemented
+Still pending from the original regression list: the remaining Word-mode
+dialogs; PDF export is available only in the reference branch and has not yet
+been ported to the consolidated package
 (`lib/src/document/pdf/` is an empty placeholder).
 
 ### Embedding
