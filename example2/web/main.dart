@@ -1,0 +1,6 @@
+// ignore_for_file: uri_has_not_been_generated
+
+import 'package:ngdart/angular.dart';
+import 'package:canvas_text_editor_example2/app_component.template.dart' as ng;
+
+void main() => runApp(ng.AppComponentNgFactory);

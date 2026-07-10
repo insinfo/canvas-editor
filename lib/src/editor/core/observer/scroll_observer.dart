@@ -82,7 +82,13 @@ class ScrollObserver {
       viewHeight = math.max(docClientHeight, windowHeight);
     } else {
       final container = _scrollContainer as Element;
-      viewHeight = container.clientHeight.toDouble();
+      final Rectangle<num> containerRect = container.getBoundingClientRect();
+      final double visibleHeight =
+          math.min(rect.bottom.toDouble(), containerRect.bottom.toDouble()) -
+              math.max(rect.top.toDouble(), containerRect.top.toDouble());
+      return IElementVisibleInfo(
+        intersectionHeight: visibleHeight > 0 ? visibleHeight : 0,
+      );
     }
     final visibleHeight = math.min(rect.bottom.toDouble(), viewHeight) -
         math.max(rect.top.toDouble(), 0);

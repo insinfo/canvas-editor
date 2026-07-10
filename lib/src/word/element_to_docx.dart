@@ -7,8 +7,8 @@
 
 import 'dart:convert';
 
-import 'package:ce_docx/ce_docx.dart';
-import 'package:ce_opc/ce_opc.dart';
+import 'package:canvas_text_editor/ce_docx.dart';
+import 'package:canvas_text_editor/ce_opc.dart';
 
 import '../editor/dataset/enum/element.dart';
 import '../editor/dataset/enum/row.dart';
@@ -62,9 +62,8 @@ class EditorToDocx {
         }
       }
 
-      final originalBlock = stamp != null && stamp < body.length
-          ? body[stamp]
-          : null;
+      final originalBlock =
+          stamp != null && stamp < body.length ? body[stamp] : null;
       final originalSpec = stamp != null ? originalSpecs[stamp] : null;
 
       if (originalBlock != null &&
@@ -91,8 +90,7 @@ class EditorToDocx {
         newBody.add(_tableFromElement(
             spec.table!, originalBlock is WpTable ? originalBlock : null));
       } else {
-        newBody.add(_paragraphFromElements(
-            spec.elements,
+        newBody.add(_paragraphFromElements(spec.elements,
             originalBlock is WpParagraph ? originalBlock.properties : null));
       }
     }
@@ -196,8 +194,7 @@ class EditorToDocx {
       final parts = element.value.split('\n');
       for (var p = 0; p < parts.length; p++) {
         if (p > 0) {
-          expanded.add(IElement(value: '\n')
-            ..externalId = element.externalId);
+          expanded.add(IElement(value: '\n')..externalId = element.externalId);
         }
         if (parts[p].isNotEmpty) {
           expanded.add(_cloneWithValue(element, parts[p]));
@@ -337,8 +334,8 @@ class EditorToDocx {
 
     void flushRun() {
       if (pendingRun.isEmpty) return;
-      inlines.add(
-          WpRun(properties: pendingProps, content: List.of(pendingRun)));
+      inlines
+          .add(WpRun(properties: pendingProps, content: List.of(pendingRun)));
       pendingRun.clear();
       pendingProps = null;
     }
@@ -499,9 +496,8 @@ class EditorToDocx {
   }
 
   WpDrawing? _embedNewImage(IElement element) {
-    final match =
-        RegExp(r'^data:(image/[a-z+]+);base64,(.+)$', dotAll: true)
-            .firstMatch(element.value);
+    final match = RegExp(r'^data:(image/[a-z+]+);base64,(.+)$', dotAll: true)
+        .firstMatch(element.value);
     if (match == null) {
       notes.add('imagem sem data URL válida ignorada no save');
       return null;
@@ -564,8 +560,7 @@ class EditorToDocx {
 
   WpTable _tableFromElement(IElement element, WpTable? base) {
     final colgroup = element.colgroup ?? const <IColgroup>[];
-    final grid = base != null &&
-            base.gridColumnsTwips.length == colgroup.length
+    final grid = base != null && base.gridColumnsTwips.length == colgroup.length
         ? base.gridColumnsTwips
         : [for (final col in colgroup) (col.width * 15).round()];
 
@@ -635,13 +630,10 @@ class EditorToDocx {
             borders: WpBorders(
               top: WpBorder(val: 'single', sizeEighths: 4, color: '000000'),
               left: WpBorder(val: 'single', sizeEighths: 4, color: '000000'),
-              bottom:
-                  WpBorder(val: 'single', sizeEighths: 4, color: '000000'),
+              bottom: WpBorder(val: 'single', sizeEighths: 4, color: '000000'),
               right: WpBorder(val: 'single', sizeEighths: 4, color: '000000'),
-              insideH:
-                  WpBorder(val: 'single', sizeEighths: 4, color: '000000'),
-              insideV:
-                  WpBorder(val: 'single', sizeEighths: 4, color: '000000'),
+              insideH: WpBorder(val: 'single', sizeEighths: 4, color: '000000'),
+              insideV: WpBorder(val: 'single', sizeEighths: 4, color: '000000'),
             ),
           ),
       gridColumnsTwips: grid,

@@ -6,7 +6,7 @@
 
 import 'dart:convert';
 
-import 'package:ce_docx/ce_docx.dart';
+import 'package:canvas_text_editor/ce_docx.dart';
 
 import '../editor/dataset/enum/element.dart';
 import '../editor/dataset/enum/row.dart';

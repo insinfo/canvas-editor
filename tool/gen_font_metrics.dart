@@ -2,7 +2,7 @@
 //
 // Lê os TTF do sistema (ou de um caminho fornecido), extrai as métricas
 // compactas (unitsPerEm + hhea/OS2 + avanços por codepoint no intervalo
-// necessário) e emite `packages/ce_fonts/lib/src/metrics_data.dart`.
+// necessário) e emite `lib/src/document/fonts/metrics_data.dart`.
 //
 // Uso: dart run tool/gen_font_metrics.dart
 //
@@ -12,7 +12,7 @@
 import 'dart:io';
 import 'dart:typed_data';
 
-import 'package:ce_fonts/ce_fonts.dart';
+import 'package:canvas_text_editor/ce_fonts.dart';
 
 /// Fontes a embarcar: família (nome CSS) → caminhos candidatos do TTF.
 const Map<String, List<String>> _fonts = <String, List<String>>{
@@ -56,10 +56,9 @@ void main() {
 
   var embedded = 0;
   for (final MapEntry<String, List<String>> entry in _fonts.entries) {
-    final String? path = entry.value
-        .cast<String?>()
-        .firstWhere((String? p) => p != null && File(p).existsSync(),
-            orElse: () => null);
+    final String? path = entry.value.cast<String?>().firstWhere(
+        (String? p) => p != null && File(p).existsSync(),
+        orElse: () => null);
     if (path == null) {
       stderr.writeln('[gen] pulando ${entry.key}: TTF não encontrado');
       continue;
@@ -98,8 +97,7 @@ void main() {
 
   out.writeln('}');
 
-  final File target =
-      File('packages/ce_fonts/lib/src/metrics_data.dart');
+  final File target = File('lib/src/document/fonts/metrics_data.dart');
   target.writeAsStringSync(out.toString());
   stdout.writeln('[gen] $embedded fonte(s) → ${target.path} '
       '(${target.lengthSync()} bytes)');

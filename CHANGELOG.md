@@ -1,4 +1,77 @@
-## Unreleased
+## 2.0.0-dev — Complete Restructuring
+
+> **⚠️ Breaking**: This release is a complete restructuring of the codebase.
+> Multiple UI regressions are present and will be fixed in subsequent commits.
+
+### Major Structural Changes
+
+- **Monorepo consolidation**: Merged six standalone packages (`ce_xml`,
+  `ce_zip`, `ce_opc`, `ce_docx`, `ce_fonts`, `ce_pdf`) into a single package
+  under `lib/src/document/`, eliminating inter-package dependencies.
+- **Assets relocated**: Moved SVG toolbar assets from `web/assets/` to
+  `lib/assets/` and replaced individual SVG icons with the Tabler Icons 3.44.0
+  webfont (`ti ti-*` CSS classes).
+- **Old `web/` example removed**: The legacy `web/` Dart entry-point, including
+  all SVG assets, `tabler_icons.dart`, `main.dart.js` (compiled output),
+  `favicon.png`, `index.html` and `styles.css`, has been deleted.
+- **New `example/` app**: A fresh, pure Dart Web demo with dynamic UI creation
+  from `lib/src/components` — the HTML file only provides the host `<div>`.
+  Features a settings panel to toggle editor features at runtime (title bar,
+  compact/word appearance, toolbar, status bar, catalog).
+- **New `example2/` app**: AngularDart 8 integration demo using `limitless_ui`
+  and Limitless CSS assets, with live editor/viewer mode switching.
+- **`CanvasEditorWidget` facade**: New high-level embeddable widget for Dart Web
+  and AngularDart with explicit editor/viewer modes, scoped UI and lifecycle
+  cleanup.
+- **`CanvasEditorConfig`**: Configuration class with `appearance` (compact or
+  word), `mode` (editor or viewer), `showToolbar`, `height`, `locale`,
+  `documentTitle`, and callback hooks.
+- **README translated to English**.
+
+### Known UI Regressions
+
+The following Word-mode interface features are **not currently working** and
+will be addressed in the next commit:
+
+- **Page setup**: Paper size, margins, and orientation dialogs/controls do not
+  apply changes to the document layout.
+- **Page mode vs continuous mode**: Switching between paginated and non-paginated
+  (continuous/scroll) rendering modes is broken.
+- **Catalog sidebar**: The table of contents / document catalog panel does not
+  open or render.
+- **Comments sidebar**: The comments/annotations panel is not functional.
+- **Loading animation**: The loading overlay/spinner that was shown when opening
+  or saving DOCX files is no longer displayed.
+- **Text box rendering**: The text-box rendering in documents like
+  `PGCTIC1_-_ETP_-_Sistema_de_Gestão_Pública` stopped working — floating text
+  boxes are not displayed.
+- **Status bar**: The bottom status bar (page count, word count, zoom slider) is
+  not rendered.
+- **Find & Replace**: The sidebar search/replace panel may be non-functional.
+- **Page number footer**: Dynamic page numbering in footers may show duplicated
+  or missing values.
+- **Many other UI elements** from the previous Word-mode interface have not yet
+  been ported to the new component architecture.
+
+### Embedding
+
+- Added the public `CanvasEditorWidget` facade for Dart Web and AngularDart,
+  with explicit editor/viewer modes, scoped dynamic UI and lifecycle cleanup.
+- Replaced body-based scrolling with an owned, configurable internal scroll
+  container suitable for cards, grids and modals.
+- Moved the pure Dart XML, ZIP, OPC, DOCX, font and PDF modules from six path
+  packages into `lib/src/document`, leaving a single package dependency.
+- Replaced SVG toolbar assets with the pinned official Tabler Icons 3.44.0
+  webfont and stable `ti ti-*` CSS classes.
+- Added `example2`, an AngularDart 8 application using `limitless_ui` and the
+  Limitless CSS assets, with live switching between editor and viewer modes.
+- Rebuilt the plain Dart Web example around a host-only `index.html`; editor UI
+  is now created dynamically from `lib/src/components`.
+- Added `CanvasEditorAppearance.word`, with a dynamic Word-style title bar,
+  tabs and ribbon groups, while retaining the compact embedded appearance.
+- Moved DOCX file picking into the widget with a persistent DOM input and
+  added Puppeteer UI coverage for file loading, viewer mode and bold
+  undo/redo.
 
 ### Performance
 

@@ -1,6 +1,6 @@
 import 'dart:async';
 import 'dart:html';
-import 'package:ce_fonts/ce_fonts.dart' as ce_fonts;
+import 'package:canvas_text_editor/ce_fonts.dart' as ce_fonts;
 import '../../dataset/constant/common.dart';
 import '../../dataset/constant/editor.dart';
 import '../../dataset/constant/element.dart' as element_constants;

@@ -1,0 +1,29 @@
+:host{
+  height: 100%;
+  overflow: hidden;
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+}
+
+.editor-demo-card {
+  max-width: 1180px;
+  margin-inline: auto;
+}
+
+.editor-angular-host {
+  display: block;
+  min-width: 0;
+}
+
+.demo-brand-mark {
+  display: inline-flex;
+  width: 32px;
+  height: 32px;
+  align-items: center;
+  justify-content: center;
+  border-radius: 6px;
+  background: rgba(255, 255, 255, .14);
+  font-size: 19px;
+}
+

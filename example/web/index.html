@@ -1,0 +1,99 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Canvas Text Editor — Dart Web Demo</title>
+  <link rel="icon" href="favicon.png">
+  <link rel="stylesheet" href="packages/canvas_text_editor/assets/icons/tabler/tabler-icons.css">
+  <link rel="stylesheet" href="packages/canvas_text_editor/assets/canvas_editor.css">
+  <link rel="stylesheet" href="styles.css">
+  <script defer src="main.dart.js"></script>
+</head>
+<body>
+  <main class="demo-page">
+    <header class="demo-header">
+      <div>
+        <span class="demo-eyebrow">Pure Dart Web</span>
+        <h1>Canvas Text Editor</h1>
+        <p>Component built dynamically; HTML only provides the host element.</p>
+      </div>
+      <div class="demo-header__actions">
+        <button id="settings-toggle" type="button" class="demo-btn demo-btn--icon" title="Settings">
+          <span class="ti ti-settings"></span>
+        </button>
+        <button id="mode-toggle" type="button" class="demo-btn demo-btn--primary">Open as Viewer</button>
+      </div>
+    </header>
+
+    <!-- Settings Panel -->
+    <aside id="settings-panel" class="settings-panel settings-panel--hidden">
+      <div class="settings-panel__header">
+        <h2>Editor Settings</h2>
+        <button id="settings-close" type="button" class="settings-panel__close" title="Close">
+          <span class="ti ti-x"></span>
+        </button>
+      </div>
+      <div class="settings-panel__body">
+        <div class="settings-group">
+          <h3>Appearance</h3>
+          <label class="settings-toggle">
+            <input type="checkbox" id="opt-word-mode" checked>
+            <span class="settings-toggle__slider"></span>
+            <span class="settings-toggle__label">Word Mode (Title Bar + Ribbon)</span>
+          </label>
+          <label class="settings-toggle">
+            <input type="checkbox" id="opt-toolbar" checked>
+            <span class="settings-toggle__slider"></span>
+            <span class="settings-toggle__label">Show Toolbar</span>
+          </label>
+          <label class="settings-toggle">
+            <input type="checkbox" id="opt-titlebar" checked>
+            <span class="settings-toggle__slider"></span>
+            <span class="settings-toggle__label">Show Title Bar</span>
+          </label>
+        </div>
+        <div class="settings-group">
+          <h3>Panels</h3>
+          <label class="settings-toggle">
+            <input type="checkbox" id="opt-catalog">
+            <span class="settings-toggle__slider"></span>
+            <span class="settings-toggle__label">Show Catalog (Table of Contents)</span>
+          </label>
+          <label class="settings-toggle">
+            <input type="checkbox" id="opt-statusbar" checked>
+            <span class="settings-toggle__slider"></span>
+            <span class="settings-toggle__label">Show Status Bar</span>
+          </label>
+        </div>
+        <div class="settings-group">
+          <h3>Editor</h3>
+          <label class="settings-toggle">
+            <input type="checkbox" id="opt-page-mode" checked>
+            <span class="settings-toggle__slider"></span>
+            <span class="settings-toggle__label">Paginated Mode</span>
+          </label>
+          <label class="settings-toggle">
+            <input type="checkbox" id="opt-readonly">
+            <span class="settings-toggle__slider"></span>
+            <span class="settings-toggle__label">Read-only Mode</span>
+          </label>
+        </div>
+        <div class="settings-group">
+          <h3>Editor Height</h3>
+          <div class="settings-height-buttons">
+            <button type="button" class="demo-btn demo-btn--sm" data-height="400px">400px</button>
+            <button type="button" class="demo-btn demo-btn--sm demo-btn--active" data-height="calc(100vh - 230px)">Auto</button>
+            <button type="button" class="demo-btn demo-btn--sm" data-height="600px">600px</button>
+            <button type="button" class="demo-btn demo-btn--sm" data-height="800px">800px</button>
+          </div>
+        </div>
+      </div>
+    </aside>
+
+    <section class="demo-card">
+      <div id="editor-host" aria-label="Document editor"></div>
+    </section>
+  </main>
+</body>
+</html>
