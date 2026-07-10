@@ -173,3 +173,14 @@ Sidebar de comentários — a infra (executeLocationGroup/executeDeleteGroup) ex
 Menus contextuais flutuantes de tabela/texto/imagem — o context menu de clique-direito do core já está ativo; os mini-toolbars flutuantes estilo Word são feature nova.
 Exportação PDF — nunca existiu (lib/src/document/pdf/ está vazio); é um projeto à parte.
 Otimizações específicas do modo viewer (pular estruturas de edição no layout). o modo de expotação de PDF existiu no original C:\MyDartProjects\canvas-editor-port\referencias\canvas-editor-feature-pdf e
+
+## Estado atualizado — 2026-07-10
+
+- [x] Delta de tabelas compatível com `quill-table-better`, incluindo merges,
+  TH, cores, títulos/listas e múltiplos parágrafos.
+- [x] Sidebar de comentários com fonte de dados explícita no widget.
+- [x] Exportação PDF multipágina fiel ao canvas (raster, Dart puro).
+- [x] Mini-toolbar contextual para seleção de texto.
+- [ ] Mini-toolbars contextuais específicas para tabela e imagem.
+- [ ] PDF vetorial pesquisável/selecionável com subset de fontes TTF.
+- [ ] Otimizações adicionais do layout no modo viewer.

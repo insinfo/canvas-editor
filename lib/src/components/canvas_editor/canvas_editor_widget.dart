@@ -17,6 +17,7 @@ import '../../word/element_to_docx.dart';
 import '../../word/quill_delta.dart';
 import '../core/ui_component.dart';
 import 'widget_loading_overlay.dart';
+import 'widget_floating_toolbar.dart';
 import 'widget_ribbon.dart';
 import 'widget_side_panels.dart';
 import 'widget_status_bar.dart';
@@ -43,6 +44,7 @@ class CanvasEditorConfig {
     this.editorOptions,
     this.comments = const <CanvasEditorComment>[],
     this.onCommentDeleted,
+    this.showFloatingToolbar = true,
   });
 
   final CanvasEditorWidgetMode mode;
@@ -58,6 +60,7 @@ class CanvasEditorConfig {
   final IEditorOption? editorOptions;
   final List<CanvasEditorComment> comments;
   final void Function(CanvasEditorComment comment)? onCommentDeleted;
+  final bool showFloatingToolbar;
 }
 
 /// Embeddable facade for Dart Web and AngularDart applications.
@@ -97,6 +100,7 @@ class CanvasEditorWidget implements CanvasEditorShellActions {
   late final WidgetCatalogPanel catalogPanel;
   late final WidgetFindPanel findPanel;
   late final WidgetCommentsPanel commentsPanel;
+  WidgetFloatingToolbar? _floatingToolbar;
   WidgetRibbon? _ribbon;
   WidgetCompactToolbar? _compactToolbar;
 
@@ -197,6 +201,12 @@ class CanvasEditorWidget implements CanvasEditorShellActions {
 
     loading = WidgetLoadingOverlay(root);
 
+    if (config.showFloatingToolbar &&
+        config.mode == CanvasEditorWidgetMode.editor) {
+      _floatingToolbar = WidgetFloatingToolbar(command, editor.getDraw(), root);
+      root.append(_floatingToolbar!.root);
+    }
+
     _attachListeners();
     _attachKeyboardShortcuts();
     _scheduleWordCount();
@@ -236,6 +246,8 @@ class CanvasEditorWidget implements CanvasEditorShellActions {
     _pendingRangeStyle = null;
     _ribbon?.syncRangeStyle(style);
     _compactToolbar?.syncRangeStyle(style);
+    _floatingToolbar?.syncStyle(style);
+    _scheduler.schedule(_floatingToolbar?.refresh ?? () {});
   }
 
   void _handleContentChange() {
@@ -260,6 +272,7 @@ class CanvasEditorWidget implements CanvasEditorShellActions {
   }
 
   void _attachKeyboardShortcuts() {
+    listenToRootMouseUp();
     root.onKeyDown.listen((KeyboardEvent event) {
       if (!(event.ctrlKey || event.metaKey)) return;
       final String? key = event.key?.toLowerCase();
@@ -271,6 +284,13 @@ class CanvasEditorWidget implements CanvasEditorShellActions {
         openFind(focusReplace: true);
       }
     });
+  }
+
+  void listenToRootMouseUp() {
+    root.onMouseUp.listen((_) {
+      _scheduler.schedule(_floatingToolbar?.refresh ?? () {});
+    });
+    scrollContainer.onScroll.listen((_) => _floatingToolbar?.hide());
   }
 
   // ---------------------------------------------------------------------
@@ -316,6 +336,9 @@ class CanvasEditorWidget implements CanvasEditorShellActions {
   }
 
   void setStatusBarVisible(bool visible) => statusBar.setVisible(visible);
+
+  /// Reavalia a mini-toolbar após uma seleção criada programaticamente.
+  void refreshFloatingToolbar() => _floatingToolbar?.refresh();
 
   DivElement _buildWordTitlebar() => DivElement()
     ..classes.add('ce-word-titlebar')
@@ -603,6 +626,7 @@ class CanvasEditorWidget implements CanvasEditorShellActions {
     catalogPanel.dispose();
     findPanel.dispose();
     commentsPanel.dispose();
+    _floatingToolbar?.dispose();
     statusBar.dispose();
     loading.dispose();
     editor.destroy();
