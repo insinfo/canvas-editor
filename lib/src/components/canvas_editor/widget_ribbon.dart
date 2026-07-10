@@ -1,0 +1,594 @@
+import 'dart:async';
+import 'dart:html';
+
+import '../../editor/index.dart';
+import '../core/ui_component.dart';
+
+/// Ações da shell que os toolbars invocam. Implementado pelo
+/// `CanvasEditorWidget`, mantendo os componentes desacoplados do widget.
+abstract class CanvasEditorShellActions {
+  Command get command;
+  void openFilePicker();
+  Future<void> downloadDocx([String? fileName]);
+  Future<void> exportCurrentPageImage();
+  void openFind({bool focusReplace = false});
+  void toggleCatalog();
+}
+
+/// Ribbon estilo Word (abas Arquivo/Página Inicial/Inserir/Layout/Exibir).
+///
+/// Além de disparar comandos, o ribbon espelha o estado da seleção: o widget
+/// chama [syncRangeStyle] (agendado por frame via [UiScheduler]) e os botões
+/// de formatação, fonte, tamanho, alinhamento e estilo ficam ativos conforme
+/// o texto sob o cursor.
+class WidgetRibbon extends UiComponent {
+  WidgetRibbon(this._actions, {required Element menuHost})
+      : _menuHost = menuHost {
+    root = _build();
+  }
+
+  static const double _pxPerCm = 96 / 2.54;
+
+  final CanvasEditorShellActions _actions;
+
+  /// Elemento que hospeda menus suspensos — o root do widget, para o menu
+  /// não ser cortado pelo overflow horizontal dos painéis do ribbon.
+  final Element _menuHost;
+
+  @override
+  late final DivElement root;
+
+  Command get _command => _actions.command;
+
+  final Map<String, ButtonElement> _commandButtons = <String, ButtonElement>{};
+  final Map<TitleLevel?, ButtonElement> _styleButtons =
+      <TitleLevel?, ButtonElement>{};
+  late final SelectElement _fontSelect;
+  late final SelectElement _sizeSelect;
+
+  DivElement? _openMenu;
+  Element? _openMenuOwner;
+
+  // -----------------------------------------------------------------------
+  // Sincronização com a seleção (rangeStyleChange)
+  // -----------------------------------------------------------------------
+
+  /// Espelha o estilo do texto sob o cursor nos controles do ribbon.
+  /// Chamado pelo widget no flush do [UiScheduler] — uma vez por frame.
+  void syncRangeStyle(IRangeStyle style) {
+    _setActive('bold', style.bold);
+    _setActive('italic', style.italic);
+    _setActive('underline', style.underline);
+    _setActive('strike', style.strikeout);
+    _setActive('superscript', style.type == ElementType.superscript);
+    _setActive('subscript', style.type == ElementType.subscript);
+    _setActive('list', style.listType != null);
+
+    _setActive(
+        'align-left', style.rowFlex == null || style.rowFlex == RowFlex.left);
+    _setActive('align-center', style.rowFlex == RowFlex.center);
+    _setActive('align-right', style.rowFlex == RowFlex.right);
+    _setActive('justify',
+        style.rowFlex == RowFlex.alignment || style.rowFlex == RowFlex.justify);
+
+    _setDisabled('undo', !style.undo);
+    _setDisabled('redo', !style.redo);
+
+    if (_optionExists(_fontSelect, style.font)) {
+      _fontSelect.value = style.font;
+    }
+    final String sizeValue = '${style.size.round()}';
+    if (_optionExists(_sizeSelect, sizeValue)) {
+      _sizeSelect.value = sizeValue;
+    }
+
+    _styleButtons.forEach((TitleLevel? level, ButtonElement button) {
+      button.classes.toggle('active', style.level == level);
+    });
+  }
+
+  void syncPageMode(PageMode mode) {
+    _setActive('page-paging', mode == PageMode.paging);
+    _setActive('page-continuity', mode == PageMode.continuity);
+  }
+
+  void _setActive(String commandName, bool active) {
+    _commandButtons[commandName]?.classes.toggle('active', active);
+  }
+
+  void _setDisabled(String commandName, bool disabled) {
+    _commandButtons[commandName]?.classes.toggle('disabled', disabled);
+  }
+
+  bool _optionExists(SelectElement select, String value) =>
+      select.options.any((OptionElement option) => option.value == value);
+
+  // -----------------------------------------------------------------------
+  // Construção
+  // -----------------------------------------------------------------------
+
+  DivElement _build() {
+    final DivElement shell = DivElement()..classes.add('ce-word-ribbon');
+    final DivElement tabs = DivElement()
+      ..classes.add('ce-word-tabs')
+      ..setAttribute('role', 'tablist');
+    final DivElement panels = DivElement()..classes.add('ce-word-panels');
+
+    void addTab(String id, String label, List<Element> groups) {
+      final ButtonElement tab = ButtonElement()
+        ..type = 'button'
+        ..text = label
+        ..dataset['ceTab'] = id
+        ..classes.toggle('active', id == 'home')
+        ..onClick.listen((_) => _activateTab(shell, id));
+      tabs.append(tab);
+      final DivElement panel = DivElement()
+        ..classes.add('ce-word-panel')
+        ..classes.toggle('active', id == 'home')
+        ..dataset['cePanel'] = id
+        ..children.addAll(groups);
+      panels.append(panel);
+    }
+
+    addTab('file', 'Arquivo', <Element>[
+      _group('Documento', <Element>[
+        _button('open', 'ti-folder-open', 'Abrir DOCX', _actions.openFilePicker,
+            labeled: true),
+        _button('save', 'ti-device-floppy', 'Salvar DOCX',
+            () => _actions.downloadDocx(),
+            labeled: true),
+        _button(
+            'print', 'ti-printer', 'Imprimir', () => _command.executePrint(),
+            labeled: true),
+      ]),
+      _group('Exportar', <Element>[
+        _button('export-image', 'ti-photo', 'Página → PNG',
+            () => _actions.exportCurrentPageImage(),
+            labeled: true),
+      ]),
+    ]);
+    addTab('home', 'Página Inicial', <Element>[
+      _group('Área de Transferência', <Element>[
+        _button('undo', 'ti-arrow-back-up', 'Desfazer',
+            () => _command.executeUndo()),
+        _button('redo', 'ti-arrow-forward-up', 'Refazer',
+            () => _command.executeRedo()),
+        _button('format', 'ti-clear-formatting', 'Limpar',
+            () => _command.executeFormat()),
+      ]),
+      _fontGroup(),
+      _group('Parágrafo', <Element>[
+        _button('align-left', 'ti-align-left', 'Esquerda',
+            () => _command.executeRowFlex(RowFlex.left)),
+        _button('align-center', 'ti-align-center', 'Centralizar',
+            () => _command.executeRowFlex(RowFlex.center)),
+        _button('align-right', 'ti-align-right', 'Direita',
+            () => _command.executeRowFlex(RowFlex.right)),
+        _button('justify', 'ti-align-justified', 'Justificar',
+            () => _command.executeRowFlex(RowFlex.alignment)),
+        _button('list', 'ti-list', 'Lista',
+            () => _command.executeList(ListType.unordered)),
+      ]),
+      _group('Estilos', <Element>[
+        _styleCommand('Normal', null),
+        _styleCommand('Título 1', TitleLevel.first),
+        _styleCommand('Título 2', TitleLevel.second),
+      ]),
+      _group('Edição', <Element>[
+        _button('find', 'ti-search', 'Localizar', () => _actions.openFind(),
+            labeled: true),
+        _button('replace', 'ti-replace', 'Substituir',
+            () => _actions.openFind(focusReplace: true),
+            labeled: true),
+      ]),
+    ]);
+    addTab('insert', 'Inserir', <Element>[
+      _group('Páginas', <Element>[
+        _button('page-break', 'ti-page-break', 'Quebra de página',
+            () => _command.executePageBreak(),
+            labeled: true),
+      ]),
+      _group('Tabelas', <Element>[
+        _button('table', 'ti-table', 'Tabela 3 × 3',
+            () => _command.executeInsertTable(3, 3),
+            labeled: true),
+      ]),
+      _group('Texto e símbolos', <Element>[
+        _button('separator', 'ti-separator-horizontal', 'Separador',
+            () => _command.executeSeparator(<num>[1, 1]),
+            labeled: true),
+      ]),
+    ]);
+    addTab('layout', 'Layout', <Element>[
+      _group('Configurar Página', <Element>[
+        _dropdownButton('margins', 'ti-layout-distribute-vertical', 'Margens',
+            _buildMarginsMenu),
+        _dropdownButton(
+            'paper-size', 'ti-dimensions', 'Tamanho', _buildPaperSizeMenu),
+        _button('portrait', 'ti-file-orientation', 'Retrato',
+            () => _command.executePaperDirection(PaperDirection.vertical),
+            labeled: true),
+        _button('landscape', 'ti-file-orientation', 'Paisagem',
+            () => _command.executePaperDirection(PaperDirection.horizontal),
+            labeled: true),
+      ]),
+    ]);
+    addTab('view', 'Exibir', <Element>[
+      _group('Modos de Exibição', <Element>[
+        _button('page-paging', 'ti-file', 'Paginado',
+            () => _command.executePageMode(PageMode.paging),
+            labeled: true),
+        _button('page-continuity', 'ti-arrows-vertical', 'Contínuo',
+            () => _command.executePageMode(PageMode.continuity),
+            labeled: true),
+      ]),
+      _group('Mostrar', <Element>[
+        _button('catalog', 'ti-list-tree', 'Navegação', _actions.toggleCatalog,
+            labeled: true),
+      ]),
+      _group('Zoom', <Element>[
+        _button('zoom-out', 'ti-zoom-out', 'Reduzir',
+            () => _command.executePageScaleMinus(),
+            labeled: true),
+        _button('zoom-reset', 'ti-zoom-reset', '100%',
+            () => _command.executePageScaleRecovery(),
+            labeled: true),
+        _button('zoom-in', 'ti-zoom-in', 'Ampliar',
+            () => _command.executePageScaleAdd(),
+            labeled: true),
+      ]),
+    ]);
+    shell.children.addAll(<Element>[tabs, panels]);
+    return shell;
+  }
+
+  DivElement _fontGroup() {
+    _fontSelect = SelectElement()
+      ..title = 'Fonte'
+      ..classes.add('ce-word-select');
+    for (final String font in <String>[
+      'Arial',
+      'Calibri',
+      'Cambria',
+      'Times New Roman'
+    ]) {
+      _fontSelect.append(OptionElement(data: font, value: font));
+    }
+    _fontSelect.onChange
+        .listen((_) => _command.executeFont(_fontSelect.value ?? 'Arial'));
+    _sizeSelect = SelectElement()
+      ..title = 'Tamanho'
+      ..classes.add('ce-word-select');
+    for (final int size in <int>[8, 10, 12, 14, 16, 18, 24, 32, 48]) {
+      _sizeSelect.append(OptionElement(data: '$size', value: '$size'));
+    }
+    _sizeSelect.value = '16';
+    _sizeSelect.onChange
+        .listen((_) => _command.executeSize(int.parse(_sizeSelect.value!)));
+    return _group('Fonte', <Element>[
+      _fontSelect,
+      _sizeSelect,
+      _button('bold', 'ti-bold', 'Negrito', () => _command.executeBold()),
+      _button('italic', 'ti-italic', 'Itálico', () => _command.executeItalic()),
+      _button('underline', 'ti-underline', 'Sublinhado',
+          () => _command.executeUnderline()),
+      _button('strike', 'ti-strikethrough', 'Tachado',
+          () => _command.executeStrikeout()),
+      _button('superscript', 'ti-superscript', 'Sobrescrito',
+          () => _command.executeSuperscript()),
+      _button('subscript', 'ti-subscript', 'Subscrito',
+          () => _command.executeSubscript()),
+    ]);
+  }
+
+  DivElement _group(String label, List<Element> children) => DivElement()
+    ..classes.add('ce-word-group')
+    ..children.addAll(<Element>[
+      DivElement()
+        ..classes.add('ce-word-group__commands')
+        ..children.addAll(children),
+      SpanElement()
+        ..classes.add('ce-word-group__label')
+        ..text = label,
+    ]);
+
+  ButtonElement _styleCommand(String label, TitleLevel? level) {
+    final ButtonElement button = ButtonElement()
+      ..type = 'button'
+      ..classes.add('ce-word-style')
+      ..text = label
+      ..onMouseDown.listen((event) => event.preventDefault())
+      ..onClick.listen((_) => _command.executeTitle(level));
+    _styleButtons[level] = button;
+    return button;
+  }
+
+  void _activateTab(DivElement shell, String id) {
+    for (final Element tab in shell.querySelectorAll('[data-ce-tab]')) {
+      tab.classes.toggle('active', tab.dataset['ceTab'] == id);
+    }
+    for (final Element panel in shell.querySelectorAll('[data-ce-panel]')) {
+      panel.classes.toggle('active', panel.dataset['cePanel'] == id);
+    }
+  }
+
+  ButtonElement _button(
+    String commandName,
+    String iconClass,
+    String label,
+    void Function() action, {
+    bool labeled = false,
+  }) {
+    final ButtonElement button = ButtonElement()
+      ..type = 'button'
+      ..title = label
+      ..dataset['ceCommand'] = commandName
+      ..classes.toggle('ce-word-command--labeled', labeled)
+      ..setAttribute('aria-label', label)
+      ..append(SpanElement()..classes.addAll(<String>['ti', iconClass]));
+    if (labeled) {
+      button.append(SpanElement()..text = label);
+    }
+    button.onMouseDown.listen((MouseEvent event) {
+      // Keeps the canvas selection active while a format command is clicked.
+      event.preventDefault();
+    });
+    button.onClick.listen((_) => action());
+    _commandButtons[commandName] = button;
+    return button;
+  }
+
+  // -----------------------------------------------------------------------
+  // Menus suspensos
+  // -----------------------------------------------------------------------
+
+  ButtonElement _dropdownButton(
+    String commandName,
+    String iconClass,
+    String label,
+    DivElement Function() buildMenu,
+  ) {
+    late ButtonElement button;
+    button = _button(commandName, iconClass, label, () {
+      if (_openMenuOwner == button) {
+        _closeMenu();
+        return;
+      }
+      _openMenuFor(button, buildMenu());
+    }, labeled: true);
+    button.append(
+        SpanElement()..classes.addAll(<String>['ti', 'ti-chevron-down']));
+    return button;
+  }
+
+  StreamSubscription<MouseEvent>? _outsideClickSubscription;
+
+  void _openMenuFor(Element owner, DivElement menu) {
+    _closeMenu();
+    final Rectangle<num> ownerRect = owner.getBoundingClientRect();
+    final Rectangle<num> hostRect = _menuHost.getBoundingClientRect();
+    menu
+      ..classes.add('ce-word-menu')
+      ..style.left = '${ownerRect.left - hostRect.left}px'
+      ..style.top = '${ownerRect.bottom - hostRect.top + 2}px';
+    _menuHost.append(menu);
+    _openMenu = menu;
+    _openMenuOwner = owner;
+    _outsideClickSubscription = document.onClick.listen((MouseEvent event) {
+      final Node? target = event.target as Node?;
+      if (target != null && (menu.contains(target) || owner.contains(target))) {
+        return;
+      }
+      _closeMenu();
+    });
+  }
+
+  void _closeMenu() {
+    _outsideClickSubscription?.cancel();
+    _outsideClickSubscription = null;
+    _openMenu?.remove();
+    _openMenu = null;
+    _openMenuOwner = null;
+  }
+
+  DivElement _menuItem(String title, String detail, void Function() action) {
+    return DivElement()
+      ..classes.add('ce-word-menu__item')
+      ..children.addAll(<Element>[
+        SpanElement()
+          ..classes.add('ce-word-menu__item-title')
+          ..text = title,
+        SpanElement()
+          ..classes.add('ce-word-menu__item-detail')
+          ..text = detail,
+      ])
+      ..onClick.listen((_) {
+        action();
+        _closeMenu();
+      });
+  }
+
+  DivElement _buildMarginsMenu() {
+    // Presets do Word (cm): [superior, direita, inferior, esquerda].
+    DivElement preset(String name, String detail, List<double> cm) =>
+        _menuItem(name, detail, () {
+          _command.executeSetPaperMargin(<double>[
+            for (final double value in cm) value * _pxPerCm,
+          ]);
+        });
+
+    final DivElement menu = DivElement()
+      ..children.addAll(<Element>[
+        preset('Normal', 'Sup/Inf 2,5 cm · Esq/Dir 3 cm',
+            <double>[2.5, 3, 2.5, 3]),
+        preset('Estreita', 'Todas 1,27 cm', <double>[1.27, 1.27, 1.27, 1.27]),
+        preset('Moderada', 'Sup/Inf 2,54 cm · Esq/Dir 1,91 cm',
+            <double>[2.54, 1.91, 2.54, 1.91]),
+        preset('Larga', 'Sup/Inf 2,54 cm · Esq/Dir 5,08 cm',
+            <double>[2.54, 5.08, 2.54, 5.08]),
+        DivElement()..classes.add('ce-word-menu__divider'),
+      ]);
+    menu.append(_buildCustomMarginsForm());
+    return menu;
+  }
+
+  DivElement _buildCustomMarginsForm() {
+    final List<double> current = _currentMarginsPx();
+    NumberInputElement marginInput(String label, double px) {
+      return NumberInputElement()
+        ..classes.add('ce-word-menu__number')
+        ..title = label
+        ..min = '0'
+        ..step = '0.1'
+        ..value = (px / _pxPerCm).toStringAsFixed(2);
+    }
+
+    final NumberInputElement top = marginInput('Superior', current[0]);
+    final NumberInputElement right = marginInput('Direita', current[1]);
+    final NumberInputElement bottom = marginInput('Inferior', current[2]);
+    final NumberInputElement left = marginInput('Esquerda', current[3]);
+
+    DivElement field(String label, NumberInputElement input) => DivElement()
+      ..classes.add('ce-word-menu__field')
+      ..children.addAll(<Element>[
+        SpanElement()..text = label,
+        input,
+      ]);
+
+    final ButtonElement apply = ButtonElement()
+      ..type = 'button'
+      ..classes.add('ce-word-menu__apply')
+      ..text = 'Aplicar'
+      ..onClick.listen((_) {
+        double parse(NumberInputElement input, double fallbackPx) {
+          final double? cm = double.tryParse(input.value ?? '');
+          return cm == null ? fallbackPx : cm * _pxPerCm;
+        }
+
+        _command.executeSetPaperMargin(<double>[
+          parse(top, current[0]),
+          parse(right, current[1]),
+          parse(bottom, current[2]),
+          parse(left, current[3]),
+        ]);
+        _closeMenu();
+      });
+
+    return DivElement()
+      ..classes.add('ce-word-menu__form')
+      ..children.addAll(<Element>[
+        SpanElement()
+          ..classes.add('ce-word-menu__form-title')
+          ..text = 'Margens personalizadas (cm)',
+        DivElement()
+          ..classes.add('ce-word-menu__fields')
+          ..children.addAll(<Element>[
+            field('Sup.', top),
+            field('Dir.', right),
+            field('Inf.', bottom),
+            field('Esq.', left),
+          ]),
+        apply,
+      ]);
+  }
+
+  List<double> _currentMarginsPx() {
+    try {
+      final dynamic margins = _command.getPaperMargin();
+      if (margins is List && margins.length == 4) {
+        return <double>[for (final dynamic m in margins) (m as num).toDouble()];
+      }
+    } catch (_) {
+      // Sem margens legíveis: usa o padrão A4 do editor.
+    }
+    return <double>[96, 96, 96, 96];
+  }
+
+  DivElement _buildPaperSizeMenu() {
+    DivElement size(String name, String detail, double width, double height) =>
+        _menuItem(name, detail, () => _command.executePaperSize(width, height));
+
+    return DivElement()
+      ..children.addAll(<Element>[
+        size('A4', '21 × 29,7 cm', 794, 1123),
+        size('Carta', '21,6 × 27,9 cm', 816, 1056),
+        size('Ofício', '21,6 × 35,6 cm', 816, 1344),
+        size('A5', '14,8 × 21 cm', 559, 794),
+      ]);
+  }
+
+  @override
+  void onDispose() {
+    _closeMenu();
+  }
+}
+
+/// Toolbar compacta para o modo embutido ([CanvasEditorAppearance.compact]).
+class WidgetCompactToolbar extends UiComponent {
+  WidgetCompactToolbar(this._actions) {
+    root = _build();
+  }
+
+  final CanvasEditorShellActions _actions;
+
+  @override
+  late final DivElement root;
+
+  final Map<String, ButtonElement> _commandButtons = <String, ButtonElement>{};
+
+  Command get _command => _actions.command;
+
+  void syncRangeStyle(IRangeStyle style) {
+    _commandButtons['bold']?.classes.toggle('active', style.bold);
+    _commandButtons['italic']?.classes.toggle('active', style.italic);
+    _commandButtons['underline']?.classes.toggle('active', style.underline);
+    _commandButtons['undo']?.classes.toggle('disabled', !style.undo);
+    _commandButtons['redo']?.classes.toggle('disabled', !style.redo);
+  }
+
+  DivElement _build() {
+    final DivElement toolbar = DivElement()
+      ..classes.add('ce-embed__toolbar')
+      ..setAttribute('role', 'toolbar')
+      ..setAttribute('aria-label', 'Formatação do documento');
+    toolbar.children.addAll(<Element>[
+      _button('open', 'ti-folder-open', 'Abrir DOCX', _actions.openFilePicker),
+      _button(
+          'undo', 'ti-arrow-back-up', 'Desfazer', () => _command.executeUndo()),
+      _button('redo', 'ti-arrow-forward-up', 'Refazer',
+          () => _command.executeRedo()),
+      _button('bold', 'ti-bold', 'Negrito', () => _command.executeBold()),
+      _button('italic', 'ti-italic', 'Itálico', () => _command.executeItalic()),
+      _button('underline', 'ti-underline', 'Sublinhado',
+          () => _command.executeUnderline()),
+      _button('align-left', 'ti-align-left', 'Alinhar à esquerda',
+          () => _command.executeRowFlex(RowFlex.left)),
+      _button('align-center', 'ti-align-center', 'Centralizar',
+          () => _command.executeRowFlex(RowFlex.center)),
+      _button('align-right', 'ti-align-right', 'Alinhar à direita',
+          () => _command.executeRowFlex(RowFlex.right)),
+      _button('search', 'ti-search', 'Localizar (Ctrl+F)',
+          () => _actions.openFind()),
+      _button('print', 'ti-printer', 'Imprimir', () => _command.executePrint()),
+    ]);
+    return toolbar;
+  }
+
+  ButtonElement _button(
+    String commandName,
+    String iconClass,
+    String label,
+    void Function() action,
+  ) {
+    final ButtonElement button = ButtonElement()
+      ..type = 'button'
+      ..title = label
+      ..dataset['ceCommand'] = commandName
+      ..setAttribute('aria-label', label)
+      ..append(SpanElement()..classes.addAll(<String>['ti', iconClass]));
+    button.onMouseDown.listen((MouseEvent event) => event.preventDefault());
+    button.onClick.listen((_) => action());
+    _commandButtons[commandName] = button;
+    return button;
+  }
+}

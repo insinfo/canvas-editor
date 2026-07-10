@@ -39,9 +39,10 @@ void main() {
         ? CanvasEditorAppearance.word
         : CanvasEditorAppearance.compact;
 
-    final CanvasEditorWidgetMode mode = (optReadonly.checked == true || isViewer)
-        ? CanvasEditorWidgetMode.viewer
-        : CanvasEditorWidgetMode.editor;
+    final CanvasEditorWidgetMode mode =
+        (optReadonly.checked == true || isViewer)
+            ? CanvasEditorWidgetMode.viewer
+            : CanvasEditorWidgetMode.editor;
 
     return CanvasEditorWidget(
       host,
@@ -96,9 +97,10 @@ void main() {
   });
 
   optCatalog.onChange.listen((_) {
-    // Catalog is listed as a known regression — toggle via DOM class for now.
-    widget.root.classes.toggle(
-        'ce-embed--show-catalog', optCatalog.checked == true);
+    final bool show = optCatalog.checked == true;
+    if (show != widget.catalogPanel.isVisible) {
+      widget.toggleCatalog();
+    }
   });
 
   optStatusbar.onChange.listen((_) {
@@ -121,10 +123,8 @@ void main() {
       in document.querySelectorAll('[data-height]').cast<ButtonElement>()) {
     btn.onClick.listen((_) {
       currentHeight = btn.dataset['height'] ?? currentHeight;
-      widget.root
-          .querySelector('.ce-embed__scroll')
-          ?.style
-          .height = currentHeight;
+      widget.root.querySelector('.ce-embed__scroll')?.style.height =
+          currentHeight;
       // Update active state
       for (final Element sibling
           in document.querySelectorAll('[data-height]')) {
@@ -157,19 +157,7 @@ void _toggleTitlebar(CanvasEditorWidget widget, bool show) {
 }
 
 void _toggleStatusbar(CanvasEditorWidget widget, bool show) {
-  // Toggle status bar visibility — the footer element may be rendered by the
-  // editor core with various class names.
-  widget.root.classes.toggle('ce-embed--hide-statusbar', !show);
-  for (final String selector in <String>[
-    '.ce-footer',
-    '.ce-embed__footer',
-    '.ce-word-footer',
-  ]) {
-    final Element? el = widget.root.querySelector(selector);
-    if (el != null) {
-      el.style.display = show ? '' : 'none';
-    }
-  }
+  widget.setStatusBarVisible(show);
 }
 
 void _togglePageMode(CanvasEditorWidget widget, bool paginated) {

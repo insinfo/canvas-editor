@@ -1,4 +1,4 @@
-## 2.0.0-dev — Complete Restructuring
+comece a implementar os recursos auzentes que fora perdidos devido a ultima restruturação para almentar a paridade com o word ## 2.0.0-dev — Complete Restructuring
 
 > **⚠️ Breaking**: This release is a complete restructuring of the codebase.
 > Multiple UI regressions are present and will be fixed in subsequent commits.
@@ -28,61 +28,30 @@
   `documentTitle`, and callback hooks.
 - **README translated to English**.
 
-### Restored After Restructuring (widget shell)
+### Known UI Regressions
 
-The regressions introduced by the restructuring were fixed by porting the old
-shell wiring into the new component architecture:
+The following Word-mode interface features are **not currently working** and
+will be addressed in the next commit:
 
-- **Component mini-framework**: `lib/src/components/core/ui_component.dart`
-  defines the `UiComponent` lifecycle contract (single root element, tracked
-  subscriptions, idempotent `dispose`) and a `UiScheduler` that coalesces UI
-  invalidations into one DOM flush per animation frame.
-- **Ribbon extracted as `WidgetRibbon`** (`widget_ribbon.dart`) with selection
-  mirroring: `rangeStyleChange` is scheduled through `UiScheduler` and
-  `syncRangeStyle` activates bold/italic/underline/strike/super/subscript,
-  font family/size selects, alignment, list, title-level style cards and
-  enables/disables undo/redo — without adding work to the typing hot path.
-- **Status bar restored** (`widget_status_bar.dart`): current page/total
-  pages, word count (debounced `getWordCount`), paginated/continuous toggle,
-  zoom slider (50–300%), zoom −/+ and click-to-reset percentage.
-- **Catalog sidebar restored** (`widget_side_panels.dart`):
-  `getCatalog()`-driven navigation panel with nested headings, click →
-  `executeLocationCatalog`, auto-refresh on content change.
-- **Find & Replace restored**: sidebar panel with match counter
-  (`getSearchNavigateInfo`), prev/next navigation, replace-one (indexed) and
-  replace-all, wired to Ctrl+F / Ctrl+H inside the widget (works in viewer
-  mode too via focusable scroll container).
-- **Loading overlay restored** (`widget_loading_overlay.dart`), shown on DOCX
-  open/save and page-image export, yielding two animation frames before the
-  heavy synchronous work.
-- **DOCX open flow re-ported**: `loadDocx` now applies paper geometry via
-  `setPaperOptionsSilently`, dynamic PAGE/NUMPAGES page numbering, header and
-  footer distances and **floating header text boxes (carimbos)** before the
-  single `executeSetValue` render — fixing the missing text boxes, the
-  duplicated footer page numbers and the multi-relayout open cost.
-- **DOCX save flow re-ported**: deferred pristine save reference
-  (`buildSaveReferenceFromConverted` on first save) and model re-anchoring
-  after each save.
-- **Page setup in the Layout ribbon**: Word-style margin presets
-  (Normal/Narrow/Moderate/Wide) plus a custom-margins form in cm, paper size
-  menu (A4/Letter/Legal/A5) and portrait/landscape — dropdown menus anchored
-  to the widget root so the ribbon overflow cannot clip them.
-- **Paginated vs continuous mode**: first-class buttons in the View ribbon
-  and in the status bar, kept in sync via `pageModeChange`.
-- **Export page as PNG**: File ribbon action using `getImage`, downloading
-  the currently visible page.
-- **Quill Delta interop**: new pure-Dart `QuillDeltaConverter`
-  (`lib/src/word/quill_delta.dart`) exposed as
-  `CanvasEditorWidget.toQuillDelta()` / `loadQuillDelta()` covering inline
-  formatting, headers, lists, alignment, links, images and round-trip table
-  interoperability with `quill-table-better`, including column widths,
-  merged cells and multi-paragraph cell content, with VM unit tests.
-- `example/` now uses the real widget APIs for the catalog and status bar
-  toggles instead of the temporary DOM-class hacks.
-
-Still pending from the original regression list: the comments sidebar and the
-remaining Word-mode dialogs; PDF export was never implemented
-(`lib/src/document/pdf/` is an empty placeholder).
+- **Page setup**: Paper size, margins, and orientation dialogs/controls do not
+  apply changes to the document layout.
+- **Page mode vs continuous mode**: Switching between paginated and non-paginated
+  (continuous/scroll) rendering modes is broken.
+- **Catalog sidebar**: The table of contents / document catalog panel does not
+  open or render.
+- **Comments sidebar**: The comments/annotations panel is not functional.
+- **Loading animation**: The loading overlay/spinner that was shown when opening
+  or saving DOCX files is no longer displayed.
+- **Text box rendering**: The text-box rendering in documents like
+  `PGCTIC1_-_ETP_-_Sistema_de_Gestão_Pública` stopped working — floating text
+  boxes are not displayed.
+- **Status bar**: The bottom status bar (page count, word count, zoom slider) is
+  not rendered.
+- **Find & Replace**: The sidebar search/replace panel may be non-functional.
+- **Page number footer**: Dynamic page numbering in footers may show duplicated
+  or missing values.
+- **Many other UI elements** from the previous Word-mode interface have not yet
+  been ported to the new component architecture.
 
 ### Embedding
 
@@ -195,3 +164,12 @@ remaining Word-mode dialogs; PDF export was never implemented
 ## 1.0.0
 
 - Initial version.
+ C:\MyDartProjects\canvas-editor-port\resources\Captura de tela 2026-07-08 045750.png  C:\MyDartProjects\canvas-editor-port\resources\Captura de tela 2026-07-08 045816.png  C:\MyDartProjects\canvas-editor-port\resources\Captura de tela 2026-07-08 045849.png C:\MyDartProjects\canvas-editor-port\resources incluindo menus flutuantes  contextuais para edição de tabela edião rapida de texto imagem etc, alem de melhorar o modo somente visualizador para otimizar para visulização e busca de testo zoom expotar pagina para imagem expotar documento para o formato delta do quill importar delta do quill exportação para PDF etc referencias C:\MyDartProjects\dart_quill e C:\MyDartProjects\  C:\MyDartProjects\canvas-editor-port\doc
+
+ alem disso é bom organizar o C:\MyDartProjects\canvas-editor-port\lib\src\components para ter uma estrutura paronizada e bem orginzada com cliclos de vida etc tipo um mini frameork para que todos os componentes erdem de uma intreface padrnizada etc ou seja um codimo performatico e manutenivel pois é interecante ter uma option que ao clicar em um texto bold a opção bold da ribbom bar fica ativo assim como o tamanho da fonte e font famili e assim por diante ao licar no texto chama uma função que agenda a atualização da sehll ribom bar de froma eficiente sem causar travamentos e lentidão no clico de edição e digital etc
+
+ "tabelas são achatadas em texto no export" isso esta errado tem que suportar os recuros do quill quill_table_better  as referencias voce encontra aqui  C:\MyDartProjects\new_sali\frontend\web\assets\js\quill  C:\MyDartProjects\new_sali\core\lib\dependencies C:\MyDartProjects\new_sali\frontend\web\assets\js\quill_table_better para lidar com  O que ainda falta (próximos passos sugeridos)
+Sidebar de comentários — a infra (executeLocationGroup/executeDeleteGroup) existe; falta definir a fonte de dados no widget (o antigo usava mock).
+Menus contextuais flutuantes de tabela/texto/imagem — o context menu de clique-direito do core já está ativo; os mini-toolbars flutuantes estilo Word são feature nova.
+Exportação PDF — nunca existiu (lib/src/document/pdf/ está vazio); é um projeto à parte.
+Otimizações específicas do modo viewer (pular estruturas de edição no layout). o modo de expotação de PDF existiu no original C:\MyDartProjects\canvas-editor-port\referencias\canvas-editor-feature-pdf e
