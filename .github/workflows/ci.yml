@@ -52,6 +52,39 @@ jobs:
             test/word/docx_to_element_test.dart \
             test/word/editor_roundtrip_test.dart
 
+      # ── Browser Tests ──────────────────────────────────────────────────
+      # Dynamically find any tests that are not VM-only and run them in Chrome.
+
+      - name: Run browser tests
+        env:
+          CHROME_BIN: ${{ steps.setup-chrome.outputs.chrome-path }}
+        run: |
+          printf '#!/usr/bin/env bash\nexec "%s" --no-sandbox "$@"\n' "$CHROME_BIN" > /tmp/chrome-no-sandbox
+          chmod +x /tmp/chrome-no-sandbox
+          VM_SAFE_TESTS=(
+            test/document/xml/xml_test.dart
+            test/document/zip/zip_archive_test.dart
+            test/document/opc/opc_package_test.dart
+            test/document/fonts/font_metrics_test.dart
+            test/document/docx/reader_test.dart
+            test/document/docx/writer_test.dart
+            test/word/docx_to_element_test.dart
+            test/word/editor_roundtrip_test.dart
+            test/e2e/embed_widget_ui_test.dart
+            test/e2e/editor_smoke_test.dart
+          )
+          printf '%s\n' "${VM_SAFE_TESTS[@]}" > /tmp/vm_safe_tests.txt
+          # Find all test files and exclude the VM/Puppeteer tests
+          mapfile -t BROWSER_TESTS < <(find test -name '*_test.dart' | sort | grep -vxF -f /tmp/vm_safe_tests.txt || true)
+          
+          if [ ${#BROWSER_TESTS[@]} -eq 0 ]; then
+            echo "No browser-specific tests found to run."
+          else
+            echo "Running browser tests: ${BROWSER_TESTS[*]}"
+            CHROME_EXECUTABLE=/tmp/chrome-no-sandbox \
+              dart test -p chrome -j 1 "${BROWSER_TESTS[@]}"
+          fi
+
       # ── E2E Puppeteer Tests ────────────────────────────────────────────
       # These tests compile fixture Dart to JS, launch a shelf server, and
       # drive a headless Chrome via the puppeteer package.
