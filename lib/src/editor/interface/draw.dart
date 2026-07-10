@@ -150,8 +150,10 @@ class IAppendElementListOption {
 class IGetImageOption {
   double? pixelRatio;
   EditorMode? mode;
+  String? mimeType;
+  num? quality;
 
-  IGetImageOption({this.pixelRatio, this.mode});
+  IGetImageOption({this.pixelRatio, this.mode, this.mimeType, this.quality});
 }
 
 class IComputeRowListPayload {

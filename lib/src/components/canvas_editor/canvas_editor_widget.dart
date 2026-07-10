@@ -1,11 +1,14 @@
 import 'dart:async';
+import 'dart:convert';
 import 'dart:html';
 import 'dart:typed_data';
 
 import 'package:canvas_text_editor/ce_docx.dart';
+import 'package:canvas_text_editor/ce_pdf.dart';
 
 import '../../editor/core/listener/listener.dart';
 import '../../editor/index.dart';
+import '../../editor/interface/draw.dart' show IGetImageOption;
 import '../../editor/interface/footer.dart';
 import '../../editor/interface/header.dart' as header_model;
 import '../../editor/interface/page_number.dart';
@@ -518,6 +521,53 @@ class CanvasEditorWidget implements CanvasEditorShellActions {
     } finally {
       loading.hide();
     }
+  }
+
+  /// Exporta todas as páginas renderizadas para um PDF multipágina.
+  ///
+  /// As páginas vêm do renderer do editor em modo impressão, preservando a
+  /// aparência de tabelas, imagens, caixas flutuantes e cabeçalhos/rodapés.
+  @override
+  Future<void> downloadPdf([String? fileName]) async {
+    final String requested = fileName ?? _openedDocxName ?? 'documento.pdf';
+    final String name = requested.toLowerCase().endsWith('.pdf')
+        ? requested
+        : '${requested.replaceFirst(RegExp(r'\.[^.]+$'), '')}.pdf';
+    await loading.show('Gerando $name…');
+    try {
+      final List<String> dataUrls = await command.getImage(IGetImageOption(
+        pixelRatio: 1,
+        mode: EditorMode.print,
+        mimeType: 'image/jpeg',
+        quality: 0.92,
+      ));
+      final List<Uint8List> pages = <Uint8List>[
+        for (final String dataUrl in dataUrls) _decodeDataUrl(dataUrl),
+      ];
+      final Uint8List bytes = RasterPdfEncoder.encode(
+        pages,
+        title: config.documentTitle,
+      );
+      final String url = Url.createObjectUrlFromBlob(
+        Blob(<Object>[bytes], 'application/pdf'),
+      );
+      AnchorElement(href: url)
+        ..download = name
+        ..click();
+      Timer.run(() => Url.revokeObjectUrl(url));
+    } catch (error) {
+      config.onError?.call(error);
+    } finally {
+      loading.hide();
+    }
+  }
+
+  static Uint8List _decodeDataUrl(String dataUrl) {
+    final int comma = dataUrl.indexOf(',');
+    if (comma < 0 || !dataUrl.substring(0, comma).contains(';base64')) {
+      throw const FormatException('Imagem de página inválida.');
+    }
+    return base64Decode(dataUrl.substring(comma + 1));
   }
 
   /// Exporta o documento atual no formato Delta do Quill

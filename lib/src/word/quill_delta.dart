@@ -53,18 +53,26 @@ class QuillDeltaConverter {
       for (final IElement element in elements) {
         switch (element.type) {
           case ElementType.title:
-            walk(element.valueList ?? const <IElement>[], <String, dynamic>{
+            final Map<String, dynamic> titleInherited = <String, dynamic>{
               ...inherited,
               if (element.level != null)
                 'header': _titleLevelToHeader(element.level!),
-            });
+            };
+            walk(element.valueList ?? const <IElement>[], titleInherited);
+            if (ops.isEmpty || ops.last['insert'] != '\n') {
+              insertNewline(_lineAttributes(element, titleInherited));
+            }
             continue;
           case ElementType.list:
-            walk(element.valueList ?? const <IElement>[], <String, dynamic>{
+            final Map<String, dynamic> listInherited = <String, dynamic>{
               ...inherited,
               'list':
                   element.listType == ListType.ordered ? 'ordered' : 'bullet',
-            });
+            };
+            walk(element.valueList ?? const <IElement>[], listInherited);
+            if (ops.isEmpty || ops.last['insert'] != '\n') {
+              insertNewline(_lineAttributes(element, listInherited));
+            }
             continue;
           case ElementType.hyperlink:
             final Map<String, dynamic> linked = <String, dynamic>{
@@ -120,16 +128,20 @@ class QuillDeltaConverter {
               for (int c = 0; c < tr.tdList.length; c++) {
                 final ITd td = tr.tdList[c];
                 final String cellId = 'cell-t$tableIndex-r${r + 1}-c${c + 1}';
+                final bool isHeaderCell = td.extension is Map &&
+                    (td.extension as Map)['quillTableHeader'] == true;
                 final Map<String, dynamic> cellAttributes = <String, dynamic>{
                   'data-row': rowId,
                   if (td.colspan > 1) 'colspan': '${td.colspan}',
                   if (td.rowspan > 1) 'rowspan': '${td.rowspan}',
                   if (td.width != null) 'width': '${td.width!.round()}',
                   'height': '${tr.height.round()}',
+                  if (td.backgroundColor != null)
+                    'style': 'background-color: ${td.backgroundColor}',
                 };
                 final Map<String, dynamic> cellInherited = <String, dynamic>{
-                  'table-cell-block': cellId,
-                  'table-cell': cellAttributes,
+                  isHeaderCell ? 'table-th-block' : 'table-cell-block': cellId,
+                  isHeaderCell ? 'table-th' : 'table-cell': cellAttributes,
                 };
                 final int opsBefore = ops.length;
                 walk(td.value, cellInherited);
@@ -137,8 +149,9 @@ class QuillDeltaConverter {
                 // terminou em '\n' (célula vazia ou parágrafo aberto).
                 final bool terminated = ops.length > opsBefore &&
                     ops.last['insert'] == '\n' &&
-                    (ops.last['attributes']
-                            as Map<String, dynamic>?)?['table-cell-block'] ==
+                    ops.last['attributes'] is Map &&
+                    _cellIdOf((ops.last['attributes'] as Map)
+                            .cast<String, dynamic>()) ==
                         cellId;
                 if (!terminated) {
                   insertNewline(cellInherited);
@@ -200,13 +213,33 @@ class QuillDeltaConverter {
 
   static Map<String, dynamic> _lineAttributes(
       IElement element, Map<String, dynamic> inherited) {
+    final Object? cellId =
+        inherited['table-cell-block'] ?? inherited['table-th-block'];
+    final bool isTableLine = cellId != null;
     return <String, dynamic>{
-      if (inherited.containsKey('header')) 'header': inherited['header'],
-      if (inherited.containsKey('list')) 'list': inherited['list'],
-      if (inherited.containsKey('table-cell-block'))
+      if (inherited.containsKey('header') && !isTableLine)
+        'header': inherited['header'],
+      if (inherited.containsKey('list') && !isTableLine)
+        'list': inherited['list'],
+      if (inherited.containsKey('header') && isTableLine)
+        'table-header': <String, dynamic>{
+          'cellId': cellId,
+          'value': inherited['header'],
+        }
+      else if (inherited.containsKey('list') && isTableLine)
+        'table-list': <String, dynamic>{
+          'cellId': cellId,
+          'value': inherited['list'],
+        }
+      else if (inherited.containsKey('table-cell-block'))
         'table-cell-block': inherited['table-cell-block'],
+      if (inherited.containsKey('table-th-block') &&
+          !inherited.containsKey('header') &&
+          !inherited.containsKey('list'))
+        'table-th-block': inherited['table-th-block'],
       if (inherited.containsKey('table-cell'))
         'table-cell': inherited['table-cell'],
+      if (inherited.containsKey('table-th')) 'table-th': inherited['table-th'],
       if (element.rowFlex == RowFlex.center) 'align': 'center',
       if (element.rowFlex == RowFlex.right) 'align': 'right',
       if (element.rowFlex == RowFlex.alignment ||
@@ -319,7 +352,38 @@ class QuillDeltaConverter {
           else if (lineAttributes['table-th'] is Map)
             ...(lineAttributes['table-th'] as Map).cast<String, dynamic>(),
         };
-        table.addLine(cellId, cellAttributes, List<IElement>.from(line));
+        List<IElement> cellLine = List<IElement>.from(line);
+        final Object? tableHeader = lineAttributes['table-header'];
+        final Object? tableList = lineAttributes['table-list'];
+        if (tableHeader is Map && cellLine.isNotEmpty) {
+          cellLine = <IElement>[
+            IElement(
+              value: '',
+              type: ElementType.title,
+              level: _headerToTitleLevel(
+                  (_parseInt(tableHeader['value']) ?? 1).clamp(1, 6)),
+              valueList: cellLine,
+            ),
+          ];
+        } else if (tableList is Map && cellLine.isNotEmpty) {
+          final String value = '${tableList['value']}';
+          cellLine = <IElement>[
+            IElement(
+              value: '',
+              type: ElementType.list,
+              listType:
+                  value == 'ordered' ? ListType.ordered : ListType.unordered,
+              valueList: cellLine,
+            ),
+          ];
+        }
+        table.addLine(
+          cellId,
+          cellAttributes,
+          cellLine,
+          isHeaderCell: lineAttributes['table-th'] is Map ||
+              lineAttributes.containsKey('table-th-block'),
+        );
         line.clear();
         return;
       }
@@ -477,6 +541,11 @@ class QuillDeltaConverter {
     }
     return null;
   }
+
+  static int? _parseInt(Object? value) {
+    if (value is num) return value.toInt();
+    return int.tryParse('$value');
+  }
 }
 
 /// Reconstrói um elemento de tabela do editor a partir das linhas de célula
@@ -495,11 +564,9 @@ class _TableAccumulator {
     _columnWidths.add(width);
   }
 
-  void addLine(
-    String cellId,
-    Map<String, dynamic> cellAttributes,
-    List<IElement> lineElements,
-  ) {
+  void addLine(String cellId, Map<String, dynamic> cellAttributes,
+      List<IElement> lineElements,
+      {bool isHeaderCell = false}) {
     final String rowKey = cellAttributes['data-row'] as String? ?? cellId;
     final _RowAccumulator row = _rows.putIfAbsent(rowKey, _RowAccumulator.new);
     final double? height = _parsePx(cellAttributes['height']);
@@ -512,6 +579,9 @@ class _TableAccumulator {
       ..colspan = _parseInt(cellAttributes['colspan']) ?? cell.colspan
       ..rowspan = _parseInt(cellAttributes['rowspan']) ?? cell.rowspan
       ..width = _parsePx(cellAttributes['width']) ?? cell.width
+      ..backgroundColor =
+          _backgroundColor(cellAttributes['style']) ?? cell.backgroundColor
+      ..isHeaderCell = isHeaderCell || cell.isHeaderCell
       ..paragraphs.add(lineElements);
   }
 
@@ -554,6 +624,10 @@ class _TableAccumulator {
           colspan: cell.colspan,
           rowspan: cell.rowspan,
           width: cell.width,
+          backgroundColor: cell.backgroundColor,
+          extension: cell.isHeaderCell
+              ? <String, dynamic>{'quillTableHeader': true}
+              : null,
           value: value,
         ));
       }
@@ -593,6 +667,14 @@ class _TableAccumulator {
     }
     return null;
   }
+
+  static String? _backgroundColor(Object? style) {
+    if (style is! String) return null;
+    final Match? match =
+        RegExp(r'background-color\s*:\s*([^;]+)', caseSensitive: false)
+            .firstMatch(style);
+    return match?.group(1)?.trim();
+  }
 }
 
 class _RowAccumulator {
@@ -605,5 +687,7 @@ class _CellAccumulator {
   int colspan = 1;
   int rowspan = 1;
   double? width;
+  String? backgroundColor;
+  bool isHeaderCell = false;
   final List<List<IElement>> paragraphs = <List<IElement>>[];
 }
