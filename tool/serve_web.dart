@@ -27,15 +27,15 @@ Future<void> main(List<String> args) async {
   final skipBuild = args.contains('--no-build');
 
   if (!skipBuild) {
-    stdout
-        .writeln('[serve_web] compilando example/main.dart com dart2js -O2...');
+    stdout.writeln(
+        '[serve_web] compilando example/web/main.dart com dart2js -O2...');
     final result = await Process.run('dart', <String>[
       'compile',
       'js',
       '-O2',
       '-o',
-      p.join('example', 'main.dart.js'),
-      p.join('example', 'main.dart'),
+      p.join('example', 'web', 'main.dart.js'),
+      p.join('example', 'web', 'main.dart'),
     ]);
     stdout.write(result.stdout);
     if (result.exitCode != 0) {

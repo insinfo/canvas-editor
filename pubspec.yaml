@@ -1,6 +1,6 @@
 name: canvas_text_editor
 description: Embeddable canvas DOCX editor and viewer for Dart Web and AngularDart.
-version: 1.0.0
+version: 2.0.0
 publish_to: none
 # repository: https://github.com/my_org/my_repo
 
