@@ -13,6 +13,7 @@ abstract class CanvasEditorShellActions {
   Future<void> exportCurrentPageImage();
   void openFind({bool focusReplace = false});
   void toggleCatalog();
+  void toggleComments();
 }
 
 /// Ribbon estilo Word (abas Arquivo/Página Inicial/Inserir/Layout/Exibir).
@@ -210,6 +211,13 @@ class WidgetRibbon extends UiComponent {
             labeled: true),
         _button('landscape', 'ti-file-orientation', 'Paisagem',
             () => _command.executePaperDirection(PaperDirection.horizontal),
+            labeled: true),
+      ]),
+    ]);
+    addTab('review', 'Revisão', <Element>[
+      _group('Comentários', <Element>[
+        _button(
+            'comments', 'ti-message', 'Comentários', _actions.toggleComments,
             labeled: true),
       ]),
     ]);

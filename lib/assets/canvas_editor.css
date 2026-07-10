@@ -459,6 +459,73 @@
   color: #185abd;
 }
 
+.ce-panel--comments .ce-panel__main {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.ce-comment {
+  position: relative;
+  padding: 10px 32px 10px 10px;
+  border: 1px solid #d6dce5;
+  border-radius: 5px;
+  background: #fff;
+  cursor: pointer;
+}
+
+.ce-comment:hover,
+.ce-comment:focus {
+  border-color: #7aa7e6;
+  box-shadow: 0 0 0 2px rgb(24 90 189 / 10%);
+  outline: none;
+}
+
+.ce-comment__author {
+  display: block;
+  margin-bottom: 5px;
+  color: #20344f;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.ce-comment__quote {
+  margin-bottom: 6px;
+  padding-left: 7px;
+  border-left: 2px solid #8fb2e3;
+  color: #687386;
+  font-size: 11px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ce-comment__content {
+  color: #303b4a;
+  font-size: 12px;
+  line-height: 1.4;
+  white-space: pre-wrap;
+}
+
+.ce-comment__delete {
+  position: absolute;
+  top: 6px;
+  right: 5px;
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  border: 0;
+  border-radius: 3px;
+  background: transparent;
+  color: #687386;
+  cursor: pointer;
+}
+
+.ce-comment__delete:hover {
+  background: #fdebec;
+  color: #b4232c;
+}
+
 /* ── Barra de status ───────────────────────────────────────────────────── */
 
 .ce-statusbar {

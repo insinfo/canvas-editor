@@ -209,22 +209,33 @@ void main() {
       }
     });
 
-    test('header contém o carimbo (mc:AlternateContent preservado)', () {
-      var found = false;
+    test('header contém o carimbo como caixa de texto tipada ou XML preservado',
+        () {
+      WpTextBox? textBox;
+      var preservedAlternateContent = false;
       for (final header in etp.headersByType.values) {
         for (final block in header.blocks) {
           if (block is! WpParagraph) continue;
           for (final run in block.allRuns) {
-            if (run.content.any((c) =>
-                c is WpPreservedRunContent &&
-                c.qname == 'mc:AlternateContent')) {
-              found = true;
+            for (final content in run.content) {
+              if (content is WpTextBox) {
+                textBox = content;
+              } else if (content is WpPreservedRunContent &&
+                  content.qname == 'mc:AlternateContent') {
+                preservedAlternateContent = true;
+              }
             }
           }
         }
       }
-      expect(found, isTrue,
-          reason: 'text box do carimbo deve estar preservado (D1)');
+      expect(textBox != null || preservedAlternateContent, isTrue,
+          reason: 'text box do carimbo deve estar tipado ou preservado (D1)');
+      if (textBox != null) {
+        expect(textBox.rawXml, contains('mc:AlternateContent'));
+        expect(textBox.blocks, isNotEmpty);
+        expect(textBox.extentCxEmu, isNotNull);
+        expect(textBox.extentCyEmu, isNotNull);
+      }
     });
 
     test('imagens dos headers resolvem bytes via rels', () {
