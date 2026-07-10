@@ -245,3 +245,4 @@ Ordem segura:
   páginas.
 - `draw.dart` não deve receber novos domínios; novos recursos entram por
   serviços e controllers.
+Header/caixa de texto editável: 

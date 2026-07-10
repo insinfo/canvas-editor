@@ -6,7 +6,7 @@ import 'package:canvas_text_editor/src/editor/dataset/enum/row.dart';
 import 'package:canvas_text_editor/src/editor/dataset/enum/table/table.dart';
 import 'package:canvas_text_editor/src/editor/interface/element.dart';
 import 'package:canvas_text_editor/src/word/docx_to_element.dart';
-import 'package:ce_docx/ce_docx.dart';
+import 'package:canvas_text_editor/ce_docx.dart';
 import 'package:test/test.dart';
 
 const _etpPath = 'resources/PGCTIC1_-_ETP_-_Sistema_de_Gestão_Pública.docx';
@@ -84,10 +84,8 @@ void main() {
     });
 
     test('TR: 22 tabelas top-level convertidas e 3 hyperlinks', () {
-      expect(_countType(tr.main, ElementType.table),
-          lessThanOrEqualTo(22));
-      expect(_countType(tr.main, ElementType.table),
-          greaterThanOrEqualTo(20));
+      expect(_countType(tr.main, ElementType.table), lessThanOrEqualTo(22));
+      expect(_countType(tr.main, ElementType.table), greaterThanOrEqualTo(20));
       expect(_countType(tr.main, ElementType.hyperlink), 3);
       final text = _plainText(tr.main);
       expect(text, contains('TERMO DE REFERÊNCIA'));
@@ -242,8 +240,7 @@ void main() {
     });
 
     test('carimbo do header registrado nas notas de fidelidade', () {
-      expect(
-          etp.notes.any((note) => note.contains('carimbo')), isTrue);
+      expect(etp.notes.any((note) => note.contains('carimbo')), isTrue);
     });
   });
 }

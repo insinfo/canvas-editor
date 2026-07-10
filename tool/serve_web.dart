@@ -8,7 +8,7 @@
 //   dart run tool/serve_web.dart --port=9090
 //   dart run tool/serve_web.dart --no-build # só serve (usa o último build)
 //
-// O JS é gerado em web/main.dart.js (mesmo nome que o index.html referencia).
+// O JS é gerado em example/main.dart.js (mesmo nome referenciado no HTML).
 
 import 'dart:io';
 
@@ -27,14 +27,15 @@ Future<void> main(List<String> args) async {
   final skipBuild = args.contains('--no-build');
 
   if (!skipBuild) {
-    stdout.writeln('[serve_web] compilando web/main.dart com dart2js -O2...');
+    stdout
+        .writeln('[serve_web] compilando example/main.dart com dart2js -O2...');
     final result = await Process.run('dart', <String>[
       'compile',
       'js',
       '-O2',
       '-o',
-      p.join('web', 'main.dart.js'),
-      p.join('web', 'main.dart'),
+      p.join('example', 'main.dart.js'),
+      p.join('example', 'main.dart'),
     ]);
     stdout.write(result.stdout);
     if (result.exitCode != 0) {
@@ -47,8 +48,35 @@ Future<void> main(List<String> args) async {
   }
 
   final staticHandler =
-      createStaticHandler('web', defaultDocument: 'index.html');
+      createStaticHandler('example', defaultDocument: 'index.html');
   final handler = const Pipeline().addHandler((Request request) {
+    const assetPrefix = 'packages/canvas_text_editor/assets/';
+    if (request.url.path.startsWith(assetPrefix)) {
+      final relative = request.url.path.substring(assetPrefix.length);
+      final assetRoot = p.canonicalize(p.join('lib', 'assets'));
+      final assetPath = p.canonicalize(
+        p.joinAll(<String>[assetRoot, ...p.split(relative)]),
+      );
+      if (!p.isWithin(assetRoot, assetPath)) {
+        return Response.forbidden('caminho de asset inválido');
+      }
+      final file = File(assetPath);
+      if (file.existsSync()) {
+        final extension = p.extension(file.path).toLowerCase();
+        final contentType = switch (extension) {
+          '.css' => 'text/css; charset=utf-8',
+          '.woff2' => 'font/woff2',
+          '.woff' => 'font/woff',
+          '.ttf' => 'font/ttf',
+          _ => 'application/octet-stream',
+        };
+        return Response.ok(
+          file.readAsBytesSync(),
+          headers: <String, String>{'Content-Type': contentType},
+        );
+      }
+      return Response.notFound('asset não encontrado');
+    }
     // DOCX de resources/ acessíveis em /resources/<arquivo> (testes manuais).
     if (request.url.path.startsWith('resources/')) {
       final file = File(Uri.decodeComponent(request.url.path));

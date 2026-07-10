@@ -5,7 +5,7 @@ import 'package:canvas_text_editor/src/editor/dataset/enum/element.dart';
 import 'package:canvas_text_editor/src/editor/interface/element.dart';
 import 'package:canvas_text_editor/src/word/docx_to_element.dart';
 import 'package:canvas_text_editor/src/word/element_to_docx.dart';
-import 'package:ce_docx/ce_docx.dart';
+import 'package:canvas_text_editor/ce_docx.dart';
 import 'package:test/test.dart';
 
 const _etpPath = 'resources/PGCTIC1_-_ETP_-_Sistema_de_Gestão_Pública.docx';
@@ -26,7 +26,8 @@ Uint8List _read(String path) =>
   return (file: fileB, original: original, current: current);
 }
 
-IElement? _findTextElement(List<IElement> elements, bool Function(IElement) test) {
+IElement? _findTextElement(
+    List<IElement> elements, bool Function(IElement) test) {
   for (final element in elements) {
     if (element.type == null && test(element)) return element;
     final children = element.valueList;
@@ -45,11 +46,12 @@ void main() {
 
       setUpAll(() => original = _read(path));
 
-      test('abrir → converter → sincronizar sem edição → salvar '
+      test(
+          'abrir → converter → sincronizar sem edição → salvar '
           '= byte-idêntico', () {
         final env = _openTwice(original);
-        final notes = EditorToDocx.apply(
-            env.file, env.current.main, env.original.main);
+        final notes =
+            EditorToDocx.apply(env.file, env.current.main, env.original.main);
         final saved = DocxWriter.write(env.file);
         expect(saved.length, original.length,
             reason: 'notas: ${notes.join('; ')}');
@@ -58,8 +60,7 @@ void main() {
         }
       });
 
-      test('editar texto de 1 parágrafo → mudança localizada e reabrível',
-          () {
+      test('editar texto de 1 parágrafo → mudança localizada e reabrível', () {
         final env = _openTwice(original);
         final target = _findTextElement(
             env.current.main,
@@ -101,8 +102,8 @@ void main() {
             isTrue);
         for (final name in reopened.package.partNames) {
           if (name == env.file.mainPartName) continue;
-          expect(reopened.package.partBytes(name),
-              fresh.package.partBytes(name),
+          expect(
+              reopened.package.partBytes(name), fresh.package.partBytes(name),
               reason: name);
         }
       });
@@ -138,8 +139,8 @@ void main() {
       final newTable = reopened.document.body[stamp] as WpTable;
       expect(newTable.rows.length, originalTable.rows.length);
       for (var r = 0; r < newTable.rows.length; r++) {
-        expect(newTable.rows[r].cells.length,
-            originalTable.rows[r].cells.length,
+        expect(
+            newTable.rows[r].cells.length, originalTable.rows[r].cells.length,
             reason: 'linha $r');
       }
       expect(
@@ -170,8 +171,7 @@ void main() {
 
       final fresh = DocxReader.read(original);
       final reopened = DocxReader.read(saved);
-      expect(reopened.document.body.length,
-          fresh.document.body.length + 1);
+      expect(reopened.document.body.length, fresh.document.body.length + 1);
       expect(
           reopened.document.allParagraphs
               .any((p) => p.text.contains('Parágrafo novo inserido')),
@@ -185,8 +185,7 @@ void main() {
             block.sourceXml!: true
       };
       for (final block in reopened.document.body) {
-        if (block is WpParagraph &&
-            originalXml.containsKey(block.sourceXml)) {
+        if (block is WpParagraph && originalXml.containsKey(block.sourceXml)) {
           passthrough++;
         }
       }
@@ -210,8 +209,7 @@ void main() {
         }
       }
       expect(link, isNotNull, reason: 'TR tem 3 hyperlinks externos');
-      final textChild =
-          link!.valueList!.firstWhere((e) => e.value.isNotEmpty);
+      final textChild = link!.valueList!.firstWhere((e) => e.value.isNotEmpty);
       textChild.value = '${textChild.value}X';
 
       EditorToDocx.apply(env.file, env.current.main, env.original.main);

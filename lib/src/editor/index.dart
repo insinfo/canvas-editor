@@ -41,6 +41,7 @@ export 'dataset/enum/watermark.dart';
 
 export 'interface/element.dart';
 export 'interface/editor.dart';
+export 'interface/placeholder.dart';
 export 'interface/graffiti.dart';
 export 'interface/label.dart';
 export 'interface/white_space.dart';
@@ -132,7 +133,8 @@ class Editor implements IPluginHost {
       headerElementList = _cloneElementList(data.header);
       mainElementList = element_utils.cloneElementList(data.main);
       footerElementList = _cloneElementList(data.footer);
-      graffitiData = List<IGraffitiData>.from(data.graffiti ?? const <IGraffitiData>[]);
+      graffitiData =
+          List<IGraffitiData>.from(data.graffiti ?? const <IGraffitiData>[]);
     } else {
       final dynamic cloned = utils.deepClone(data);
       if (cloned is List<IElement>) {
@@ -144,8 +146,8 @@ class Editor implements IPluginHost {
         headerElementList = _cloneElementList(cloned.header);
         mainElementList = element_utils.cloneElementList(cloned.main);
         footerElementList = _cloneElementList(cloned.footer);
-        graffitiData =
-            List<IGraffitiData>.from(cloned.graffiti ?? const <IGraffitiData>[]);
+        graffitiData = List<IGraffitiData>.from(
+            cloned.graffiti ?? const <IGraffitiData>[]);
       } else {
         throw ArgumentError(
             'Editor data must be an IEditorData or List<IElement>.');
@@ -167,9 +169,9 @@ class Editor implements IPluginHost {
       );
     }
 
-  _listener = Listener();
-  _eventBus = EventBus<EventBusMap>();
-  _overrideHost = Override();
+    _listener = Listener();
+    _eventBus = EventBus<EventBusMap>();
+    _overrideHost = Override();
 
     final Draw draw = Draw(
       container,
@@ -186,23 +188,23 @@ class Editor implements IPluginHost {
     );
     _draw = draw;
 
-  _command = Command(CommandAdapt(draw));
+    _command = Command(CommandAdapt(draw));
     final ContextMenu contextMenu = ContextMenu(draw, command);
     final Shortcut shortcut = Shortcut(draw, command);
 
-  _register = Register(
+    _register = Register(
       contextMenu: contextMenu,
       shortcut: shortcut,
       i18n: draw.getI18n(),
     );
 
-  _destroy = () {
+    _destroy = () {
       draw.destroy();
       shortcut.removeEvent();
       contextMenu.removeEvent();
     };
 
     final Plugin plugin = Plugin(this);
-  _use = plugin.use;
+    _use = plugin.use;
   }
 }

@@ -11,7 +11,7 @@
 
 import 'dart:io';
 
-import 'package:ce_zip/ce_zip.dart';
+import 'package:canvas_text_editor/ce_zip.dart';
 
 class DocxInventory {
   final String path;
@@ -39,9 +39,8 @@ class DocxInventory {
       for (final name in [...headerNames, ...footerNames])
         archive.readString(name) ?? ''
     ].join();
-    final mediaNames = archive.entryNames
-        .where((n) => n.startsWith('word/media/'))
-        .toList();
+    final mediaNames =
+        archive.entryNames.where((n) => n.startsWith('word/media/')).toList();
     final relsXml = archive.entryNames
         .where((n) => n.endsWith('.rels'))
         .map((n) => archive.readString(n) ?? '')
@@ -76,8 +75,8 @@ class DocxInventory {
     c['mc:AlternateContent'] =
         count('$document$headersFooters', '<mc:AlternateContent[ >/]');
     c['imagens (media)'] = mediaNames.length;
-    c['hyperlinks externos'] =
-        count(relsXml, 'TargetMode="External"[^>]*|Target[^>]*TargetMode="External"');
+    c['hyperlinks externos'] = count(
+        relsXml, 'TargetMode="External"[^>]*|Target[^>]*TargetMode="External"');
     c['bookmarks'] = count(document, '<w:bookmarkStart[ >/]');
     c['w:ins'] = count(document, '<w:ins[ >/]');
     c['tab stops (w:tab defs)'] = count(document, '<w:tab w:val=');

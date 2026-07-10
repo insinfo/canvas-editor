@@ -137,41 +137,6 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "8.12.0"
-  ce_docx:
-    dependency: "direct main"
-    description:
-      path: "packages/ce_docx"
-      relative: true
-    source: path
-    version: "0.1.0"
-  ce_fonts:
-    dependency: "direct main"
-    description:
-      path: "packages/ce_fonts"
-      relative: true
-    source: path
-    version: "0.1.0"
-  ce_opc:
-    dependency: "direct main"
-    description:
-      path: "packages/ce_opc"
-      relative: true
-    source: path
-    version: "0.1.0"
-  ce_xml:
-    dependency: "direct main"
-    description:
-      path: "packages/ce_xml"
-      relative: true
-    source: path
-    version: "0.1.0"
-  ce_zip:
-    dependency: "direct main"
-    description:
-      path: "packages/ce_zip"
-      relative: true
-    source: path
-    version: "0.1.0"
   checked_yaml:
     dependency: transitive
     description:

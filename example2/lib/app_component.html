@@ -1,0 +1,60 @@
+<div class="navbar navbar-dark navbar-expand-lg navbar-static border-bottom border-bottom-white border-opacity-10">
+  <div class="container-fluid">
+    <a class="navbar-brand d-inline-flex align-items-center text-white text-decoration-none" href="#">
+      <span class="demo-brand-mark me-2"><i class="ph-file-doc"></i></span>
+      <span class="fw-semibold">Canvas Editor + Limitless UI</span>
+    </a>
+    <span class="navbar-text text-white-50 d-none d-md-inline">AngularDart 8</span>
+  </div>
+</div>
+
+<div class="page-content">
+  <div class="content-wrapper">
+    <div class="content-inner">
+      <div class="page-header page-header-light shadow">
+        <div class="page-header-content d-lg-flex">
+          <div class="d-flex">
+            <div class="breadcrumb py-3">
+              <a class="breadcrumb-item"><i class="ph-house me-2"></i>Exemplos</a>
+              <span class="breadcrumb-item active">Editor embutido</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="content">
+        <div class="card editor-demo-card">
+          <div class="card-header d-flex align-items-center gap-3 flex-wrap">
+            <div class="flex-fill">
+              <h5 class="mb-1">Documento clínico</h5>
+              <div class="text-muted small">A rolagem do documento não movimenta o body.</div>
+            </div>
+            <li-dropdown-menu
+              ariaLabel="Modo do documento"
+              triggerClass="btn btn-outline-primary"
+              triggerIconClass="ph-sliders-horizontal"
+              [options]="modeOptions"
+              [value]="mode"
+              (valueChange)="onModeChange($event)">
+            </li-dropdown-menu>
+            <button type="button" class="btn btn-primary" (click)="openDocx($event)">
+              <i class="ph-folder-open me-2"></i>Abrir DOCX
+            </button>
+          </div>
+          <div class="card-body p-0">
+            <div #editorHost class="editor-angular-host"></div>
+          </div>
+          <div class="card-footer d-flex align-items-center">
+            <i class="ph-info me-2 text-primary"></i>
+            <span>{{ status }}</span>
+          </div>
+        </div>
+
+        <div class="alert alert-info border-0 mt-3">
+          <i class="ph-arrows-down-up me-2"></i>
+          Role dentro do documento e depois fora do card: os dois contêineres são independentes.
+        </div>
+      </div>
+    </div>
+  </div>
+</div>

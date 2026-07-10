@@ -4,7 +4,7 @@ import 'dart:html';
 import 'dart:js_util' as js_util;
 import 'dart:typed_data';
 
-import 'package:ce_docx/ce_docx.dart';
+import 'package:canvas_text_editor/ce_docx.dart';
 
 import 'components/dialog/dialog.dart';
 import 'editor/index.dart';
@@ -1010,8 +1010,7 @@ class EditorApp {
   void _setupFindSidebar() {
     final findSidebar = _requireElement<DivElement>('.find-sidebar');
     final closeDom = _requireElement<DivElement>('.find-sidebar__close');
-    final searchInput =
-        _requireElement<InputElement>('.find-sidebar__search');
+    final searchInput = _requireElement<InputElement>('.find-sidebar__search');
     final replaceInput =
         _requireElement<InputElement>('.find-sidebar__replace');
     final countDom = _requireElement<SpanElement>('.find-sidebar__count');
@@ -1166,20 +1165,57 @@ class EditorApp {
     const tabControls = <String, List<String>>{
       'arquivo': <String>['docx', 'docx-save', 'print'],
       'inicial': <String>[
-        'undo', 'redo', 'painter', 'format', 'font', 'size', 'size-add',
-        'size-minus', 'bold', 'italic', 'underline', 'strikeout',
-        'superscript', 'subscript', 'color', 'highlight', 'title', 'left',
-        'center', 'right', 'alignment', 'justify', 'row-margin', 'list',
+        'undo',
+        'redo',
+        'painter',
+        'format',
+        'font',
+        'size',
+        'size-add',
+        'size-minus',
+        'bold',
+        'italic',
+        'underline',
+        'strikeout',
+        'superscript',
+        'subscript',
+        'color',
+        'highlight',
+        'title',
+        'left',
+        'center',
+        'right',
+        'alignment',
+        'justify',
+        'row-margin',
+        'list',
         'style-gallery',
       ],
       'inserir': <String>[
-        'table', 'table__collapse', 'image', 'hyperlink', 'separator',
-        'watermark', 'codeblock', 'page-break', 'control', 'checkbox',
-        'radio', 'latex', 'date', 'block',
+        'table',
+        'table__collapse',
+        'image',
+        'hyperlink',
+        'separator',
+        'watermark',
+        'codeblock',
+        'page-break',
+        'control',
+        'checkbox',
+        'radio',
+        'latex',
+        'date',
+        'block',
       ],
       'layout': <String>[
-        'page-break', 'paper-size', 'paper-direction', 'paper-margin',
-        'page-mode', 'edit-header', 'edit-footer', 'close-zone',
+        'page-break',
+        'paper-size',
+        'paper-direction',
+        'paper-margin',
+        'page-mode',
+        'edit-header',
+        'edit-footer',
+        'close-zone',
         'remove-header-textbox',
       ],
       'revisao': <String>['search', 'search__collapse'],
