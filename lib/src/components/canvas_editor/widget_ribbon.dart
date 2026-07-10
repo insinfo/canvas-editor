@@ -11,6 +11,7 @@ abstract class CanvasEditorShellActions {
   void openFilePicker();
   Future<void> downloadDocx([String? fileName]);
   Future<void> exportCurrentPageImage();
+  Future<void> downloadPdf([String? fileName]);
   void openFind({bool focusReplace = false});
   void toggleCatalog();
   void toggleComments();
@@ -145,6 +146,9 @@ class WidgetRibbon extends UiComponent {
       _group('Exportar', <Element>[
         _button('export-image', 'ti-photo', 'Página → PNG',
             () => _actions.exportCurrentPageImage(),
+            labeled: true),
+        _button('export-pdf', 'ti-file-type-pdf', 'Documento → PDF',
+            () => _actions.downloadPdf(),
             labeled: true),
       ]),
     ]);

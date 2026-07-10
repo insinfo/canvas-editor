@@ -232,6 +232,65 @@ void main() {
       expect(restored.map((e) => e.value).join(), contains('depois'));
     });
 
+    test('preserva TH, cor de fundo, título e lista dentro de células', () {
+      final original = <IElement>[
+        IElement(
+          value: '',
+          type: ElementType.table,
+          colgroup: <IColgroup>[IColgroup(width: 160)],
+          trList: <ITr>[
+            ITr(height: 44, tdList: <ITd>[
+              ITd(
+                colspan: 1,
+                rowspan: 1,
+                backgroundColor: '#ffeeaa',
+                extension: <String, dynamic>{'quillTableHeader': true},
+                value: <IElement>[
+                  IElement(
+                    value: '',
+                    type: ElementType.title,
+                    level: TitleLevel.second,
+                    valueList: <IElement>[IElement(value: 'Cabeçalho')],
+                  ),
+                  IElement(value: '\n'),
+                  IElement(
+                    value: '',
+                    type: ElementType.list,
+                    listType: ListType.ordered,
+                    valueList: <IElement>[IElement(value: 'Item')],
+                  ),
+                ],
+              ),
+            ]),
+          ],
+        ),
+      ];
+
+      final delta = QuillDeltaConverter.toDelta(original);
+      final ops = (delta['ops'] as List).cast<Map<String, dynamic>>();
+      final headerEnd = ops.firstWhere((op) =>
+          (op['attributes'] as Map?)?.containsKey('table-header') == true);
+      final listEnd = ops.firstWhere((op) =>
+          (op['attributes'] as Map?)?.containsKey('table-list') == true);
+      expect(headerEnd['attributes']['table-header']['value'], 2);
+      expect(listEnd['attributes']['table-list']['value'], 'ordered');
+      expect(headerEnd['attributes']['table-th']['style'],
+          contains('background-color: #ffeeaa'));
+
+      final restored = QuillDeltaConverter.fromDelta(delta);
+      final ITd cell = restored
+          .firstWhere((element) => element.type == ElementType.table)
+          .trList!
+          .single
+          .tdList
+          .single;
+      expect((cell.extension as Map)['quillTableHeader'], isTrue);
+      expect(cell.backgroundColor, '#ffeeaa');
+      expect(
+          cell.value.where((e) => e.type == ElementType.title), hasLength(1));
+      expect(cell.value.where((e) => e.type == ElementType.list), hasLength(1));
+    });
+
     test('round-trip preserva texto e formatação básica', () {
       final original = <IElement>[
         IElement(value: 'Um '),

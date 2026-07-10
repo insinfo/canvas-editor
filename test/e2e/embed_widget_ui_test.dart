@@ -143,6 +143,8 @@ void main() {
     expect(await page!.$$('[data-ce-tab="review"]'), hasLength(1));
     await page!.click('[data-ce-tab="review"]');
     expect(await page!.$$('[data-ce-command="comments"]'), hasLength(1));
+    await page!.click('[data-ce-tab="file"]');
+    expect(await page!.$$('[data-ce-command="export-pdf"]'), hasLength(1));
     expect(await page!.$$('.ce-word-panel.active .ce-word-group'), isNotEmpty);
     expect(await page!.$$('.ce-embed__scroll'), hasLength(1));
   });

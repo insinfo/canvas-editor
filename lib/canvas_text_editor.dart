@@ -7,3 +7,4 @@ export 'src/word/docx_to_element.dart';
 export 'src/word/element_to_docx.dart';
 export 'src/word/quill_delta.dart';
 export 'ce_docx.dart';
+export 'ce_pdf.dart';

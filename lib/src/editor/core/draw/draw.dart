@@ -882,6 +882,8 @@ class Draw {
   Future<List<String>> getDataURL([IGetImageOption? payload]) async {
     final double? pixelRatio = payload?.pixelRatio;
     final EditorMode? mode = payload?.mode;
+    final String mimeType = payload?.mimeType ?? 'image/png';
+    final num? quality = payload?.quality;
     if (pixelRatio != null) {
       setPagePixelRatio(pixelRatio);
     }
@@ -902,8 +904,10 @@ class Draw {
     if (imageObserver != null) {
       await imageObserver.allSettled();
     }
-    final List<String> dataUrlList =
-        _pageList.map((CanvasElement canvas) => canvas.toDataUrl()).toList();
+    final List<String> dataUrlList = _pageList
+        .map((CanvasElement canvas) =>
+            canvas.toDataUrl(mimeType, quality?.toDouble()))
+        .toList();
     if (pixelRatio != null) {
       setPagePixelRatio(null);
     }

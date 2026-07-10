@@ -74,19 +74,23 @@ shell wiring into the new component architecture:
   and in the status bar, kept in sync via `pageModeChange`.
 - **Export page as PNG**: File ribbon action using `getImage`, downloading
   the currently visible page.
+- **Export document as PDF**: File ribbon action rasterizes every page through
+  the editor's print renderer and packages the JPEG pages with the new pure
+  Dart `RasterPdfEncoder`. This preserves tables, images, floating text boxes,
+  headers, footers and page geometry without requiring JavaScript PDF libraries.
 - **Quill Delta interop**: new pure-Dart `QuillDeltaConverter`
   (`lib/src/word/quill_delta.dart`) exposed as
   `CanvasEditorWidget.toQuillDelta()` / `loadQuillDelta()` covering inline
   formatting, headers, lists, alignment, links, images and round-trip table
   interoperability with `quill-table-better`, including column widths,
-  merged cells and multi-paragraph cell content, with VM unit tests.
+  merged cells, TH cells, background colors, table headers/lists and
+  multi-paragraph cell content, with VM unit tests.
 - `example/` now uses the real widget APIs for the catalog and status bar
   toggles instead of the temporary DOM-class hacks.
 
 Still pending from the original regression list: the remaining Word-mode
-dialogs; PDF export is available only in the reference branch and has not yet
-been ported to the consolidated package
-(`lib/src/document/pdf/` is an empty placeholder).
+dialogs and a future searchable/vector PDF backend. The current PDF export is
+page-faithful raster output.
 
 ### Embedding
 
