@@ -435,6 +435,11 @@ class Draw {
   /// consumidores async podem redesenhar as páginas conhecidas normalmente.
   bool isProgressiveLayoutActive() => _progressiveTimer != null;
 
+  /// True enquanto ainda existem linhas do documento a paginar, inclusive
+  /// quando o processamento está pausado aguardando uma nova demanda.
+  bool isProgressiveLayoutPending() =>
+      _progressiveResume != null && _progressiveRowPayload != null;
+
   /// Garante que a paginação progressiva descubra páginas até [pageNo] +
   /// uma folga. Chamado pelo ScrollObserver quando o usuário se aproxima do
   /// fim conhecido, no mesmo espírito do Google Docs: o total cresce conforme

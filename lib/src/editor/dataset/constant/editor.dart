@@ -9,11 +9,11 @@ const String EDITOR_PREFIX = editorPrefix;
 const String EDITOR_CLIPBOARD = editorClipboard;
 
 final IModeRule defaultModeRuleOption = IModeRule(
-	print: IPrintModeRule(
-		imagePreviewerDisabled: false,
-		backgroundDisabled: false,
-		filterEmptyControl: true,
-	),
-	readonly: IReadonlyModeRule(imagePreviewerDisabled: false),
-	form: IFormModeRule(controlDeletableDisabled: false),
+  print: IPrintModeRule(
+    imagePreviewerDisabled: false,
+    backgroundDisabled: false,
+    filterEmptyControl: true,
+  ),
+  readonly: IReadonlyModeRule(imagePreviewerDisabled: true),
+  form: IFormModeRule(controlDeletableDisabled: false),
 );

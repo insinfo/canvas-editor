@@ -15,7 +15,12 @@ abstract class CanvasEditorShellActions {
   void openFind({bool focusReplace = false});
   void toggleCatalog();
   void toggleComments();
+  void togglePageBreakMarkers();
+  void toggleRulers();
+  void setDocumentViewMode(CanvasDocumentViewMode mode);
 }
+
+enum CanvasDocumentViewMode { printLayout, webLayout, draft }
 
 /// Ribbon estilo Word (abas Arquivo/Página Inicial/Inserir/Layout/Exibir).
 ///
@@ -84,9 +89,20 @@ class WidgetRibbon extends UiComponent {
       _sizeSelect.value = sizeValue;
     }
 
-    _styleButtons.forEach((TitleLevel? level, ButtonElement button) {
-      button.classes.toggle('active', style.level == level);
-    });
+    // `recoveryRangeStyle` emite type=null durante transições de foco. Não
+    // deixe esse payload transitório alternar Título/Normal na ribbon.
+    if (style.type != null) {
+      _styleButtons.forEach((TitleLevel? level, ButtonElement button) {
+        button.classes.toggle('active', style.level == level);
+      });
+      _setActive(
+        'styles-more',
+        style.level == TitleLevel.third ||
+            style.level == TitleLevel.fourth ||
+            style.level == TitleLevel.fifth ||
+            style.level == TitleLevel.sixth,
+      );
+    }
   }
 
   void syncPageMode(PageMode mode) {
@@ -136,7 +152,7 @@ class WidgetRibbon extends UiComponent {
       _group('Documento', <Element>[
         _button('open', 'ti-folder-open', 'Abrir DOCX', _actions.openFilePicker,
             labeled: true),
-        _button('save', 'ti-device-floppy', 'Salvar DOCX',
+        _button('save', 'ti-device-floppy', 'Baixar DOCX',
             () => _actions.downloadDocx(),
             labeled: true),
         _button(
@@ -162,7 +178,7 @@ class WidgetRibbon extends UiComponent {
             () => _command.executeFormat()),
       ]),
       _fontGroup(),
-      _group('Parágrafo', <Element>[
+      _twoRowGroup('Parágrafo', <Element>[
         _button('align-left', 'ti-align-left', 'Esquerda',
             () => _command.executeRowFlex(RowFlex.left)),
         _button('align-center', 'ti-align-center', 'Centralizar',
@@ -171,14 +187,17 @@ class WidgetRibbon extends UiComponent {
             () => _command.executeRowFlex(RowFlex.right)),
         _button('justify', 'ti-align-justified', 'Justificar',
             () => _command.executeRowFlex(RowFlex.alignment)),
+      ], <Element>[
         _button('list', 'ti-list', 'Lista',
             () => _command.executeList(ListType.unordered)),
+        _smallDropdownCommand(
+          'line-spacing',
+          'ti-line-height',
+          'Espaçamento de linhas e parágrafos',
+          _buildParagraphSpacingMenu,
+        ),
       ]),
-      _group('Estilos', <Element>[
-        _styleCommand('Normal', null),
-        _styleCommand('Título 1', TitleLevel.first),
-        _styleCommand('Título 2', TitleLevel.second),
-      ]),
+      _styleGalleryGroup(),
       _group('Edição', <Element>[
         _button('find', 'ti-search', 'Localizar', () => _actions.openFind(),
             labeled: true),
@@ -227,15 +246,31 @@ class WidgetRibbon extends UiComponent {
     ]);
     addTab('view', 'Exibir', <Element>[
       _group('Modos de Exibição', <Element>[
-        _button('page-paging', 'ti-file', 'Paginado',
-            () => _command.executePageMode(PageMode.paging),
+        _button(
+            'page-paging',
+            'ti-file',
+            'Layout de Impressão',
+            () => _actions
+                .setDocumentViewMode(CanvasDocumentViewMode.printLayout),
             labeled: true),
-        _button('page-continuity', 'ti-arrows-vertical', 'Contínuo',
-            () => _command.executePageMode(PageMode.continuity),
+        _button(
+            'page-continuity',
+            'ti-world',
+            'Layout da Web',
+            () =>
+                _actions.setDocumentViewMode(CanvasDocumentViewMode.webLayout),
+            labeled: true),
+        _button('view-draft', 'ti-file-text', 'Rascunho',
+            () => _actions.setDocumentViewMode(CanvasDocumentViewMode.draft),
             labeled: true),
       ]),
       _group('Mostrar', <Element>[
+        _button('rulers', 'ti-ruler-2', 'Régua', _actions.toggleRulers,
+            labeled: true),
         _button('catalog', 'ti-list-tree', 'Navegação', _actions.toggleCatalog,
+            labeled: true),
+        _button('page-break-markers', 'ti-separator-horizontal',
+            'Marcas de quebra', _actions.togglePageBreakMarkers,
             labeled: true),
       ]),
       _group('Zoom', <Element>[
@@ -277,9 +312,10 @@ class WidgetRibbon extends UiComponent {
     _sizeSelect.value = '16';
     _sizeSelect.onChange
         .listen((_) => _command.executeSize(int.parse(_sizeSelect.value!)));
-    return _group('Fonte', <Element>[
+    return _twoRowGroup('Fonte', <Element>[
       _fontSelect,
       _sizeSelect,
+    ], <Element>[
       _button('bold', 'ti-bold', 'Negrito', () => _command.executeBold()),
       _button('italic', 'ti-italic', 'Itálico', () => _command.executeItalic()),
       _button('underline', 'ti-underline', 'Sublinhado',
@@ -290,7 +326,205 @@ class WidgetRibbon extends UiComponent {
           () => _command.executeSuperscript()),
       _button('subscript', 'ti-subscript', 'Subscrito',
           () => _command.executeSubscript()),
+      _colorDropdownCommand(
+        'text-color',
+        'ti-color-picker',
+        'Cor do texto',
+        isHighlight: false,
+      ),
+      _colorDropdownCommand(
+        'text-highlight',
+        'ti-highlight',
+        'Cor de fundo do texto',
+        isHighlight: true,
+      ),
     ]);
+  }
+
+  ButtonElement _colorDropdownCommand(
+    String commandName,
+    String iconClass,
+    String label, {
+    required bool isHighlight,
+  }) {
+    late ButtonElement button;
+    button = _button(commandName, iconClass, label, () {
+      if (_openMenuOwner == button) {
+        _closeMenu();
+      } else {
+        _openMenuFor(button, _buildColorPalette(isHighlight: isHighlight));
+      }
+    })
+      ..classes.add('ce-word-command--dropdown')
+      ..append(
+          SpanElement()..classes.addAll(<String>['ti', 'ti-chevron-down']));
+    return button;
+  }
+
+  ButtonElement _smallDropdownCommand(
+    String commandName,
+    String iconClass,
+    String label,
+    DivElement Function() buildMenu,
+  ) {
+    late ButtonElement button;
+    button = _button(commandName, iconClass, label, () {
+      if (_openMenuOwner == button) {
+        _closeMenu();
+      } else {
+        _openMenuFor(button, buildMenu());
+      }
+    })
+      ..classes.add('ce-word-command--dropdown')
+      ..append(
+          SpanElement()..classes.addAll(<String>['ti', 'ti-chevron-down']));
+    return button;
+  }
+
+  DivElement _buildParagraphSpacingMenu() {
+    final DivElement menu = DivElement();
+    for (final double value in <double>[1, 1.08, 1.15, 1.5, 2, 2.5, 3]) {
+      menu.append(_menuItem(
+        value.toStringAsFixed(value % 1 == 0 ? 1 : 2),
+        'Espaçamento entre linhas',
+        () => _command.executeParagraphSpacing('auto', value),
+      ));
+    }
+    menu.append(DivElement()..classes.add('ce-word-menu__divider'));
+
+    final NumberInputElement before = NumberInputElement()
+      ..min = '0'
+      ..step = '1'
+      ..value = '0'
+      ..title = 'Espaçamento antes (pt)';
+    final NumberInputElement after = NumberInputElement()
+      ..min = '0'
+      ..step = '1'
+      ..value = '8'
+      ..title = 'Espaçamento depois (pt)';
+    final ButtonElement apply = ButtonElement()
+      ..type = 'button'
+      ..classes.add('ce-word-menu__apply')
+      ..text = 'Aplicar espaçamento'
+      ..onClick.listen((_) {
+        const double ptToPx = 96 / 72;
+        _command.executeParagraphSpacing(
+          'auto',
+          1.08,
+          before: (double.tryParse(before.value ?? '') ?? 0) * ptToPx,
+          after: (double.tryParse(after.value ?? '') ?? 0) * ptToPx,
+        );
+        _closeMenu();
+      });
+    menu.append(DivElement()
+      ..classes.add('ce-word-menu__form')
+      ..children.addAll(<Element>[
+        SpanElement()
+          ..classes.add('ce-word-menu__form-title')
+          ..text = 'Espaçamento de parágrafo (pt)',
+        DivElement()
+          ..classes.add('ce-word-menu__fields')
+          ..children.addAll(<Element>[
+            _numberField('Antes', before),
+            _numberField('Depois', after),
+          ]),
+        apply,
+      ]));
+    return menu;
+  }
+
+  DivElement _numberField(String label, NumberInputElement input) =>
+      DivElement()
+        ..classes.add('ce-word-menu__field')
+        ..children.addAll(<Element>[SpanElement()..text = label, input]);
+
+  DivElement _buildColorPalette({required bool isHighlight}) {
+    const List<String> colors = <String>[
+      '#000000',
+      '#404040',
+      '#7f7f7f',
+      '#bfbfbf',
+      '#ffffff',
+      '#c00000',
+      '#ff0000',
+      '#ffc000',
+      '#ffff00',
+      '#92d050',
+      '#00b050',
+      '#00b0f0',
+      '#0070c0',
+      '#002060',
+      '#7030a0',
+      '#f4cccc',
+      '#fce5cd',
+      '#fff2cc',
+      '#d9ead3',
+      '#d0e0e3',
+      '#c9daf8',
+      '#cfe2f3',
+      '#d9d2e9',
+      '#ead1dc',
+      '#6aa84f',
+    ];
+    final DivElement grid = DivElement()..classes.add('ce-color-palette__grid');
+    for (final String color in colors) {
+      grid.append(ButtonElement()
+        ..type = 'button'
+        ..classes.add('ce-color-palette__swatch')
+        ..dataset['color'] = color
+        ..title = color
+        ..style.backgroundColor = color
+        ..onClick.listen((_) {
+          if (isHighlight) {
+            _command.executeHighlight(color);
+          } else {
+            _command.executeColor(color);
+          }
+          _closeMenu();
+        }));
+    }
+
+    final InputElement custom = InputElement(type: 'color')
+      ..classes.add('ce-color-palette__custom')
+      ..title = 'Cor personalizada';
+    custom.onChange.listen((_) {
+      final String? color = custom.value;
+      if (color == null) return;
+      if (isHighlight) {
+        _command.executeHighlight(color);
+      } else {
+        _command.executeColor(color);
+      }
+      _closeMenu();
+    });
+
+    final ButtonElement clear = ButtonElement()
+      ..type = 'button'
+      ..classes.add('ce-color-palette__clear')
+      ..text = isHighlight ? 'Sem realce' : 'Cor automática'
+      ..onClick.listen((_) {
+        if (isHighlight) {
+          _command.executeHighlight(null);
+        } else {
+          _command.executeColor(null);
+        }
+        _closeMenu();
+      });
+
+    return DivElement()
+      ..classes.add('ce-color-palette')
+      ..setAttribute('role', 'dialog')
+      ..setAttribute(
+          'aria-label', isHighlight ? 'Cor de fundo do texto' : 'Cor do texto')
+      ..children.addAll(<Element>[
+        SpanElement()
+          ..classes.add('ce-color-palette__title')
+          ..text = isHighlight ? 'Realce' : 'Cor da fonte',
+        grid,
+        DivElement()
+          ..classes.add('ce-color-palette__footer')
+          ..children.addAll(<Element>[custom, clear]),
+      ]);
   }
 
   DivElement _group(String label, List<Element> children) => DivElement()
@@ -304,10 +538,71 @@ class WidgetRibbon extends UiComponent {
         ..text = label,
     ]);
 
+  DivElement _twoRowGroup(
+    String label,
+    List<Element> firstRow,
+    List<Element> secondRow,
+  ) {
+    final DivElement group = _group(label, <Element>[
+      DivElement()
+        ..classes.add('ce-word-command-rows')
+        ..children.addAll(<Element>[
+          DivElement()
+            ..classes.add('ce-word-command-row')
+            ..children.addAll(firstRow),
+          DivElement()
+            ..classes.add('ce-word-command-row')
+            ..children.addAll(secondRow),
+        ]),
+    ]);
+    group.classes.add('ce-word-group--two-row');
+    return group;
+  }
+
+  DivElement _styleGalleryGroup() {
+    final ButtonElement more = _button(
+      'styles-more',
+      'ti-chevron-down',
+      'Mais estilos',
+      () {},
+    );
+    more.onClick.listen((_) {
+      if (_openMenuOwner == more) {
+        _closeMenu();
+        return;
+      }
+      final DivElement menu = DivElement();
+      for (final (String label, TitleLevel level) in <(String, TitleLevel)>[
+        ('Título 3', TitleLevel.third),
+        ('Título 4', TitleLevel.fourth),
+        ('Título 5', TitleLevel.fifth),
+        ('Título 6', TitleLevel.sixth),
+      ]) {
+        menu.append(_menuItem(label, 'Estilo de título do Word', () {
+          _command.executeTitle(level);
+        }));
+      }
+      _openMenuFor(more, menu);
+    });
+    final DivElement group = _group('Estilos', <Element>[
+      DivElement()
+        ..classes.add('ce-word-style-gallery')
+        ..children.addAll(<Element>[
+          _styleCommand('Normal', null),
+          _styleCommand('Título 1', TitleLevel.first),
+          _styleCommand('Título 2', TitleLevel.second),
+          more,
+        ]),
+    ]);
+    group.classes.add('ce-word-group--styles');
+    return group;
+  }
+
   ButtonElement _styleCommand(String label, TitleLevel? level) {
     final ButtonElement button = ButtonElement()
       ..type = 'button'
       ..classes.add('ce-word-style')
+      ..dataset['styleLevel'] = level?.value ?? 'normal'
       ..text = label
       ..onMouseDown.listen((event) => event.preventDefault())
       ..onClick.listen((_) => _command.executeTitle(level));
@@ -339,7 +634,9 @@ class WidgetRibbon extends UiComponent {
       ..setAttribute('aria-label', label)
       ..append(SpanElement()..classes.addAll(<String>['ti', iconClass]));
     if (labeled) {
-      button.append(SpanElement()..text = label);
+      button.append(SpanElement()
+        ..classes.add('ce-word-command__label')
+        ..text = label);
     }
     button.onMouseDown.listen((MouseEvent event) {
       // Keeps the canvas selection active while a format command is clicked.
@@ -565,6 +862,8 @@ class WidgetCompactToolbar extends UiComponent {
       ..setAttribute('aria-label', 'Formatação do documento');
     toolbar.children.addAll(<Element>[
       _button('open', 'ti-folder-open', 'Abrir DOCX', _actions.openFilePicker),
+      _button('save', 'ti-device-floppy', 'Baixar DOCX',
+          () => _actions.downloadDocx()),
       _button(
           'undo', 'ti-arrow-back-up', 'Desfazer', () => _command.executeUndo()),
       _button('redo', 'ti-arrow-forward-up', 'Refazer',

@@ -12,6 +12,7 @@ import 'package:canvas_text_editor/ce_opc.dart';
 
 import '../editor/dataset/enum/element.dart';
 import '../editor/dataset/enum/row.dart';
+import '../editor/dataset/enum/title.dart';
 import '../editor/interface/element.dart';
 import '../editor/interface/table/td.dart';
 
@@ -257,6 +258,7 @@ class EditorToDocx {
         a.color != b.color ||
         a.highlight != b.highlight ||
         a.rowFlex != b.rowFlex ||
+        a.level != b.level ||
         a.url != b.url) {
       return false;
     }
@@ -313,8 +315,10 @@ class EditorToDocx {
 
   WpParagraph _paragraphFromElements(
       List<IElement> elements, WpParagraphProperties? base) {
+    TitleLevel? headingLevel;
     final flattened = <IElement>[];
     void flatten(IElement element) {
+      headingLevel ??= element.level;
       if (element.type == ElementType.title) {
         for (final child in element.valueList ?? const <IElement>[]) {
           flatten(child);
@@ -394,29 +398,107 @@ class EditorToDocx {
       RowFlex.justify => 'distribute',
       _ => base?.styleId != null ? 'left' : null,
     };
+    final int? outlineLevel = headingLevel == null
+        ? null
+        : <TitleLevel, int>{
+            TitleLevel.first: 0,
+            TitleLevel.second: 1,
+            TitleLevel.third: 2,
+            TitleLevel.fourth: 3,
+            TitleLevel.fifth: 4,
+            TitleLevel.sixth: 5,
+          }[headingLevel];
+    final String? headingStyleId =
+        headingLevel == null ? null : _resolveHeadingStyleId(outlineLevel!);
+    final IElement? paragraphAnchor =
+        flattened.isEmpty ? null : flattened.first;
+    final String? lineRule = paragraphAnchor?.lineSpacingRule;
+    final double? lineValue = paragraphAnchor?.lineSpacingValue;
+    final double? beforePx = paragraphAnchor?.paraSpacingBefore;
+    final double? afterPx = paragraphAnchor?.paraSpacingAfter;
+    final double? indentLeftPx = paragraphAnchor?.paraIndentLeft;
+    final double? firstLinePx = paragraphAnchor?.paraIndentFirstLine;
+    final WpSpacing? spacing =
+        lineRule == null && beforePx == null && afterPx == null
+            ? base?.spacing
+            : WpSpacing(
+                beforeTwips: beforePx == null
+                    ? base?.spacing?.beforeTwips
+                    : (beforePx * 15).round(),
+                afterTwips: afterPx == null
+                    ? base?.spacing?.afterTwips
+                    : (afterPx * 15).round(),
+                line: lineRule == null || lineValue == null
+                    ? base?.spacing?.line
+                    : lineRule == 'auto'
+                        ? (lineValue * 240).round()
+                        : (lineValue * 15).round(),
+                lineRule: lineRule ?? base?.spacing?.lineRule,
+              );
+    final WpIndent? indent = indentLeftPx == null && firstLinePx == null
+        ? base?.indent
+        : WpIndent(
+            leftTwips: indentLeftPx == null
+                ? base?.indent?.leftTwips
+                : (indentLeftPx * 15).round(),
+            rightTwips: base?.indent?.rightTwips,
+            firstLineTwips: firstLinePx != null && firstLinePx >= 0
+                ? (firstLinePx * 15).round()
+                : null,
+            hangingTwips: firstLinePx != null && firstLinePx < 0
+                ? (-firstLinePx * 15).round()
+                : null,
+          );
 
     return WpParagraph(
-      properties: base == null && jc == null
+      properties: base == null &&
+              jc == null &&
+              headingLevel == null &&
+              spacing == null &&
+              indent == null
           ? null
           : WpParagraphProperties(
-              styleId: base?.styleId,
+              styleId: headingStyleId ?? base?.styleId,
               numPr: base?.numPr,
               jc: jc ?? base?.jc,
-              spacing: base?.spacing,
-              indent: base?.indent,
+              spacing: spacing,
+              indent: indent,
               tabs: base?.tabs,
               shading: base?.shading,
               borders: base?.borders,
-              keepNext: base?.keepNext,
-              keepLines: base?.keepLines,
+              keepNext: headingLevel != null ? true : base?.keepNext,
+              keepLines: headingLevel != null ? true : base?.keepLines,
               pageBreakBefore: base?.pageBreakBefore,
               widowControl: base?.widowControl,
               contextualSpacing: base?.contextualSpacing,
-              outlineLvl: base?.outlineLvl,
+              outlineLvl: outlineLevel ?? base?.outlineLvl,
               markRunProperties: base?.markRunProperties,
             ),
       inlines: inlines,
     );
+  }
+
+  String _resolveHeadingStyleId(int outlineLevel) {
+    final int number = outlineLevel + 1;
+    final RegExp namePattern = RegExp(
+      '^(heading|title|título|titulo)\\s*$number\$',
+      caseSensitive: false,
+    );
+    final List<WpStyle> paragraphStyles = file.styles.byId.values
+        .where((WpStyle style) => style.type == 'paragraph')
+        .toList(growable: false);
+    for (final WpStyle style in paragraphStyles) {
+      if (namePattern.hasMatch(style.name?.trim() ?? '')) return style.id;
+    }
+    for (final WpStyle style in paragraphStyles) {
+      int? effectiveOutline;
+      for (final WpStyle chained in file.styles.chainOf(style.id)) {
+        effectiveOutline =
+            chained.paragraphProperties?.outlineLvl ?? effectiveOutline;
+      }
+      if (effectiveOutline == outlineLevel) return style.id;
+    }
+    return 'Heading$number';
   }
 
   WpRunProperties _runPropsFrom(IElement element) => WpRunProperties(

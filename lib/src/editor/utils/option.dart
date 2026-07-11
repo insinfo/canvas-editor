@@ -72,13 +72,13 @@ IEditorOption mergeOption([IEditorOption? options]) {
       _mergeSeparatorOption(options?.separator);
   final ILineNumberOption lineNumberOptions =
       _mergeLineNumberOption(options?.lineNumber);
-    final ILabelOption labelOptions = _mergeLabelOption(options?.label);
+  final ILabelOption labelOptions = _mergeLabelOption(options?.label);
   final IPageBorderOption pageBorderOptions =
       _mergePageBorderOption(options?.pageBorder);
   final IBadgeOption badgeOptions = _mergeBadgeOption(options?.badge);
   final IGraffitiOption graffitiOptions =
       _mergeGraffitiOption(options?.graffiti);
-    final IWhiteSpaceOption whiteSpaceOptions =
+  final IWhiteSpaceOption whiteSpaceOptions =
       _mergeWhiteSpaceOption(options?.whiteSpace);
   final IImgCaptionOption imgCaptionOptions =
       _mergeImgCaptionOption(options?.imgCaption);
@@ -124,8 +124,8 @@ IEditorOption mergeOption([IEditorOption? options]) {
     historyDisabled: options?.historyDisabled ?? false,
     printPixelRatio: options?.printPixelRatio ?? 3,
     maskMargin: _resolveList(options?.maskMargin, const <double>[0, 0, 0, 0]),
-    letterClass: _resolveStringList(
-        options?.letterClass, const <String>[LetterClass.ENGLISH, LetterClass.LATIN]),
+    letterClass: _resolveStringList(options?.letterClass,
+        const <String>[LetterClass.ENGLISH, LetterClass.LATIN]),
     contextMenuDisableKeys:
         _resolveStringList(options?.contextMenuDisableKeys, const <String>[]),
     shortcutDisableKeys:
@@ -183,8 +183,8 @@ ILabelOption _mergeLabelOption(ILabelOption? option) {
     defaultColor: option?.defaultColor ?? defaultLabelOption.defaultColor,
     defaultBackgroundColor: option?.defaultBackgroundColor ??
         defaultLabelOption.defaultBackgroundColor,
-    defaultBorderRadius: option?.defaultBorderRadius ??
-        defaultLabelOption.defaultBorderRadius,
+    defaultBorderRadius:
+        option?.defaultBorderRadius ?? defaultLabelOption.defaultBorderRadius,
     defaultPadding: option?.defaultPadding ?? defaultLabelOption.defaultPadding,
   );
 }
@@ -366,6 +366,7 @@ IPageBreak _mergePageBreakOption(IPageBreak? option) {
     fontSize: option?.fontSize ?? defaultPageBreakOption.fontSize,
     lineDash:
         _resolveNullableList(option?.lineDash, defaultPageBreakOption.lineDash),
+    showMarker: option?.showMarker ?? defaultPageBreakOption.showMarker,
   );
 }
 

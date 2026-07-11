@@ -32,31 +32,31 @@ class Command {
   Command(this._adapt);
 
   final CommandAdapt _adapt;
-    Future<void> Function([ICopyOption? payload])? _copyOverride;
-    void Function(String markdown)? _insertMarkdownHandler;
+  Future<void> Function([ICopyOption? payload])? _copyOverride;
+  void Function(String markdown)? _insertMarkdownHandler;
 
   // Global commands -------------------------------------------------------
   void executeMode(EditorMode payload) => _adapt.mode(payload);
 
   Future<void> executeCut() => _adapt.cut();
 
-    Future<void> executeCopy([ICopyOption? payload]) {
-        final override = _copyOverride;
-        if (override != null) {
-            return override(payload);
-        }
-        return _invokeCopy(payload);
+  Future<void> executeCopy([ICopyOption? payload]) {
+    final override = _copyOverride;
+    if (override != null) {
+      return override(payload);
     }
+    return _invokeCopy(payload);
+  }
 
-    Future<void> Function([ICopyOption? payload]) get copyInvoker => _invokeCopy;
+  Future<void> Function([ICopyOption? payload]) get copyInvoker => _invokeCopy;
 
-    void setCopyOverride(
-        Future<void> Function([ICopyOption? payload])? override,
-    ) {
-        _copyOverride = override;
-    }
+  void setCopyOverride(
+    Future<void> Function([ICopyOption? payload])? override,
+  ) {
+    _copyOverride = override;
+  }
 
-    Future<void> _invokeCopy([ICopyOption? payload]) => _adapt.copy(payload);
+  Future<void> _invokeCopy([ICopyOption? payload]) => _adapt.copy(payload);
 
   void executePaste([IPasteOption? payload]) => _adapt.paste(payload);
 
@@ -94,9 +94,9 @@ class Command {
 
   void executeBlur() => _adapt.blur();
 
-    void executeHideCursor() => _adapt.hideCursor();
+  void executeHideCursor() => _adapt.hideCursor();
 
-    void executeClearGraffiti() => _adapt.clearGraffiti();
+  void executeClearGraffiti() => _adapt.clearGraffiti();
 
   void executeUndo() => _adapt.undo();
 
@@ -153,6 +153,22 @@ class Command {
   void executeRowFlex(RowFlex payload) => _adapt.rowFlex(payload);
 
   void executeRowMargin(double payload) => _adapt.rowMargin(payload);
+
+  void executeParagraphSpacing(
+    String lineRule,
+    double lineValue, {
+    double? before,
+    double? after,
+  }) =>
+      _adapt.paragraphSpacing(
+        lineRule,
+        lineValue,
+        before: before,
+        after: after,
+      );
+
+  void executeParagraphIndent(double left, double firstLine) =>
+      _adapt.paragraphIndent(left, firstLine);
 
   // Table commands --------------------------------------------------------
   void executeInsertTable(int row, int col) => _adapt.insertTable(row, col);
@@ -366,10 +382,9 @@ class Command {
 
   void executeInsertControl(IElement payload) => _adapt.insertControl(payload);
 
-    void executeJumpControl([MoveDirection? direction]) =>
-            _adapt.jumpControl(
-                direction == null ? null : IInitNextControlOption(direction: direction),
-            );
+  void executeJumpControl([MoveDirection? direction]) => _adapt.jumpControl(
+        direction == null ? null : IInitNextControlOption(direction: direction),
+      );
 
   void executeUpdateOptions(IUpdateOption payload) =>
       _adapt.updateOptions(payload);
@@ -378,8 +393,8 @@ class Command {
 
   void executeFocus([IFocusOption? options]) => _adapt.focus(options);
 
-    double executeComputeElementListHeight(List<IElement> payload) =>
-            _adapt.computeElementListHeight(payload);
+  double executeComputeElementListHeight(List<IElement> payload) =>
+      _adapt.computeElementListHeight(payload);
 
   // Fetch operations ------------------------------------------------------
   Future<ICatalog?> getCatalog() => _adapt.getCatalog();
@@ -408,7 +423,7 @@ class Command {
 
   IElementPosition? getCursorPosition() => _adapt.getCursorPosition();
 
-    double getRemainingContentHeight() => _adapt.getRemainingContentHeight();
+  double getRemainingContentHeight() => _adapt.getRemainingContentHeight();
 
   IRange getRange() => _adapt.getRange();
 
@@ -456,12 +471,12 @@ class Command {
   ]) =>
       _adapt.getPositionContextByEvent(evt, options);
 
-    void executeInsertMarkdown(String markdown) {
-        final handler = _insertMarkdownHandler;
-        handler?.call(markdown);
-    }
+  void executeInsertMarkdown(String markdown) {
+    final handler = _insertMarkdownHandler;
+    handler?.call(markdown);
+  }
 
-    void setInsertMarkdownHandler(void Function(String markdown)? handler) {
-        _insertMarkdownHandler = handler;
-    }
+  void setInsertMarkdownHandler(void Function(String markdown)? handler) {
+    _insertMarkdownHandler = handler;
+  }
 }

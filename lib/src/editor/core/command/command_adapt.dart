@@ -451,15 +451,38 @@ class CommandAdapt {
 
   void _renderElementDelta(_ElementDeltaHistory delta) {
     final int anchorIndex = delta.indexes.isNotEmpty ? delta.indexes.first : 0;
+    final List<IElement> elementList = _castElementList(draw.getElementList());
+    // O fast layout recompõe somente o parágrafo do índice âncora. Usá-lo
+    // para uma seleção multiparágrafo deixaria as rows cacheadas dos demais
+    // parágrafos com a formatação anterior até o próximo redraw.
+    final bool canUseFastParagraphLayout = delta.metricsMayChange &&
+        _indexesBelongToSingleParagraph(delta.indexes, elementList);
     draw.render(
       IDrawOption(
         curIndex: anchorIndex,
         isSetCursor: delta.isSetCursor,
         isSubmitHistory: false,
         isCompute: delta.metricsMayChange,
-        fastLayoutIndex: delta.metricsMayChange ? anchorIndex : null,
+        fastLayoutIndex: canUseFastParagraphLayout ? anchorIndex : null,
       ),
     );
+  }
+
+  bool _indexesBelongToSingleParagraph(
+    List<int> indexes,
+    List<IElement> elementList,
+  ) {
+    if (indexes.isEmpty || elementList.isEmpty) return false;
+
+    int paragraphStart(int index) {
+      int cursor = index.clamp(0, elementList.length - 1);
+      while (cursor > 0 && elementList[cursor].value != ZERO) {
+        cursor -= 1;
+      }
+      return cursor;
+    }
+
+    return paragraphStart(indexes.first) == paragraphStart(indexes.last);
   }
 
   void _renderSelectionMutation(
@@ -1262,7 +1285,12 @@ class CommandAdapt {
           if (titleSize != null) {
             element.size = titleSize;
           }
-          element.bold = true;
+          element
+            ..font = 'Calibri Light'
+            ..color = payload == TitleLevel.third || payload == TitleLevel.sixth
+                ? '#1F4E79'
+                : '#2F5496'
+            ..bold = false;
         }
       } else if (element.titleId != null) {
         element.titleId = null;
@@ -1270,6 +1298,8 @@ class CommandAdapt {
         element.level = null;
         element.size = null;
         element.bold = null;
+        element.font = null;
+        element.color = null;
       }
     }
 
@@ -1330,6 +1360,58 @@ class CommandAdapt {
     final bool isSetCursor = startIndex == endIndex;
     final int curIndex = isSetCursor ? endIndex : startIndex;
     draw.render(IDrawOption(curIndex: curIndex, isSetCursor: isSetCursor));
+  }
+
+  void paragraphSpacing(
+    String lineRule,
+    double lineValue, {
+    double? before,
+    double? after,
+  }) {
+    if (_isReadonly() || lineValue <= 0) return;
+    final IRange currentRange = range.getRange();
+    if (currentRange.startIndex < 0 && currentRange.endIndex < 0) return;
+    final bool collapsed = currentRange.startIndex == currentRange.endIndex;
+    final List<IElement> paragraph = _castElementList(
+      collapsed
+          ? range.getRangeParagraphElementList()
+          : range.getSelectionElementList(),
+    );
+    if (paragraph.isEmpty) return;
+    for (final IElement element in paragraph) {
+      element
+        ..rowMargin = 0
+        ..lineSpacingRule = lineRule
+        ..lineSpacingValue = lineValue;
+      if (before != null) element.paraSpacingBefore = before;
+      if (after != null) element.paraSpacingAfter = after;
+    }
+    draw.render(IDrawOption(
+      curIndex: collapsed ? currentRange.endIndex : currentRange.startIndex,
+      isSetCursor: collapsed,
+    ));
+  }
+
+  void paragraphIndent(double left, double firstLine) {
+    if (_isReadonly()) return;
+    final IRange currentRange = range.getRange();
+    if (currentRange.startIndex < 0 && currentRange.endIndex < 0) return;
+    final bool collapsed = currentRange.startIndex == currentRange.endIndex;
+    final List<IElement> paragraph = _castElementList(
+      collapsed
+          ? range.getRangeParagraphElementList()
+          : range.getSelectionElementList(),
+    );
+    if (paragraph.isEmpty) return;
+    for (final IElement element in paragraph) {
+      element
+        ..paraIndentLeft = left
+        ..paraIndentFirstLine = firstLine;
+    }
+    draw.render(IDrawOption(
+      curIndex: collapsed ? currentRange.endIndex : currentRange.startIndex,
+      isSetCursor: collapsed,
+    ));
   }
 
   void insertTable(int row, int col) {
@@ -2253,10 +2335,8 @@ class CommandAdapt {
         final dynamic pos = selectionPositions[i];
         final int rowNo = _asInt(pos?.rowNo);
         final int pageNo = _asInt(pos?.pageNo);
-        final List<dynamic> leftTop =
-            (pos?.coordinate?.leftTop as List<dynamic>? ?? <dynamic>[0, 0]);
-        final List<dynamic> rightTop =
-            (pos?.coordinate?.rightTop as List<dynamic>? ?? <dynamic>[0, 0]);
+        final List<dynamic> leftTop = _coordinatePoint(pos, 'leftTop');
+        final List<dynamic> rightTop = _coordinatePoint(pos, 'rightTop');
         final double lineHeight = _asNum(pos?.lineHeight).toDouble();
         final double x =
             _asNum(leftTop.isNotEmpty ? leftTop.first : 0).toDouble();
@@ -2292,8 +2372,7 @@ class CommandAdapt {
       final dynamic caretPosition = positionList[endElementIndex];
       if (caretPosition != null) {
         final List<dynamic> rightTop =
-            (caretPosition.coordinate?.rightTop as List<dynamic>? ??
-                <dynamic>[0, 0]);
+            _coordinatePoint(caretPosition, 'rightTop');
         final double lineHeight = _asNum(caretPosition.lineHeight).toDouble();
         final int pageNo = _asInt(caretPosition.pageNo);
         rangeRects.add(
@@ -2945,11 +3024,11 @@ class CommandAdapt {
       if (cursorPosition is IElementPosition) {
         position.setCursorPosition(cursorPosition);
         draw.getCursor().moveCursorToVisible(
-          IMoveCursorToVisibleOption(
-            cursorPosition: cursorPosition,
-            direction: MoveDirection.down,
-          ),
-        );
+              IMoveCursorToVisibleOption(
+                cursorPosition: cursorPosition,
+                direction: MoveDirection.down,
+              ),
+            );
       }
     }
   }
@@ -3407,11 +3486,9 @@ class CommandAdapt {
             : null;
     if (selectionPosition != null) {
       final List<dynamic> leftTop =
-          selectionPosition.coordinate?.leftTop as List<dynamic>? ??
-              <dynamic>[0, 0];
+          _coordinatePoint(selectionPosition, 'leftTop');
       final List<dynamic> rightTop =
-          selectionPosition.coordinate?.rightTop as List<dynamic>? ??
-              <dynamic>[0, 0];
+          _coordinatePoint(selectionPosition, 'rightTop');
       final double height = _asNum(draw.getOriginalHeight()).toDouble();
       final double pageGap = _asNum(draw.getOriginalPageGap()).toDouble();
       rangeRect = RangeRect(
@@ -3506,11 +3583,11 @@ class CommandAdapt {
       if (curIndex < positionList.length) {
         final dynamic cursorPosition = positionList[curIndex];
         draw.getCursor().moveCursorToVisible(
-          IMoveCursorToVisibleOption(
-            cursorPosition: cursorPosition as IElementPosition,
-            direction: MoveDirection.down,
-          ),
-        );
+              IMoveCursorToVisibleOption(
+                cursorPosition: cursorPosition as IElementPosition,
+                direction: MoveDirection.down,
+              ),
+            );
       }
     }
   }
@@ -3586,11 +3663,11 @@ class CommandAdapt {
     );
     position.setCursorPosition(elementPosition);
     draw.getCursor().moveCursorToVisible(
-      IMoveCursorToVisibleOption(
-        cursorPosition: elementPosition,
-        direction: MoveDirection.up,
-      ),
-    );
+          IMoveCursorToVisibleOption(
+            cursorPosition: elementPosition,
+            direction: MoveDirection.up,
+          ),
+        );
   }
 
   void jumpControl([IInitNextControlOption? option]) {
@@ -4216,6 +4293,19 @@ class CommandAdapt {
   }
 
   int _asInt(dynamic value) => _asNum(value).toInt();
+
+  /// Lê um ponto do mapa lazy de coordenadas sem usar acesso dinâmico por
+  /// propriedade. Em dart2js, `coordinate.rightTop` tenta invocar um método
+  /// chamado `rightTop` em um Map e falha no clique/caret colapsado.
+  List<dynamic> _coordinatePoint(dynamic elementPosition, String key) {
+    if (elementPosition == null) return <dynamic>[0, 0];
+    final dynamic coordinate = elementPosition.coordinate;
+    if (coordinate is Map) {
+      final dynamic point = coordinate[key];
+      if (point is List) return point;
+    }
+    return <dynamic>[0, 0];
+  }
 
   num _asNum(dynamic value) {
     if (value is num) {

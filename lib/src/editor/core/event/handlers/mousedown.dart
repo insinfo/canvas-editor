@@ -133,6 +133,10 @@ void mousedown(dynamic evt, dynamic host) {
   }
 
   if (positionResult.index < 0 && positionResult.zone != null) {
+    if (draw.getMode() == EditorMode.readonly) {
+      if (evt is html.Event) evt.preventDefault();
+      return;
+    }
     final dynamic zoneManager = draw.getZone();
     zoneManager?.setZone(positionResult.zone);
     draw.clearSideEffect();

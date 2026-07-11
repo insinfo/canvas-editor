@@ -37,6 +37,8 @@ class Header {
 
 	void setTextBoxes(List<IHeaderTextBox> boxes) => _textBoxes = boxes;
 
+	List<IHeaderTextBox> getTextBoxes() => _textBoxes;
+
 	bool hasTextBoxes() => _textBoxes.isNotEmpty;
 
 	void clearTextBoxes() {

@@ -1108,7 +1108,10 @@ void _registerHarnessLifecycle() {
           DateTime.now().microsecondsSinceEpoch.toString(),
         ),
       )..createSync(recursive: true);
-      await _copyDirectory(Directory('web'), buildDir!);
+      await _copyDirectory(
+        Directory(p.join('test', 'e2e', 'fixtures', 'legacy_shell')),
+        buildDir!,
+      );
 
       final mainPath = p.join(buildDir!.path, 'main.dart');
       File(mainPath).writeAsStringSync(_mainDartSource);
@@ -1118,7 +1121,7 @@ void _registerHarnessLifecycle() {
         <String>[
           'compile',
           'js',
-          '-O1',//mudar para -O2 ou -03 que é mais estavel e menos bugado
+          '-O1', //mudar para -O2 ou -03 que é mais estavel e menos bugado
           '-o',
           p.join(buildDir!.path, 'main.dart.js'),
           mainPath,
@@ -1287,15 +1290,15 @@ Future<List<Map<String, dynamic>>> _readMainElements(Page page) async {
       .toList(growable: false);
 }
 
-    Future<List<Map<String, dynamic>>> _readDrawElements(Page page) async {
-      final String json = await page.evaluate<String?>(
+Future<List<Map<String, dynamic>>> _readDrawElements(Page page) async {
+  final String json = await page.evaluate<String?>(
         '() => JSON.stringify(window.__editorTest.drawElements())',
       ) ??
       '[]';
-      return (jsonDecode(json) as List<dynamic>)
+  return (jsonDecode(json) as List<dynamic>)
       .map((entry) => Map<String, dynamic>.from(entry as Map<dynamic, dynamic>))
       .toList(growable: false);
-    }
+}
 
 Map<String, dynamic>? _firstTable(List<Map<String, dynamic>> elements) {
   for (final element in elements) {
@@ -1671,7 +1674,8 @@ Future<bool> _openContextMenuAtFirstImage(Page page) async {
 }
 
 Future<bool> _openContextMenuOnEditor(Page page) async {
-  await page.evaluate<bool>('() => window.__editorTest.openFocusedContextMenu()');
+  await page
+      .evaluate<bool>('() => window.__editorTest.openFocusedContextMenu()');
   await Future<void>.delayed(const Duration(milliseconds: 120));
   return await page.evaluate<bool>(
     '() => !!document.querySelector(\'.ce-contextmenu-container\')',
@@ -1769,7 +1773,8 @@ Future<void> _setPrintModeOptions(
   bool filterEmptyControl = true,
   String? backgroundColor,
 }) async {
-  final String colorArg = backgroundColor == null ? 'null' : jsonEncode(backgroundColor);
+  final String colorArg =
+      backgroundColor == null ? 'null' : jsonEncode(backgroundColor);
   await page.evaluate<void>(
     '() => window.__editorTest.setPrintModeOptions($backgroundDisabled, $filterEmptyControl, $colorArg)',
   );
@@ -1909,7 +1914,8 @@ Future<void> _insertTextControl(
 }
 
 Future<void> _insertCheckboxControl(Page page) async {
-  await page.evaluate<void>('() => window.__editorTest.insertCheckboxControl()');
+  await page
+      .evaluate<void>('() => window.__editorTest.insertCheckboxControl()');
   await Future<void>.delayed(const Duration(milliseconds: 120));
 }
 
