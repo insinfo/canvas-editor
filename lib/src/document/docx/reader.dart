@@ -1,7 +1,9 @@
+import 'dart:convert';
 import 'dart:typed_data';
 
 import 'package:canvas_text_editor/ce_opc.dart';
 import 'package:canvas_text_editor/ce_xml.dart';
+import 'package:canvas_text_editor/ce_zip.dart';
 
 import 'model.dart';
 import 'numbering.dart';
@@ -68,6 +70,34 @@ class DocxFile {
   }
 }
 
+String _buildWordDefaultStyles() {
+  const List<int> sizes = <int>[32, 26, 24, 22, 22, 22];
+  const List<String> colors = <String>[
+    '2F5496',
+    '2F5496',
+    '1F4E79',
+    '2F5496',
+    '2F5496',
+    '1F4E79'
+  ];
+  final StringBuffer styles =
+      StringBuffer('''<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<w:styles xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">
+  <w:docDefaults><w:rPrDefault><w:rPr><w:rFonts w:ascii="Calibri" w:hAnsi="Calibri"/><w:sz w:val="22"/><w:szCs w:val="22"/></w:rPr></w:rPrDefault><w:pPrDefault><w:pPr/></w:pPrDefault></w:docDefaults>
+  <w:style w:type="paragraph" w:default="1" w:styleId="Normal"><w:name w:val="Normal"/><w:qFormat/></w:style>''');
+  for (int index = 0; index < 6; index++) {
+    final int number = index + 1;
+    styles.write('''
+  <w:style w:type="paragraph" w:styleId="Heading$number">
+    <w:name w:val="heading $number"/><w:aliases w:val="Título $number"/><w:basedOn w:val="Normal"/><w:next w:val="Normal"/><w:uiPriority w:val="${9 + index}"/><w:qFormat/>
+    <w:pPr><w:keepNext/><w:keepLines/><w:spacing w:before="${number <= 2 ? 240 : 120}" w:after="0"/><w:outlineLvl w:val="$index"/></w:pPr>
+    <w:rPr><w:rFonts w:ascii="Calibri Light" w:hAnsi="Calibri Light"/><w:color w:val="${colors[index]}"/><w:sz w:val="${sizes[index]}"/><w:szCs w:val="${sizes[index]}"/></w:rPr>
+  </w:style>''');
+  }
+  styles.write('\n</w:styles>');
+  return styles.toString();
+}
+
 /// Reader DOCX → modelo tipado.
 class DocxReader {
   final List<String> _notes = [];
@@ -75,6 +105,38 @@ class DocxReader {
   DocxReader._();
 
   static DocxFile read(Uint8List bytes) => DocxReader._()._read(bytes);
+
+  /// Cria um DOCX mínimo e válido para exportar documentos iniciados no
+  /// editor, sem exigir que o usuário tenha aberto previamente um template.
+  static DocxFile createEmpty() {
+    final ZipArchive archive = ZipArchive()
+      ..setFile('[Content_Types].xml',
+          utf8.encode('''<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">
+  <Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>
+  <Default Extension="xml" ContentType="application/xml"/>
+  <Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/>
+  <Override PartName="/word/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.styles+xml"/>
+</Types>'''))
+      ..setFile('_rels/.rels',
+          utf8.encode('''<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+  <Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="word/document.xml"/>
+</Relationships>'''))
+      ..setFile('word/document.xml',
+          utf8.encode('''<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">
+  <w:body><w:p/><w:sectPr><w:pgSz w:w="11906" w:h="16838"/><w:pgMar w:top="1440" w:right="1440" w:bottom="1440" w:left="1440" w:header="720" w:footer="720" w:gutter="0"/></w:sectPr></w:body>
+</w:document>'''));
+    archive
+      ..setFile('word/_rels/document.xml.rels',
+          utf8.encode('''<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+  <Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml"/>
+</Relationships>'''))
+      ..setFile('word/styles.xml', utf8.encode(_buildWordDefaultStyles()));
+    return read(archive.encode());
+  }
 
   DocxFile _read(Uint8List bytes) {
     final package = OpcPackage.decode(bytes);

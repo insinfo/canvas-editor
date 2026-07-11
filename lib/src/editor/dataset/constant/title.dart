@@ -3,12 +3,13 @@ import '../enum/title.dart';
 
 /// Default size configuration for each heading level.
 final ITitleOption defaultTitleOption = ITitleOption(
-  defaultFirstSize: 26,
-  defaultSecondSize: 24,
-  defaultThirdSize: 22,
-  defaultFourthSize: 20,
-  defaultFifthSize: 18,
-  defaultSixthSize: 16,
+  // Equivalentes em px aos tamanhos Word 16, 13, 12 e 11 pt.
+  defaultFirstSize: 21,
+  defaultSecondSize: 17,
+  defaultThirdSize: 16,
+  defaultFourthSize: 15,
+  defaultFifthSize: 15,
+  defaultSixthSize: 15,
 );
 
 /// Maps a title level to the corresponding size option key.

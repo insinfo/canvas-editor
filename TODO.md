@@ -174,13 +174,25 @@ Menus contextuais flutuantes de tabela/texto/imagem — o context menu de clique
 Exportação PDF — nunca existiu (lib/src/document/pdf/ está vazio); é um projeto à parte.
 Otimizações específicas do modo viewer (pular estruturas de edição no layout). o modo de expotação de PDF existiu no original C:\MyDartProjects\canvas-editor-port\referencias\canvas-editor-feature-pdf e
 
-## Estado atualizado — 2026-07-10
+## Estado atualizado — 2026-07-11
 
 - [x] Delta de tabelas compatível com `quill-table-better`, incluindo merges,
   TH, cores, títulos/listas e múltiplos parágrafos.
 - [x] Sidebar de comentários com fonte de dados explícita no widget.
-- [x] Exportação PDF multipágina fiel ao canvas (raster, Dart puro).
 - [x] Mini-toolbar contextual para seleção de texto.
-- [ ] Mini-toolbars contextuais específicas para tabela e imagem.
-- [ ] PDF vetorial pesquisável/selecionável com subset de fontes TTF.
+- [x] Mini-toolbars contextuais específicas para tabela (inserir/excluir
+  linha/coluna, mesclar/dividir, excluir tabela) e imagem (trocar, salvar,
+  disposição do texto).
+- [x] **Exportação PDF vetorial** (`downloadPdf`/`exportPdfBytes`): texto real
+  selecionável e pesquisável (fontes standard-14 + WinAnsiEncoding), tabelas,
+  realces, sublinhado/tachado, listas, imagens JPEG/PNG (com alfa via SMask),
+  hyperlinks anotados, cabeçalho/rodapé/nº de página/marca d'água e caixas de
+  texto do header — tudo a partir do layout já computado, Dart puro, com
+  streams comprimidos (Flate). O raster antigo ficou só como fallback.
+- [ ] Subset/embed de fontes TTF no PDF (hoje mapeia para standard-14
+  metricamente compatíveis; embutir bytes TTF quando disponíveis).
 - [ ] Otimizações adicionais do layout no modo viewer.
+
+
+tem que ter configuração de espaçamento de linhas e tambem a regua no estilo igual o word com opção de recunho etc pode pegar carona nas implementações do D:\EuroOfficeNative\DocumentServer veja as imagens e implemente alem disso o botão de titulo tem que ficar parecido com a formatação que ele vai aplicar no texto ou seja o proprio botão é um preview de cor e font e style do texto
+no modo visaulizador esta com bugs pois esta aparecendo as mini toolbars contextuais de edição alem disso ao dar clicque duplo na image de cabeaççoes esta entrando em um modo de edição de cabeçario/imagem ale  disso no modo visualizar é idela que não aparece a barra de titulo e nem a status bar o ideal ´que a aprecça uma barra igual visulizador de PDf ou seja zoom imprimir ir para prxima e voltar so con icones

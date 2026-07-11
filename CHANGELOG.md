@@ -203,6 +203,34 @@ page-faithful raster output.
 - Fixed table UI controls that stretched across long paginated tables by using
   valid div-based insert cells, keeping quick-add/select controls compact, and
   clipping the row/border overlay to the visible page segment.
+- Extended the contextual mini toolbar with Word-style table and image modes:
+  selecting inside a table now offers row/column insert/delete, merge/unmerge
+  and delete-table; clicking an image offers change/save and the five
+  text-wrap displays, with the active display highlighted.
+
+### PDF Export (vector)
+
+- Replaced the raster (JPEG-per-page) PDF export with a **vector PDF
+  exporter** in pure Dart: real, selectable and searchable text using the
+  standard-14 fonts with WinAnsiEncoding (Arial→Helvetica, Times New
+  Roman→Times, monospace→Courier — metrically compatible), positioned from
+  the editor's own computed layout so pagination and alignment match the
+  canvas exactly. The old raster encoder remains only as a fallback.
+- Vector output covers highlights, underline/strikeout, table cell
+  backgrounds/borders (including dash, external/internal modes, slashes and
+  per-cell borders), list markers, checkbox/radio, separators, header/footer
+  rows, header text boxes (carimbos), page numbers, watermark and floating
+  images; hyperlinks become real clickable link annotations.
+- Images are embedded without recompression: JPEG via DCTDecode (RGB, gray
+  and CMYK) and PNG via Flate passthrough with PNG predictors; RGBA/LA PNGs
+  are defiltered in Dart and split into image + SMask (alpha preserved).
+- Added `CanvasEditorWidget.exportPdfBytes()` for programmatic export and
+  made `downloadPdf` await full progressive pagination before exporting so
+  large documents are not truncated.
+- New pure-Dart PDF core (`PdfWriter`, `PdfContentBuilder`, image decoding,
+  zlib/Adler-32 around the existing Deflate codec) exported from `ce_pdf.dart`
+  and covered by VM unit tests; the E2E suite validates that the generated
+  PDF contains the document text as extractable `Tj` operators.
 
 ## 1.0.0
 
