@@ -809,6 +809,9 @@ class CanvasEditorWidget
   @override
   void viewerPrint() => command.executePrint();
 
+  @override
+  void viewerDownload() => unawaited(downloadDocx());
+
   void destroy() {
     _wordCountDebounce?.cancel();
     _fileInputSubscription?.cancel();

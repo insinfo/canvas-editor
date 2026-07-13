@@ -8,6 +8,7 @@ abstract class CanvasViewerActions {
   void viewerZoomOut();
   void viewerZoomIn();
   void viewerPrint();
+  void viewerDownload();
 }
 
 /// Barra minimalista do modo visualizador, semelhante a um leitor de PDF.
@@ -25,6 +26,7 @@ class WidgetViewerToolbar extends UiComponent {
         _button('ti-zoom-out', 'Reduzir zoom', _actions.viewerZoomOut),
         _button('ti-zoom-in', 'Ampliar zoom', _actions.viewerZoomIn),
         DivElement()..classes.add('ce-viewer-toolbar__separator'),
+        _button('ti-download', 'Baixar documento', _actions.viewerDownload),
         _button('ti-printer', 'Imprimir', _actions.viewerPrint),
       ]);
   }
