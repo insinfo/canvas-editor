@@ -181,11 +181,17 @@ void mousemove(dynamic evt, dynamic host) {
     rangeManager.setRange(start, end);
   }
 
-  draw.render(
-    IDrawOption(
-      isSubmitHistory: false,
-      isSetCursor: false,
-      isCompute: false,
-    ),
-  );
+  // Repaint coalescido por frame (só o range mudou; sem relayout). Em docs
+  // grandes o mousemove dispara dezenas de vezes/seg — agrupar em 1 rAF
+  // mantém a seleção fluida.
+  host.selectionRafHandle ??= html.window.requestAnimationFrame((_) {
+    host.selectionRafHandle = null;
+    draw.render(
+      IDrawOption(
+        isSubmitHistory: false,
+        isSetCursor: false,
+        isCompute: false,
+      ),
+    );
+  });
 }
