@@ -93,6 +93,11 @@ class DocxTextBox {
   final double borderWidthPx;
   final String? fillColor;
 
+  /// Origem no pacote (sync do carimbo editado no save): parte do header e
+  /// XML bruto do `mc:AlternateContent` de onde a caixa veio.
+  final String? partName;
+  final String? sourceRawXml;
+
   DocxTextBox({
     required this.elements,
     required this.alignRight,
@@ -102,6 +107,8 @@ class DocxTextBox {
     required this.borderColor,
     required this.borderWidthPx,
     required this.fillColor,
+    this.partName,
+    this.sourceRawXml,
   });
 }
 
@@ -690,6 +697,8 @@ class DocxToElementConverter {
       borderWidthPx:
           tb.borderWidthEmu == null ? 1 : Units.emuToPx(tb.borderWidthEmu!),
       fillColor: tb.fillColorHex == null ? null : '#${tb.fillColorHex}',
+      partName: fromPart,
+      sourceRawXml: tb.rawXml,
     );
   }
 
