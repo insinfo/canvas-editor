@@ -235,20 +235,32 @@ void dblclick(dynamic host, dynamic evt) {
     return;
   }
 
-  if (positionContext.isImage == true && positionContext.isDirectHit == true) {
-    draw.getPreviewer()?.render();
-    return;
-  }
-
-  if (draw.getIsPagingMode() == true) {
-    final int ctxIndex = positionContext.index;
-    if (ctxIndex < 0 && positionContext.zone != null) {
-      final dynamic zoneManager = draw.getZone();
+  // Word: duplo-clique na faixa do cabeçalho/rodapé ATIVA a zona primeiro —
+  // mesmo sobre imagem ou caixa de texto (a moldura tracejada + label
+  // "Cabeçalho"/"Rodapé" aparecem). Só com a zona já ativa o duplo-clique
+  // nos elementos internos abre previewer/editor da caixa.
+  if (draw.getIsPagingMode() == true && positionContext.zone != null) {
+    final dynamic zoneManager = draw.getZone();
+    if (positionContext.zone != EditorZone.main &&
+        zoneManager?.getZone() != positionContext.zone) {
       zoneManager?.setZone(positionContext.zone);
       draw.clearSideEffect();
       position.setPositionContext(IPositionContext(isTable: false));
       return;
     }
+    if (positionContext.index < 0 &&
+        positionContext.zone == EditorZone.main &&
+        zoneManager?.getZone() != EditorZone.main) {
+      zoneManager?.setZone(EditorZone.main);
+      draw.clearSideEffect();
+      position.setPositionContext(IPositionContext(isTable: false));
+      return;
+    }
+  }
+
+  if (positionContext.isImage == true && positionContext.isDirectHit == true) {
+    draw.getPreviewer()?.render();
+    return;
   }
 
   if ((positionContext.isCheckbox == true || positionContext.isRadio == true) &&

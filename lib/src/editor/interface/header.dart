@@ -3,15 +3,20 @@ import 'element.dart';
 
 /// Caixa de texto flutuante do cabeçalho (carimbo, F4.8): conteúdo + geometria
 /// para o frame do header desenhar a borda e o texto no canto (top-right).
+/// Mutável: a caixa é editável na UI (mover/redimensionar/editar texto).
 class IHeaderTextBox {
-  final List<IElement> elements;
-  final bool alignRight;
-  final double offsetYPx;
-  final double widthPx;
-  final double heightPx;
-  final String? borderColor;
-  final double borderWidthPx;
-  final String? fillColor;
+  List<IElement> elements;
+  bool alignRight;
+
+  /// Deslocamento X explícito a partir da margem esquerda (px, sem scale).
+  /// `null` = posicionar pela regra [alignRight] (comportamento original).
+  double? offsetXPx;
+  double offsetYPx;
+  double widthPx;
+  double heightPx;
+  String? borderColor;
+  double borderWidthPx;
+  String? fillColor;
 
   IHeaderTextBox({
     required this.elements,
@@ -19,6 +24,7 @@ class IHeaderTextBox {
     required this.offsetYPx,
     required this.widthPx,
     required this.heightPx,
+    this.offsetXPx,
     this.borderColor,
     this.borderWidthPx = 1,
     this.fillColor,

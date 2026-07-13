@@ -15,6 +15,24 @@ import '../../position/position.dart';
 import '../../zone/zone.dart';
 import '../draw.dart';
 
+/// Retângulo de uma caixa de texto do header em coordenadas da página
+/// (com scale aplicado) — consumido pelo TextBoxTool.
+class HeaderTextBoxRect {
+  final int index;
+  final double left;
+  final double top;
+  final double width;
+  final double height;
+
+  const HeaderTextBoxRect({
+    required this.index,
+    required this.left,
+    required this.top,
+    required this.width,
+    required this.height,
+  });
+}
+
 class Header {
   Header(Draw draw, [List<IElement>? data])
       : _draw = draw,
@@ -67,6 +85,42 @@ class Header {
       _evenAndOdd && pageNo.isOdd && _evenElementList.isNotEmpty;
 
   void setTextBoxes(List<IHeaderTextBox> boxes) => _textBoxes = boxes;
+
+  /// Retângulos (coordenadas da página, já com scale) das caixas de texto —
+  /// usados pelo hit-test/overlay de edição interativa do carimbo.
+  List<HeaderTextBoxRect> getTextBoxRects() {
+    if (_textBoxes.isEmpty) return const <HeaderTextBoxRect>[];
+    final double scale = (_options.scale ?? 1).toDouble();
+    final double innerWidth = _draw.getInnerWidth();
+    final List<double> margins = _draw.getMargins();
+    final double headerTop = getHeaderTop();
+    const double pad = 4;
+    final List<HeaderTextBoxRect> rects = <HeaderTextBoxRect>[];
+    for (int i = 0; i < _textBoxes.length; i++) {
+      final IHeaderTextBox tb = _textBoxes[i];
+      final double w = tb.widthPx * scale;
+      final double left = tb.offsetXPx != null
+          ? margins[3] + tb.offsetXPx! * scale
+          : margins[3] + (tb.alignRight ? (innerWidth - w) : 0);
+      final double top = headerTop + tb.offsetYPx * scale;
+      final double innerBoxWidth = w - 2 * pad * scale;
+      final List<IRow> rows = _drawDynamic((dynamic target) {
+            final dynamic r = target.computeRowList(IComputeRowListPayload(
+                innerWidth: innerBoxWidth, elementList: tb.elements));
+            return r is List ? r.whereType<IRow>().toList() : <IRow>[];
+          }) as List<IRow>? ??
+          const <IRow>[];
+      double contentH = 0;
+      for (final IRow r in rows) {
+        contentH += r.height + (r.offsetY ?? 0);
+      }
+      final double h =
+          math.max(tb.heightPx * scale, contentH + 2 * pad * scale);
+      rects.add(HeaderTextBoxRect(
+          index: i, left: left, top: top, width: w, height: h));
+    }
+    return rects;
+  }
 
   List<IHeaderTextBox> getTextBoxes() => _textBoxes;
 
@@ -269,7 +323,9 @@ class Header {
     const double pad = 4;
     for (final IHeaderTextBox tb in _textBoxes) {
       final double w = tb.widthPx * scale;
-      final double left = margins[3] + (tb.alignRight ? (innerWidth - w) : 0);
+      final double left = tb.offsetXPx != null
+          ? margins[3] + tb.offsetXPx! * scale
+          : margins[3] + (tb.alignRight ? (innerWidth - w) : 0);
       final double top = headerTop + tb.offsetYPx * scale;
       final double innerBoxWidth = w - 2 * pad * scale;
       final List<IRow> rows = _drawDynamic((dynamic target) {

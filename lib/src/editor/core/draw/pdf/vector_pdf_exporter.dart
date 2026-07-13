@@ -710,7 +710,9 @@ class VectorPdfExporter {
     final dynamic position = _draw.getPosition();
     for (final IHeaderTextBox tb in textBoxes) {
       final double w = tb.widthPx * _scale;
-      final double left = margins[3] + (tb.alignRight ? (innerWidth - w) : 0);
+      final double left = tb.offsetXPx != null
+          ? margins[3] + tb.offsetXPx! * _scale
+          : margins[3] + (tb.alignRight ? (innerWidth - w) : 0);
       final double top = headerTop + tb.offsetYPx * _scale;
       final double innerBoxWidth = w - 2 * pad * _scale;
       final dynamic rawRows = _draw.computeRowList(

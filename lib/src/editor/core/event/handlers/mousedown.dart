@@ -122,6 +122,15 @@ void mousedown(dynamic evt, dynamic host) {
     }
   }
 
+  // Caixa de texto do cabeçalho (carimbo): com a zona header ativa, o clique
+  // sobre a caixa seleciona/mantém a seleção com alças (TextBoxTool).
+  final dynamic textBoxTool = draw.getTextBoxTool();
+  if (textBoxTool != null &&
+      textBoxTool.handleMousedown(offsetX, offsetY) == true) {
+    if (evt is html.Event) evt.preventDefault();
+    return;
+  }
+
   host.isAllowSelection = true;
   final IPositionContext oldPositionContext =
       _clonePositionContext(position.getPositionContext() as IPositionContext);
