@@ -50,6 +50,19 @@ class EditorToDocx {
     ];
     var preservedCursor = 0;
 
+    // Região do Sumário (extension['toc'] sem 'tocTitle'): os parágrafos das
+    // entradas são envolvidos num complex field `TOC \o "1-9" \h` para o
+    // Word reconhecer/atualizar via F9 (o resultado em cache é o que já
+    // renderizamos). O título "Sumário" fica fora do campo.
+    WpParagraph? tocFirstParagraph;
+    WpParagraph? tocLastParagraph;
+    bool specIsTocEntry(_BlockSpec spec) =>
+        spec.table == null &&
+        spec.elements.any((IElement e) {
+          final dynamic ext = e.extension;
+          return ext is Map && ext['toc'] != null && ext['tocTitle'] != true;
+        });
+
     final newBody = <WpBlock>[];
     for (final spec in currentSpecs) {
       final stamp = spec.stamp;
@@ -91,13 +104,38 @@ class EditorToDocx {
         newBody.add(_tableFromElement(
             spec.table!, originalBlock is WpTable ? originalBlock : null));
       } else {
-        newBody.add(_paragraphFromElements(spec.elements,
-            originalBlock is WpParagraph ? originalBlock.properties : null));
+        final WpParagraph paragraph = _paragraphFromElements(spec.elements,
+            originalBlock is WpParagraph ? originalBlock.properties : null);
+        if (specIsTocEntry(spec)) {
+          tocFirstParagraph ??= paragraph;
+          tocLastParagraph = paragraph;
+        }
+        newBody.add(paragraph);
       }
     }
     while (preservedCursor < preservedIndices.length) {
       newBody.add(body[preservedIndices[preservedCursor]]);
       preservedCursor++;
+    }
+
+    // Envelopa as entradas do Sumário no campo TOC (begin+instr+separate no
+    // 1º parágrafo, end no último) — resultado em cache = o texto já gerado.
+    if (tocFirstParagraph != null && tocLastParagraph != null) {
+      tocFirstParagraph.inlines.insert(
+        0,
+        WpPreservedInline(
+          'w:fldTocBegin',
+          '<w:r><w:fldChar w:fldCharType="begin"/></w:r>'
+              '<w:r><w:instrText xml:space="preserve"> TOC \\o "1-9" \\h \\z '
+              '\\u </w:instrText></w:r>'
+              '<w:r><w:fldChar w:fldCharType="separate"/></w:r>',
+        ),
+      );
+      tocLastParagraph.inlines.add(WpPreservedInline(
+        'w:fldTocEnd',
+        '<w:r><w:fldChar w:fldCharType="end"/></w:r>',
+      ));
+      notes.add('sumário exportado como campo TOC (atualizável via F9)');
     }
 
     body

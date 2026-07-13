@@ -64,8 +64,7 @@ void main() {
     expect(titles.single.level, TitleLevel.second);
   });
 
-  test('bookmark inline vira alvo de navegação no primeiro leaf do título',
-      () {
+  test('bookmark inline vira alvo de navegação no primeiro leaf do título', () {
     final converted = DocxToElementConverter.convert(_syntheticDocx());
     final target = _findLeafWithBookmark(converted.main, 'alvo1');
     expect(target, isNotNull);
@@ -106,6 +105,43 @@ void main() {
     expect(xml, contains('<w:bookmarkEnd'));
     expect(xml, contains('w:anchor="alvo1"'));
     expect(xml, contains('EDITADO'));
+  });
+
+  test('região do Sumário exporta como campo TOC atualizável', () {
+    final file = _syntheticDocx();
+    final converted = DocxToElementConverter.convert(file);
+    final current = DocxToElementConverter.convert(file).main;
+    // Simula o bloco gerado pelo executeInsertToc (título fora do campo).
+    current.addAll(<IElement>[
+      IElement(value: '\n')
+        ..extension = <String, dynamic>{'toc': 't1', 'tocTitle': true},
+      IElement(value: 'Sumário', bold: true)
+        ..extension = <String, dynamic>{'toc': 't1', 'tocTitle': true},
+      IElement(value: '\n')..extension = <String, dynamic>{'toc': 't1'},
+      IElement(
+        value: '',
+        type: ElementType.hyperlink,
+        url: '#alvo1',
+        valueList: <IElement>[
+          IElement(value: 'Título customizado')
+            ..extension = <String, dynamic>{'toc': 't1'},
+        ],
+      )..extension = <String, dynamic>{'toc': 't1'},
+      IElement(value: ' ..... 1')..extension = <String, dynamic>{'toc': 't1'},
+    ]);
+
+    EditorToDocx.apply(file, current, converted.main);
+    final xml = DocxReader.read(DocxWriter.write(file))
+        .package
+        .partString('word/document.xml')!;
+
+    expect(xml, contains('w:fldCharType="begin"'));
+    expect(xml, contains(r'TOC \o "1-9"'));
+    expect(xml, contains('w:fldCharType="separate"'));
+    expect(xml, contains('w:fldCharType="end"'));
+    // O título "Sumário" fica ANTES do begin do campo.
+    expect(
+        xml.indexOf('Sumário'), lessThan(xml.indexOf('fldCharType="begin"')));
   });
 
   test('round-trip sem edição continua byte-idêntico com bookmarks', () {
