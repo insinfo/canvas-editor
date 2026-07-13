@@ -45,8 +45,8 @@ class CanvasEvent {
           (draw.getPageList() as List?)?.whereType<CanvasElement>() ??
               const <CanvasElement>[],
         ),
-  range = draw.getRange(),
-  position = draw.getPosition(),
+        range = draw.getRange(),
+        position = draw.getPosition(),
         isAllowSelection = false,
         isComposing = false,
         compositionInfo = null,
@@ -76,8 +76,13 @@ class CanvasEvent {
   IPositionContext? cachePositionContext;
   ICurrentPosition? mouseDownStartPosition;
 
+  /// Throttle do repaint durante a seleção por arrasto: um `render()` por
+  /// frame (rAF). Múltiplos `mousemove` no mesmo frame coalescem — sem isto,
+  /// em docs grandes o repaint dispara dezenas de vezes por segundo.
+  int? selectionRafHandle;
+
   final List<StreamSubscription<dynamic>> _subscriptions =
-    <StreamSubscription<dynamic>>[];
+      <StreamSubscription<dynamic>>[];
 
   dynamic getDraw() => draw;
 
@@ -102,6 +107,11 @@ class CanvasEvent {
       subscription.cancel();
     }
     _subscriptions.clear();
+    final int? raf = selectionRafHandle;
+    if (raf != null) {
+      window.cancelAnimationFrame(raf);
+      selectionRafHandle = null;
+    }
   }
 
   void setIsAllowSelection(bool value) {
@@ -348,5 +358,4 @@ class CanvasEvent {
     cachePositionContext = null;
     mouseDownStartPosition = null;
   }
-
 }
