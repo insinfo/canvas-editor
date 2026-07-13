@@ -194,8 +194,12 @@ void main() {
         // O parágrafo do campo sai do rodapé estático (sem duplicação).
         expect(_plainText(result.footer), isNot(contains('Página')));
       }
-      expect(etp.pageNumberRowFlex, isNull); // parágrafo do campo é jc left
-      expect(tr.pageNumberRowFlex, RowFlex.center);
+      // O parágrafo do campo começa com 2 <w:tab/> (tab stops center+right
+      // do estilo Rodapé do Word) → número à DIREITA, como o Word renderiza
+      // (screenshot de referência); a suposição anterior (jc left) era só o
+      // jc do parágrafo, ignorando os tabs.
+      expect(etp.pageNumberRowFlex, RowFlex.right);
+      expect(tr.pageNumberRowFlex, anyOf(RowFlex.center, RowFlex.right));
     });
 
     test('distâncias de header/footer vêm do pgMar (F4.6)', () {

@@ -239,6 +239,10 @@ class DocxToElementConverter {
       var state = _FieldState.none;
       String instruction = '';
       WpRunProperties? styleRun;
+      // Tabs à frente do campo: o template do Word usa os tab stops do
+      // estilo Rodapé (center/right) — 2 tabs = número à DIREITA, 1 = centro.
+      var leadingTabs = 0;
+      var sawContent = false;
 
       for (final inline in block.inlines) {
         switch (inline) {
@@ -285,7 +289,10 @@ class DocxToElementConverter {
                   if (state == _FieldState.none) {
                     format.write(text.text);
                     styleRun ??= _resolver.resolveRun(block, run.properties);
+                    if (text.text.trim().isNotEmpty) sawContent = true;
                   }
+                case WpTabChar _:
+                  if (!sawContent) leadingTabs++;
                 case _:
                   break;
               }
@@ -307,9 +314,16 @@ class DocxToElementConverter {
       final style = styleRun ?? _resolver.resolveRun(block, null);
       _notes.add('campos PAGE/NUMPAGES do rodapé renderizados '
           'dinamicamente (formato "${format.toString()}")');
+      // Tabs do estilo Rodapé do Word: 2 tabs (center+right) empurram o
+      // número para a DIREITA; 1 tab centraliza (aprox. até F4.4 tab stops).
+      final RowFlex? tabFlex = leadingTabs >= 2
+          ? RowFlex.right
+          : leadingTabs == 1
+              ? RowFlex.center
+              : null;
       return _PageNumberSpec(
         format: format.toString(),
-        rowFlex: _rowFlex(pPr.jc),
+        rowFlex: tabFlex ?? _rowFlex(pPr.jc),
         size: style.sizeHalfPoints == null
             ? null
             : Units.halfPointToPx(style.sizeHalfPoints!).round(),
