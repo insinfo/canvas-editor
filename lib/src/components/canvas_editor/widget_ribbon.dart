@@ -3,6 +3,7 @@ import 'dart:html';
 
 import '../../editor/index.dart';
 import '../core/ui_component.dart';
+import 'widget_floating_toolbar.dart' show FloatingToolbarMode;
 
 /// Ações da shell que os toolbars invocam. Implementado pelo
 /// `CanvasEditorWidget`, mantendo os componentes desacoplados do widget.
@@ -48,8 +49,12 @@ class WidgetRibbon extends UiComponent {
   Command get _command => _actions.command;
 
   final Map<String, ButtonElement> _commandButtons = <String, ButtonElement>{};
+  final Map<String, ButtonElement> _tabButtons = <String, ButtonElement>{};
   final Map<TitleLevel?, ButtonElement> _styleButtons =
       <TitleLevel?, ButtonElement>{};
+  late DivElement _shell;
+  String _activeTabId = 'home';
+  FloatingToolbarMode _contextMode = FloatingToolbarMode.hidden;
   late final SelectElement _fontSelect;
   late final SelectElement _sizeSelect;
 
@@ -127,18 +132,25 @@ class WidgetRibbon extends UiComponent {
 
   DivElement _build() {
     final DivElement shell = DivElement()..classes.add('ce-word-ribbon');
+    _shell = shell;
     final DivElement tabs = DivElement()
       ..classes.add('ce-word-tabs')
       ..setAttribute('role', 'tablist');
     final DivElement panels = DivElement()..classes.add('ce-word-panels');
 
-    void addTab(String id, String label, List<Element> groups) {
+    void addTab(String id, String label, List<Element> groups,
+        {bool contextual = false}) {
       final ButtonElement tab = ButtonElement()
         ..type = 'button'
         ..text = label
         ..dataset['ceTab'] = id
         ..classes.toggle('active', id == 'home')
+        ..classes.toggle('ce-word-tab--contextual', contextual)
         ..onClick.listen((_) => _activateTab(shell, id));
+      if (contextual) {
+        tab.style.display = 'none';
+      }
+      _tabButtons[id] = tab;
       tabs.append(tab);
       final DivElement panel = DivElement()
         ..classes.add('ce-word-panel')
@@ -222,6 +234,14 @@ class WidgetRibbon extends UiComponent {
             () => _command.executeSeparator(<num>[1, 1]),
             labeled: true),
       ]),
+      _group('Referências', <Element>[
+        _button(
+            'toc', 'ti-list-tree', 'Sumário', () => _command.executeInsertToc(),
+            labeled: true),
+        _button('toc-update', 'ti-refresh', 'Atualizar Sumário',
+            () => _command.executeInsertToc(),
+            labeled: true),
+      ]),
     ]);
     addTab('layout', 'Layout', <Element>[
       _group('Configurar Página', <Element>[
@@ -285,8 +305,131 @@ class WidgetRibbon extends UiComponent {
             labeled: true),
       ]),
     ]);
+    // Abas contextuais (estilo "Ferramentas de Tabela/Imagem" do Word):
+    // aparecem quando a seleção entra numa tabela ou numa imagem, via
+    // [syncSelectionContext].
+    addTab(
+        'table-tools',
+        'Tabela',
+        <Element>[
+          _group('Linhas e Colunas', <Element>[
+            _button('ctx-row-top', 'ti-row-insert-top', 'Inserir linha acima',
+                () => _command.executeInsertTableTopRow()),
+            _button(
+                'ctx-row-bottom',
+                'ti-row-insert-bottom',
+                'Inserir linha abaixo',
+                () => _command.executeInsertTableBottomRow()),
+            _button(
+                'ctx-col-left',
+                'ti-column-insert-left',
+                'Inserir coluna à esquerda',
+                () => _command.executeInsertTableLeftCol()),
+            _button(
+                'ctx-col-right',
+                'ti-column-insert-right',
+                'Inserir coluna à direita',
+                () => _command.executeInsertTableRightCol()),
+            _button('ctx-row-remove', 'ti-row-remove', 'Excluir linha',
+                () => _command.executeDeleteTableRow()),
+            _button('ctx-col-remove', 'ti-column-remove', 'Excluir coluna',
+                () => _command.executeDeleteTableCol()),
+            _button('ctx-table-remove', 'ti-table-minus', 'Excluir tabela',
+                () => _command.executeDeleteTable()),
+          ]),
+          _group('Mesclar', <Element>[
+            _button('ctx-merge', 'ti-arrows-join-2', 'Mesclar células',
+                () => _command.executeMergeTableCell()),
+            _button('ctx-split', 'ti-arrows-split-2', 'Desfazer mesclagem',
+                () => _command.executeCancelMergeTableCell()),
+          ]),
+          _group('Dados', <Element>[
+            _button(
+                'ctx-repeat-header',
+                'ti-table-options',
+                'Repetir linhas de cabeçalho',
+                () => _command.executeToggleTableHeaderRow(),
+                labeled: true),
+          ]),
+          _group('Bordas', <Element>[
+            _button('ctx-border-all', 'ti-border-all', 'Todas as bordas',
+                () => _command.executeTableBorderType(TableBorder.all)),
+            _button('ctx-border-empty', 'ti-border-none', 'Sem bordas',
+                () => _command.executeTableBorderType(TableBorder.empty)),
+            _button('ctx-border-external', 'ti-border-outer', 'Bordas externas',
+                () => _command.executeTableBorderType(TableBorder.external)),
+            _button('ctx-border-internal', 'ti-border-inner', 'Bordas internas',
+                () => _command.executeTableBorderType(TableBorder.internal)),
+          ]),
+          _group('Alinhamento', <Element>[
+            _button('ctx-valign-top', 'ti-layout-align-top', 'Alinhar no topo',
+                () => _command.executeTableTdVerticalAlign(VerticalAlign.top)),
+            _button(
+                'ctx-valign-middle',
+                'ti-layout-align-middle',
+                'Centralizar verticalmente',
+                () =>
+                    _command.executeTableTdVerticalAlign(VerticalAlign.middle)),
+            _button(
+                'ctx-valign-bottom',
+                'ti-layout-align-bottom',
+                'Alinhar na base',
+                () =>
+                    _command.executeTableTdVerticalAlign(VerticalAlign.bottom)),
+          ]),
+        ],
+        contextual: true);
+    addTab(
+        'image-tools',
+        'Imagem',
+        <Element>[
+          _group('Disposição do Texto', <Element>[
+            _imageWrapButton('ctx-wrap-block', 'ti-float-none',
+                'Embutida no texto', ImageDisplay.block),
+            _imageWrapButton('ctx-wrap-inline', 'ti-layout-rows',
+                'Acima e abaixo do texto', ImageDisplay.inline),
+            _imageWrapButton('ctx-wrap-surround', 'ti-float-left',
+                'Contornar pelo texto', ImageDisplay.surround),
+            _imageWrapButton('ctx-wrap-front', 'ti-stack-front',
+                'À frente do texto', ImageDisplay.floatTop),
+            _imageWrapButton('ctx-wrap-behind', 'ti-stack-back',
+                'Atrás do texto', ImageDisplay.floatBottom),
+          ]),
+          _group('Imagem', <Element>[
+            _button('ctx-image-save', 'ti-download', 'Salvar imagem',
+                () => _command.executeSaveAsImageElement(),
+                labeled: true),
+          ]),
+        ],
+        contextual: true);
     shell.children.addAll(<Element>[tabs, panels]);
     return shell;
+  }
+
+  ButtonElement _imageWrapButton(
+      String id, String icon, String label, ImageDisplay display) {
+    return _button(id, icon, label, () {
+      final RangeContext? context = _command.getRangeContext();
+      final IElement? element = context?.startElement;
+      if (element == null || element.type != ElementType.image) return;
+      _command.executeChangeImageDisplay(element, display);
+    });
+  }
+
+  /// Mostra/oculta as abas contextuais conforme a seleção (tabela/imagem),
+  /// como as "Ferramentas de Tabela" do Word. Se a aba ativa some, volta
+  /// para Página Inicial.
+  void syncSelectionContext(FloatingToolbarMode mode) {
+    if (mode == _contextMode) return;
+    _contextMode = mode;
+    final bool showTable = mode == FloatingToolbarMode.table;
+    final bool showImage = mode == FloatingToolbarMode.image;
+    _tabButtons['table-tools']?.style.display = showTable ? '' : 'none';
+    _tabButtons['image-tools']?.style.display = showImage ? '' : 'none';
+    if ((_activeTabId == 'table-tools' && !showTable) ||
+        (_activeTabId == 'image-tools' && !showImage)) {
+      _activateTab(_shell, 'home');
+    }
   }
 
   DivElement _fontGroup() {
@@ -611,6 +754,7 @@ class WidgetRibbon extends UiComponent {
   }
 
   void _activateTab(DivElement shell, String id) {
+    _activeTabId = id;
     for (final Element tab in shell.querySelectorAll('[data-ce-tab]')) {
       tab.classes.toggle('active', tab.dataset['ceTab'] == id);
     }

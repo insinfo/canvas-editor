@@ -30,6 +30,17 @@
 
 CI local: `dart run tool/ci.dart` (packages + raiz + inventário; `--e2e` opcional).
 
+**Rodada 2026-07-13 (plano_expansao_word_gdocs.md):** M1 bookmarks/links internos +
+títulos customizados (outlineLvl herdado, testado); régua estilo Word (linha-guia,
+controle 3 peças com hanging, recuo direito fim-a-fim `w:ind@right`); F4.6 header/footer
+multi-tipo (first/even) no render; "Repetir linhas de cabeçalho" (UI p/ `pagingRepeat`);
+abas contextuais Tabela/Imagem no ribbon; Sumário automático v1 (`executeInsertToc`,
+bookmarks + links internos + pontos por TTF; right-tab real fica p/ F4.4). PERF: bench
+consertado (teclas não chegavam ao editor — números antigos inválidos),
+`finishProgressiveLayout()` (navegação além da fronteira da paginação sob demanda) e
+**repintura dirigida por página (modelo OnRecalculatePage): TR 165→68 ms/tecla (2,4×)**.
+E2E 40/40, test/word 37/37 em todas as etapas.
+
 ---
 
 ## 1. Metas mensuráveis (Definition of Done global)

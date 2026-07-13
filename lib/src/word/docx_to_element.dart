@@ -21,6 +21,16 @@ class DocxConversionResult {
   final List<IElement> header;
   final List<IElement> main;
   final List<IElement> footer;
+
+  /// Variantes de cabeçalho/rodapé (F4.6): `first` vale na 1ª página quando
+  /// `titlePage` (w:titlePg); `even` nas páginas pares quando
+  /// `evenAndOddHeaders` (settings.xml). `null` = variante ausente.
+  final List<IElement>? headerFirst;
+  final List<IElement>? headerEven;
+  final List<IElement>? footerFirst;
+  final List<IElement>? footerEven;
+  final bool titlePage;
+  final bool evenAndOddHeaders;
   final double pageWidthPx;
   final double pageHeightPx;
 
@@ -50,6 +60,12 @@ class DocxConversionResult {
     required this.header,
     required this.main,
     required this.footer,
+    this.headerFirst,
+    this.headerEven,
+    this.footerFirst,
+    this.footerEven,
+    this.titlePage = false,
+    this.evenAndOddHeaders = false,
     this.headerTextBoxes = const [],
     required this.pageWidthPx,
     required this.pageHeightPx,
@@ -154,16 +170,38 @@ class DocxToElementConverter {
     if (pageNumber != null) {
       _stripCachedPageNumberLines(footer);
     }
-    if (file.headersByType.length > 1) {
-      _notes.add('headers first/even convertidos apenas como default '
-          '(seleção por tipo na Fase 4.6)');
+
+    // F4.6: variantes first/even de header/footer (seleção por página no
+    // render conforme titlePg/evenAndOddHeaders).
+    final section = file.document.section;
+    final bool titlePage = section?.titlePage ?? false;
+    final bool evenAndOdd = file.settings.evenAndOddHeaders;
+    List<IElement>? convertVariant(WpHeaderFooter? part) => part == null
+        ? null
+        : _convertBlocks(part.blocks, fromPart: part.partName);
+    final headerFirst = convertVariant(file.headersByType['first']);
+    final headerEven = convertVariant(file.headersByType['even']);
+    final footerFirst = convertVariant(file.footersByType['first']);
+    final footerEven = convertVariant(file.footersByType['even']);
+    if ((headerFirst != null || footerFirst != null) && !titlePage) {
+      _notes.add('header/footer "first" presentes mas w:titlePg desligado '
+          '(variante inativa, preservada no round-trip)');
+    }
+    if ((headerEven != null || footerEven != null) && !evenAndOdd) {
+      _notes.add('header/footer "even" presentes mas evenAndOddHeaders '
+          'desligado (variante inativa, preservada no round-trip)');
     }
 
-    final section = file.document.section;
     return DocxConversionResult(
       header: header,
       main: main,
       footer: footer,
+      headerFirst: headerFirst,
+      headerEven: headerEven,
+      footerFirst: footerFirst,
+      footerEven: footerEven,
+      titlePage: titlePage,
+      evenAndOddHeaders: evenAndOdd,
       headerTextBoxes: headerTextBoxes,
       pageWidthPx: Units.twipToPx(section?.pageWidthTwips ?? 11906),
       pageHeightPx: Units.twipToPx(section?.pageHeightTwips ?? 16838),

@@ -347,6 +347,9 @@ class Command {
   /// Navega até um bookmark interno (alvo de hyperlink `#nome`).
   bool executeLocationBookmark(String name) => _adapt.locationBookmark(name);
 
+  /// Insere/atualiza o Sumário automático no corpo do documento.
+  void executeInsertToc() => _adapt.insertToc();
+
   void executeWordTool() => _adapt.wordTool();
 
   String? executeSetGroup() => _adapt.setGroup();

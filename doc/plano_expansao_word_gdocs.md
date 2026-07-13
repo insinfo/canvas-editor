@@ -12,10 +12,11 @@
 | PERF §6.4 métricas actualBoundingBox | ✅ já implementado no fallback canvas (nada a fazer) | draw.dart:2492-2513 |
 | M2 §7 régua | ✅ (2026-07-13) linha-guia pontilhada no arrasto, controle 3 peças (▽ firstLine / △ hanging / □ caixa), recuo direito arrastável, sync com o cursor por frame | widget_ruler.dart + CSS |
 | M2 §7b `paraIndentRight` | ✅ modelo + layout (largura útil da row, com clamp) + conversão `w:ind@right` + export + régua | teste em title_export_test |
-| M3 header/footer multi-tipo | ⬜ | — |
-| M4 repeat header row + abas contextuais | ⬜ | — |
-| M5 TOC no corpo + tab stops | ⬜ | — |
-| PERF §6.2 modularização draw.dart / §6.3 workers | ⬜ | — |
+| M3 header/footer multi-tipo (first/even) | ✅ (2026-07-13) conversor expõe variantes + flags (`titlePg`/`evenAndOddHeaders`); frames Header/Footer computam e renderizam a variante por página (edição continua no default; zona ativa mostra default) | teste F4.6 em docx_to_element_test; corpus tem variantes mas flags OFF |
+| M4.1 repeat header row | ✅ o layout JÁ clonava `pagingRepeat` no topo de cada fatia — faltava a UI: `toggleTableHeaderRow` (Word-style: linhas 0..cursor, só na 1ª parte) + menu de contexto + botão na mini-toolbar | table_operate.dart |
+| M4.2 abas contextuais no ribbon | ✅ abas "Tabela"/"Imagem" (roxas, estilo Ferramentas do Word) aparecem/somem com a seleção (`resolveSelectionContext` compartilhado com a mini-toolbar); aba ativa some → volta p/ Página Inicial | widget_ribbon.syncSelectionContext |
+| M5 TOC no corpo | ✅ v1 (2026-07-13) `executeInsertToc`: coleta títulos, reusa/cria bookmarks (novos exportados via wpBookmark*Xml + `_sameElement` compara `bookmarks` p/ forçar regen), entradas com hyperlink interno `#anchor`, recuo por nível e pontos medidos por TTF; re-rodar substitui a região `extension['toc']`; botões Sumário/Atualizar na aba Inserir. **Pendente**: right-tab com leader real (F4.4), campo TOC OOXML no export (hoje sai como parágrafos com links internos) | command_adapt.insertToc |
+| PERF §6.2 modularização draw.dart / §6.3 workers | ⬜ próxima sessão | — |
 
 Data: 2026-07-13. Baseado em: exploração completa do `lib/` atual, do OnlyOffice
 DocumentServer (`D:\EuroOfficeNative\DocumentServer\sdkjs\word` — **apenas referência

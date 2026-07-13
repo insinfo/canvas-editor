@@ -247,6 +247,12 @@ class EditorToDocx {
       ];
 
   bool _sameElement(IElement a, IElement b) {
+    // Bookmarks criados em sessão (ex.: âncoras do Sumário) precisam forçar
+    // a regeneração do parágrafo para serem emitidos no DOCX.
+    if (!_sameStringList(
+        _extensionStrings(a, 'bookmarks'), _extensionStrings(b, 'bookmarks'))) {
+      return false;
+    }
     if (a.type != b.type ||
         _clean(a.value) != _clean(b.value) ||
         a.font != b.font ||
@@ -301,6 +307,16 @@ class EditorToDocx {
   static bool _hasFlag(IElement element, String flag) {
     final extension = element.extension;
     return extension is Map && extension[flag] == true;
+  }
+
+  static bool _sameStringList(List<String>? a, List<String>? b) {
+    if (a == null && b == null) return true;
+    if (a == null || b == null) return false;
+    if (a.length != b.length) return false;
+    for (var i = 0; i < a.length; i++) {
+      if (a[i] != b[i]) return false;
+    }
+    return true;
   }
 
   static List<String>? _extensionStrings(IElement element, String key) {
