@@ -100,6 +100,19 @@ void main() {
         'pageCount': js_util.allowInterop(() {
           return app.editor.getDraw().getPageList().length;
         }),
+        // Sanidade da digitação: nº de elementos do corpo — cresce 1 por
+        // tecla; se não crescer, as teclas não estão chegando ao editor e a
+        // latência medida é lixo.
+        'elementCount': js_util.allowInterop(() {
+          return app.editor.getDraw().getOriginalMainElementList().length;
+        }),
+        // F5.5: conclui a paginação sob demanda (síncrono) e devolve o custo
+        // em ms — é o pior caso realista para digitar no meio do documento.
+        'finishLayout': js_util.allowInterop(() {
+          final start = html.window.performance.now();
+          app.editor.getDraw().finishProgressiveLayout();
+          return (html.window.performance.now() - start).toDouble();
+        }),
         // F5.4a: nº de canvases com backing store vivo (largura > 1) vs total,
         // e memória aproximada do backing store (MB).
         'canvasMemStats': js_util.allowInterop(() {
@@ -194,13 +207,11 @@ Future<void> _copyDirectory(Directory source, Directory target) async {
 }
 
 Future<double> _openDocx(Page page, String url) async {
-  final result = await page
-      .evaluate<num?>(
-        '''(url) => new Promise((resolve) =>
+  final result = await page.evaluate<num?>(
+    '''(url) => new Promise((resolve) =>
         window.__perf.openDocxFromUrl(url, (ms) => resolve(ms)))''',
-        args: <dynamic>[url],
-      )
-      .timeout(const Duration(minutes: 8));
+    args: <dynamic>[url],
+  ).timeout(const Duration(minutes: 8));
   final ms = (result ?? -1).toDouble();
   if (ms < 0) {
     throw StateError('Falha ao abrir $url no editor.');
@@ -223,6 +234,8 @@ Future<double> _typeChars(
   if (middleIndex == null || middleIndex.toInt() < 0) {
     throw StateError('Não foi possível posicionar o cursor no meio do doc.');
   }
+  final beforeCount =
+      (await page.evaluate<num?>('() => window.__perf.elementCount()')) ?? -1;
   // Aquecimento: primeira tecla paga custos de JIT/caches frios.
   await page.keyboard.type('a').timeout(budget);
   final stopwatch = Stopwatch()..start();
@@ -239,6 +252,15 @@ Future<double> _typeChars(
     }
   }
   stopwatch.stop();
+  final afterCount =
+      (await page.evaluate<num?>('() => window.__perf.elementCount()')) ?? -1;
+  final inserted = afterCount.toInt() - beforeCount.toInt();
+  stdout.writeln('[bench] sanidade: $inserted elementos inseridos '
+      '(esperado ${typed + 1})');
+  if (inserted < typed) {
+    throw StateError('Digitação não chegou ao editor: $inserted/$typed '
+        'teclas inseridas — latência medida seria inválida.');
+  }
   return stopwatch.elapsedMilliseconds / typed;
 }
 
@@ -259,7 +281,10 @@ Future<void> main(List<String> args) async {
   )..createSync(recursive: true);
 
   stdout.writeln('[bench] build dir: ${buildDir.path}');
-  await _copyDirectory(Directory('web'), buildDir);
+  // A shell web/ foi removida na reestruturação — o bench usa a mesma
+  // fixture do harness E2E (shell legada compatível com EditorApp).
+  await _copyDirectory(
+      Directory(p.join('test', 'e2e', 'fixtures', 'legacy_shell')), buildDir);
   final mainPath = p.join(buildDir.path, 'main.dart');
   File(mainPath).writeAsStringSync(_benchMainSource);
 
@@ -315,8 +340,7 @@ Future<void> main(List<String> args) async {
       stderr.writeln('[page:dialog] ${dialog.message}');
       dialog.accept();
     });
-    await page.goto('http://127.0.0.1:${server.port}',
-        wait: Until.networkIdle);
+    await page.goto('http://127.0.0.1:${server.port}', wait: Until.networkIdle);
     await page.waitForFunction('() => window.__perfReady === true',
         timeout: const Duration(seconds: 30));
 
@@ -334,6 +358,17 @@ Future<void> main(List<String> args) async {
             ?.toInt());
     stdout.writeln('[rowStats] '
         '${await page.evaluate<String?>('() => window.__perf.rowStats()')}');
+    // A digitação precisa do layout completo: sem isto o cursor no meio do
+    // documento cai além da fronteira da paginação sob demanda e as teclas
+    // são descartadas (medição inválida).
+    report(
+        'etp_finish_layout_ms',
+        (await page.evaluate<num?>('() => window.__perf.finishLayout()'))
+            ?.toDouble());
+    report(
+        'etp_pages_final',
+        (await page.evaluate<num?>('() => window.__perf.pageCount()'))
+            ?.toInt());
     stdout.writeln('[bench] digitando $chars teclas no ETP...');
     report('typing_etp_ms_per_key', await _typeChars(page, chars));
 
@@ -344,9 +379,10 @@ Future<void> main(List<String> args) async {
           'tr_pages',
           (await page.evaluate<num?>('() => window.__perf.pageCount()'))
               ?.toInt());
-      // F5.5: aguarda a paginação progressiva async terminar e confirma o
-      // total (deve bater com o layout completo).
-      await Future<void>.delayed(const Duration(seconds: 6));
+      report(
+          'tr_finish_layout_ms',
+          (await page.evaluate<num?>('() => window.__perf.finishLayout()'))
+              ?.toDouble());
       report(
           'tr_pages_final',
           (await page.evaluate<num?>('() => window.__perf.pageCount()'))

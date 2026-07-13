@@ -61,6 +61,7 @@ void main() {
             paraSpacingAfter: 8,
             paraIndentLeft: 24,
             paraIndentFirstLine: 12,
+            paraIndentRight: 36,
           ),
         ],
         original.main);
@@ -72,5 +73,14 @@ void main() {
     expect(xml, contains('w:lineRule="auto"'));
     expect(xml, contains('w:left="360"'));
     expect(xml, contains('w:firstLine="180"'));
+    expect(xml, contains('w:right="540"'));
+
+    // Reimportação: o recuo direito volta para o modelo (px = twips/15).
+    final reconverted = DocxToElementConverter.convert(reopened);
+    final withRight = reconverted.main
+        .where((IElement e) => e.paraIndentRight != null)
+        .toList(growable: false);
+    expect(withRight, isNotEmpty);
+    expect(withRight.first.paraIndentRight, closeTo(36, 0.1));
   });
 }

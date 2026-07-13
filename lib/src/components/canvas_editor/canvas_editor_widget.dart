@@ -273,6 +273,9 @@ class CanvasEditorWidget
     _ribbon?.syncRangeStyle(style);
     _compactToolbar?.syncRangeStyle(style);
     _floatingToolbar?.syncStyle(style);
+    // Régua acompanha o parágrafo do cursor (recuos), como no Word —
+    // reposiciona só os marcadores, sem reconstruir os ticks.
+    _ruler?.syncSelection();
     _scheduler.schedule(_floatingToolbar?.refresh ?? () {});
   }
 

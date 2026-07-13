@@ -736,14 +736,28 @@
   border-right: 5px solid transparent;
   border-top: 7px solid #59616d;
 }
-.ce-ruler__indent--left,
+/* Controle de 3 peças do Word: △ (hanging) sobre a caixa □ (recuo esq.). */
+.ce-ruler__indent--hanging,
 .ce-ruler__indent--right {
-  bottom: 1px;
+  bottom: 6px;
   border-left: 5px solid transparent;
   border-right: 5px solid transparent;
   border-bottom: 7px solid #59616d;
 }
-.ce-ruler__indent--right { pointer-events: none; }
+.ce-ruler__indent--leftbox {
+  bottom: 1px;
+  width: 10px;
+  height: 5px;
+  background: #59616d;
+  border-radius: 1px;
+}
+.ce-ruler-guide {
+  position: fixed;
+  z-index: 40;
+  width: 0;
+  border-left: 1px dashed #5b6470;
+  pointer-events: none;
+}
 .ce-rulers.is-dragging,
 .ce-rulers.is-dragging * { cursor: ew-resize !important; }
 .ce-rulers.is-dragging .ce-ruler-horizontal { overflow: visible; }

@@ -1392,7 +1392,7 @@ class CommandAdapt {
     ));
   }
 
-  void paragraphIndent(double left, double firstLine) {
+  void paragraphIndent(double left, double firstLine, [double? right]) {
     if (_isReadonly()) return;
     final IRange currentRange = range.getRange();
     if (currentRange.startIndex < 0 && currentRange.endIndex < 0) return;
@@ -1407,6 +1407,9 @@ class CommandAdapt {
       element
         ..paraIndentLeft = left
         ..paraIndentFirstLine = firstLine;
+      if (right != null) {
+        element.paraIndentRight = right > 0 ? right : null;
+      }
     }
     draw.render(IDrawOption(
       curIndex: collapsed ? currentRange.endIndex : currentRange.startIndex,
@@ -1424,6 +1427,17 @@ class CommandAdapt {
     }
     tableOperate.insertTable(row, col);
   }
+
+  /// "Repetir Linhas de Cabeçalho" (Word): marca/desmarca as linhas do topo
+  /// da tabela como cabeçalho repetido em cada página (w:tblHeader).
+  void toggleTableHeaderRow() {
+    if (_isReadonly()) {
+      return;
+    }
+    tableOperate.toggleTableHeaderRow();
+  }
+
+  bool isTableHeaderRowActive() => tableOperate.isTableHeaderRowActive();
 
   void insertTableTopRow() {
     if (_isReadonly()) {
@@ -2923,6 +2937,8 @@ class CommandAdapt {
   }
 
   void locationCatalog(String titleId) {
+    // O título pode estar além da fronteira da paginação sob demanda (F5.5).
+    draw.finishProgressiveLayout();
     final List<IElement> elementList =
         _castElementList(draw.getOriginalElementList());
 
