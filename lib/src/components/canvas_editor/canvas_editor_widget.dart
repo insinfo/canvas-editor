@@ -813,12 +813,28 @@ class CanvasEditorWidget
   @override
   void viewerDownload() => unawaited(downloadDocx());
 
-  /// Imprime via PDF VETORIAL num iframe oculto (como um leitor de PDF) —
-  /// texto nítido em qualquer impressora, sem rasterizar páginas.
+  IFrameElement? _printFrame;
+  String? _printObjectUrl;
+  StreamSubscription<Event>? _afterPrintSubscription;
+
+  void _disposePrintArtifacts() {
+    _printFrame?.remove();
+    _printFrame = null;
+    if (_printObjectUrl != null) {
+      Url.revokeObjectUrl(_printObjectUrl!);
+      _printObjectUrl = null;
+    }
+    _afterPrintSubscription?.cancel();
+    _afterPrintSubscription = null;
+  }
+
+  /// Imprime via PDF VETORIAL num iframe nomeado sem exibição — o print é
+  /// invocado em `window.frames['ce-printf']` via js_util (objeto JS cru;
+  /// o `contentWindow` do dart:html é um wrapper Dart e o callMethod nele
+  /// falha). Padrão comprovado no new_sali/frontend.
   @override
   Future<void> printDocument() async {
     await loading.show('Preparando impressão…');
-    String? url;
     try {
       Uint8List bytes;
       try {
@@ -827,52 +843,34 @@ class CanvasEditorWidget
       } catch (_) {
         bytes = await _exportRasterPdfFallback();
       }
-      url = Url.createObjectUrlFromBlob(
+
+      _disposePrintArtifacts();
+      _printObjectUrl = Url.createObjectUrlFromBlob(
         Blob(<Object>[bytes], 'application/pdf'),
       );
-      // SEM tamanho, mas NÃO oculto (display/visibility/opacity quebram o
-      // print do viewer de PDF em alguns browsers).
       final IFrameElement frame = IFrameElement()
-        ..style.position = 'fixed'
-        ..style.right = '0'
-        ..style.bottom = '0'
-        ..style.width = '0'
-        ..style.height = '0'
-        ..style.border = 'none'
-        ..setAttribute('aria-hidden', 'true')
-        ..src = url;
-      // O visualizador de PDF embutido monta de forma assíncrona após o
-      // onLoad — tenta imprimir com retry até pegar (máx ~6s).
-      void tryPrint(int attempt) {
-        try {
-          final dynamic win = frame.contentWindow;
-          if (win != null) {
-            js_util.callMethod(win, 'focus', <Object>[]);
-            js_util.callMethod(win, 'print', <Object>[]);
-            return;
-          }
-        } catch (error) {
-          window.console.warn('printDocument: tentativa $attempt falhou '
-              '($error)');
-        }
-        if (attempt < 12) {
-          Timer(const Duration(milliseconds: 500), () => tryPrint(attempt + 1));
-        }
-      }
-
-      frame.onLoad.first.then((_) {
-        Timer(const Duration(milliseconds: 600), () => tryPrint(0));
-      });
+        ..id = 'ce-printf'
+        ..name = 'ce-printf'
+        ..src = _printObjectUrl
+        ..style.display = 'none';
+      _printFrame = frame;
       document.body?.append(frame);
-      final String createdUrl = url;
-      // O diálogo de impressão segura o iframe; limpa com folga generosa.
-      Timer(const Duration(seconds: 90), () {
-        frame.remove();
-        Url.revokeObjectUrl(createdUrl);
+
+      _afterPrintSubscription = window.on['afterprint'].listen((_) {
+        _disposePrintArtifacts();
       });
+
+      await frame.onLoad.first;
+      try {
+        final dynamic frames = js_util.getProperty(window, 'frames');
+        final dynamic namedFrame = js_util.getProperty(frames, 'ce-printf');
+        js_util.callMethod(namedFrame, 'print', <Object>[]);
+      } catch (error) {
+        window.console.warn('printDocument: print via iframe falhou ($error). '
+            'Use Ctrl+P.');
+      }
     } catch (error) {
       config.onError?.call(error);
-      if (url != null) Url.revokeObjectUrl(url);
     } finally {
       loading.hide();
     }
