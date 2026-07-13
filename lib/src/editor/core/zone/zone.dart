@@ -128,10 +128,14 @@ class Zone {
     final double offsetX = _indicatorTitleTranslate[0] * scale;
     final double offsetY = _indicatorTitleTranslate[1] * scale;
 
-    final double indicatorHeight =
-        isHeaderZone ? _getHeaderHeight() : _getFooterHeight();
+    // A moldura abraça o CONTEÚDO real do header/rodapé (como no Word) —
+    // _getHeaderHeight/_getFooterHeight são o TETO (25% da página), usados
+    // só como faixa de clique, e deixavam a moldura gigante.
+    double indicatorHeight = isHeaderZone
+        ? ((_draw.getHeader() as dynamic).getHeight() as num?)?.toDouble() ?? 0
+        : ((_draw.getFooter() as dynamic).getHeight() as num?)?.toDouble() ?? 0;
     if (indicatorHeight <= 0) {
-      return;
+      indicatorHeight = 24; // zona vazia: faixa mínima visível
     }
     final double indicatorTop = isHeaderZone
         ? _getHeaderTop()
@@ -178,7 +182,9 @@ class Zone {
       final SpanElement lineBottom = SpanElement()
         ..classes.add(
             '${editor_constants.editorPrefix}-zone-indicator-border__bottom')
-        ..style.top = '${indicatorBottomY}px';
+        ..style.top = '${indicatorBottomY}px'
+        ..style.width = '${innerWidth}px'
+        ..style.marginLeft = '${margins[3]}px';
       _indicatorContainer!.append(lineBottom);
 
       final SpanElement lineRight = SpanElement()

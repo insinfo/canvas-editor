@@ -64,12 +64,16 @@ class TextBoxTool {
   }
 
   void _select(HeaderTextBoxRect rect) {
-    _selectedIndex = rect.index;
-    // Esconde o caret do editor — a seleção é da caixa, não de texto
-    // (sem isto o cursor da posição anterior fica visível, gigante).
+    // Limpa QUALQUER seleção anterior (resizer de imagem, popup, caret e o
+    // range da shell) — evita duas mini-UIs contextuais simultâneas.
     try {
-      (_draw.getCursor() as dynamic)?.recoveryCursor();
+      _draw.clearSideEffect(); // inclui este tool (overlay antigo)
+      final dynamic rangeManager = _draw.getRange();
+      rangeManager?.clearRange?.call();
+      // Notifica a shell (rangeStyleChange) p/ a mini-toolbar flutuante sumir.
+      rangeManager?.setRangeStyle?.call();
     } catch (_) {}
+    _selectedIndex = rect.index;
     _renderOverlay(rect);
   }
 
