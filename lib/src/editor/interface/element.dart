@@ -499,6 +499,9 @@ class IElement
   double? paraIndentLeft;
   double? paraIndentFirstLine;
 
+  /// `w:ind@right` em px: recuo à direita (reduz a largura útil da linha).
+  double? paraIndentRight;
+
   // IElementRule
   @override
   bool? hide;
@@ -672,6 +675,7 @@ class IElement
     this.paraSpacingAfter,
     this.paraIndentLeft,
     this.paraIndentFirstLine,
+    this.paraIndentRight,
     // IElementRule
     this.hide,
     // IElementGroup

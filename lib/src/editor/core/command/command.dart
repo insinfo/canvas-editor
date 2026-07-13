@@ -167,8 +167,8 @@ class Command {
         after: after,
       );
 
-  void executeParagraphIndent(double left, double firstLine) =>
-      _adapt.paragraphIndent(left, firstLine);
+  void executeParagraphIndent(double left, double firstLine, [double? right]) =>
+      _adapt.paragraphIndent(left, firstLine, right);
 
   // Table commands --------------------------------------------------------
   void executeInsertTable(int row, int col) => _adapt.insertTable(row, col);
@@ -214,6 +214,11 @@ class Command {
       _adapt.tableTdBackgroundColor(payload);
 
   void executeTableSelectAll() => _adapt.tableSelectAll();
+
+  /// "Repetir Linhas de Cabeçalho" do Word (w:tblHeader) na linha atual.
+  void executeToggleTableHeaderRow() => _adapt.toggleTableHeaderRow();
+
+  bool getIsTableHeaderRowActive() => _adapt.isTableHeaderRowActive();
 
   // Media & hyperlink -----------------------------------------------------
   String? executeImage(IDrawImagePayload payload) => _adapt.image(payload);
@@ -340,8 +345,7 @@ class Command {
       _adapt.locationCatalog(titleId);
 
   /// Navega até um bookmark interno (alvo de hyperlink `#nome`).
-  bool executeLocationBookmark(String name) =>
-      _adapt.locationBookmark(name);
+  bool executeLocationBookmark(String name) => _adapt.locationBookmark(name);
 
   void executeWordTool() => _adapt.wordTool();
 

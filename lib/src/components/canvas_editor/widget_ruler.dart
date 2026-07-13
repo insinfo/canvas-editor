@@ -6,13 +6,23 @@ import '../../editor/dataset/enum/editor.dart';
 import '../../editor/interface/element.dart';
 import '../core/ui_component.dart';
 
-enum _RulerDrag { none, marginLeft, marginRight, indentLeft, firstLine }
+enum _RulerDrag {
+  none,
+  marginLeft,
+  marginRight,
+  indentLeft, // caixa: move recuo esquerdo + primeira linha juntos (Word)
+  firstLine, // ▽ superior: só o delta da primeira linha
+  hanging, // △ inferior: recuo das linhas de continuação (mantém a 1ª fixa)
+  indentRight, // △ direito
+}
 
-/// Régua de página inspirada no Word/DocumentServer.
+/// Régua de página estilo Word/OnlyOffice.
 ///
 /// A escala nasce na margem esquerda, usa quartos de centímetro e separa
 /// visualmente o papel (cinza) da área editável (branca). Margens e recuos
-/// podem ser arrastados sem criar elementos dentro do stage do documento.
+/// são arrastáveis com o controle de 3 peças do Word (primeira linha,
+/// deslocamento e caixa do recuo esquerdo) + recuo direito, com linha-guia
+/// vertical pontilhada sobre o documento durante o arrasto.
 class WidgetRuler extends UiComponent {
   WidgetRuler(this._command, this._draw) {
     root = DivElement()..classes.add('ce-rulers');
@@ -44,6 +54,19 @@ class WidgetRuler extends UiComponent {
   List<double> _margins = <double>[0, 0, 0, 0];
   double _indentLeft = 0;
   double _firstLine = 0;
+  double _indentRight = 0;
+
+  // Marcadores persistentes (reposicionados sem reconstruir a régua — o
+  // sync com o cursor roda por tecla via rangeStyleChange coalescido).
+  DivElement? _markerMarginLeft;
+  DivElement? _markerMarginRight;
+  DivElement? _markerFirstLine;
+  DivElement? _markerHanging;
+  DivElement? _markerLeftBox;
+  DivElement? _markerRight;
+
+  // Linha-guia vertical (Word/OnlyOffice) durante o arrasto.
+  DivElement? _guide;
 
   void refresh() {
     _scale = (_draw.getOptions().scale ?? 1).toDouble();
@@ -66,17 +89,38 @@ class WidgetRuler extends UiComponent {
     _buildVertical(pxPerCm, verticalHeight);
   }
 
+  /// Sincronização leve com o cursor: re-lê os recuos do parágrafo da
+  /// seleção e reposiciona só os marcadores (sem reconstruir os ticks).
+  void syncSelection() {
+    if (_drag != _RulerDrag.none) return;
+    if (_markerFirstLine == null) return;
+    final double beforeLeft = _indentLeft;
+    final double beforeFirst = _firstLine;
+    final double beforeRight = _indentRight;
+    _readParagraphIndents();
+    if (beforeLeft == _indentLeft &&
+        beforeFirst == _firstLine &&
+        beforeRight == _indentRight) {
+      return;
+    }
+    _positionMarkers();
+  }
+
   void _readParagraphIndents() {
     _indentLeft = 0;
     _firstLine = 0;
+    _indentRight = 0;
     try {
       final dynamic raw = _draw.getRange().getRangeParagraphElementList();
       if (raw is List) {
         for (final dynamic item in raw) {
           if (item is! IElement) continue;
-          if (item.paraIndentLeft != null || item.paraIndentFirstLine != null) {
+          if (item.paraIndentLeft != null ||
+              item.paraIndentFirstLine != null ||
+              item.paraIndentRight != null) {
             _indentLeft = (item.paraIndentLeft ?? 0) * _scale;
             _firstLine = (item.paraIndentFirstLine ?? 0) * _scale;
+            _indentRight = (item.paraIndentRight ?? 0) * _scale;
             break;
           }
         }
@@ -102,21 +146,46 @@ class WidgetRuler extends UiComponent {
     ]);
     _appendTicks(_horizontal,
         extent: _pageWidth, pxPerCm: pxPerCm, zero: left, horizontal: true);
+    _markerMarginLeft = _marker(
+        'ce-ruler__margin-handle ce-ruler__margin-handle--left',
+        'Margem esquerda',
+        _RulerDrag.marginLeft);
+    _markerMarginRight = _marker(
+        'ce-ruler__margin-handle ce-ruler__margin-handle--right',
+        'Margem direita',
+        _RulerDrag.marginRight);
+    _markerFirstLine = _marker('ce-ruler__indent ce-ruler__indent--first',
+        'Recuo da primeira linha', _RulerDrag.firstLine);
+    _markerHanging = _marker('ce-ruler__indent ce-ruler__indent--hanging',
+        'Recuo deslocado', _RulerDrag.hanging);
+    _markerLeftBox = _marker('ce-ruler__indent ce-ruler__indent--leftbox',
+        'Recuo à esquerda', _RulerDrag.indentLeft);
+    _markerRight = _marker('ce-ruler__indent ce-ruler__indent--right',
+        'Recuo à direita', _RulerDrag.indentRight);
     _horizontal.children.addAll(<Element>[
-      _marker('ce-ruler__margin-handle ce-ruler__margin-handle--left', left,
-          'Margem esquerda', _RulerDrag.marginLeft),
-      _marker('ce-ruler__margin-handle ce-ruler__margin-handle--right',
-          _pageWidth - right, 'Margem direita', _RulerDrag.marginRight),
-      _marker(
-          'ce-ruler__indent ce-ruler__indent--first',
-          left + _indentLeft + _firstLine,
-          'Recuo da primeira linha',
-          _RulerDrag.firstLine),
-      _marker('ce-ruler__indent ce-ruler__indent--left', left + _indentLeft,
-          'Recuo esquerdo', _RulerDrag.indentLeft),
-      _marker('ce-ruler__indent ce-ruler__indent--right', _pageWidth - right,
-          'Recuo direito', _RulerDrag.none),
+      _markerMarginLeft!,
+      _markerMarginRight!,
+      _markerFirstLine!,
+      _markerHanging!,
+      _markerLeftBox!,
+      _markerRight!,
     ]);
+    _positionMarkers();
+  }
+
+  void _positionMarkers() {
+    final double left = _margins[3];
+    final double right = _margins[1];
+    void setX(DivElement? marker, double x) {
+      marker?.style.left = '${x.clamp(0, _pageWidth)}px';
+    }
+
+    setX(_markerMarginLeft, left);
+    setX(_markerMarginRight, _pageWidth - right);
+    setX(_markerFirstLine, left + _indentLeft + _firstLine);
+    setX(_markerHanging, left + _indentLeft);
+    setX(_markerLeftBox, left + _indentLeft);
+    setX(_markerRight, _pageWidth - right - _indentRight);
   }
 
   void _buildVertical(double pxPerCm, double extent) {
@@ -183,11 +252,9 @@ class WidgetRuler extends UiComponent {
     }
   }
 
-  DivElement _marker(
-      String classes, double position, String title, _RulerDrag drag) {
+  DivElement _marker(String classes, String title, _RulerDrag drag) {
     final DivElement marker = DivElement()
       ..classes.addAll(classes.split(' '))
-      ..style.left = '${position.clamp(0, _pageWidth)}px'
       ..title = title;
     if (drag != _RulerDrag.none) {
       marker.dataset['drag'] = drag.name;
@@ -210,6 +277,26 @@ class WidgetRuler extends UiComponent {
       ..preventDefault()
       ..stopPropagation();
     root.classes.add('is-dragging');
+    _showGuide(event.client.x.toDouble());
+  }
+
+  void _showGuide(double clientX) {
+    final Rectangle<num> bounds = _horizontal.getBoundingClientRect();
+    final double top = bounds.bottom.toDouble();
+    final DivElement guide =
+        _guide ??= DivElement()..classes.add('ce-ruler-guide');
+    guide.style
+      ..top = '${top}px'
+      ..height = '${(window.innerHeight ?? 800) - top}px'
+      ..left = '${clientX}px';
+    if (guide.parent == null) {
+      document.body?.append(guide);
+    }
+  }
+
+  void _hideGuide() {
+    _guide?.remove();
+    _guide = null;
   }
 
   void _handleDrag(MouseEvent event) {
@@ -227,16 +314,29 @@ class WidgetRuler extends UiComponent {
             .clamp(0, _pageWidth - _margins[3] - minContent)
             .toDouble();
       case _RulerDrag.indentLeft:
+        // Caixa: move recuo esquerdo mantendo o delta da 1ª linha.
         _indentLeft =
             (x - _margins[3]).clamp(0, _pageWidth - _margins[1]).toDouble();
+      case _RulerDrag.hanging:
+        // △: muda o recuo das linhas de continuação mantendo a 1ª linha
+        // fixa no lugar (o delta compensa), como no Word.
+        final double firstLineAbs = _indentLeft + _firstLine;
+        _indentLeft =
+            (x - _margins[3]).clamp(0, _pageWidth - _margins[1]).toDouble();
+        _firstLine = firstLineAbs - _indentLeft;
       case _RulerDrag.firstLine:
         _firstLine = (x - _margins[3] - _indentLeft)
             .clamp(-_indentLeft, _pageWidth - _margins[1])
             .toDouble();
+      case _RulerDrag.indentRight:
+        _indentRight = (_pageWidth - _margins[1] - x)
+            .clamp(0, _pageWidth - _margins[1] - _margins[3] - minContent)
+            .toDouble();
       case _RulerDrag.none:
         return;
     }
-    _buildHorizontal(96 / 2.54 * _scale);
+    _showGuide(event.client.x.toDouble());
+    _positionMarkers();
   }
 
   void _finishDrag(MouseEvent _) {
@@ -244,6 +344,7 @@ class WidgetRuler extends UiComponent {
     final _RulerDrag completed = _drag;
     _drag = _RulerDrag.none;
     root.classes.remove('is-dragging');
+    _hideGuide();
     if (completed == _RulerDrag.marginLeft ||
         completed == _RulerDrag.marginRight) {
       final List<double> visual =
@@ -254,7 +355,7 @@ class WidgetRuler extends UiComponent {
           : visual);
     } else {
       _command.executeParagraphIndent(
-          _indentLeft / _scale, _firstLine / _scale);
+          _indentLeft / _scale, _firstLine / _scale, _indentRight / _scale);
     }
     window.requestAnimationFrame((_) => refresh());
   }
@@ -262,5 +363,11 @@ class WidgetRuler extends UiComponent {
   void setVisible(bool visible) {
     root.style.display = visible ? '' : 'none';
     if (visible) window.requestAnimationFrame((_) => refresh());
+  }
+
+  @override
+  void dispose() {
+    _hideGuide();
+    super.dispose();
   }
 }

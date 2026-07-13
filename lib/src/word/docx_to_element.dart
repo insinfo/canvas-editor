@@ -888,6 +888,7 @@ class DocxToElementConverter {
     }
     final direct = pPr.indent;
     final int? leftTwips = direct?.leftTwips ?? numIndent?.leftTwips;
+    final int? rightTwips = direct?.rightTwips ?? numIndent?.rightTwips;
     final int? firstLineTwips =
         direct?.firstLineTwips ?? numIndent?.firstLineTwips;
     final int? hangingTwips = direct?.hangingTwips ?? numIndent?.hangingTwips;
@@ -910,6 +911,7 @@ class DocxToElementConverter {
           spacing?.beforeTwips == null ? null : spacing!.beforeTwips! / 15.0,
       afterPx: spacing?.afterTwips == null ? null : spacing!.afterTwips! / 15.0,
       indentLeftPx: leftTwips == null ? null : leftTwips / 15.0,
+      indentRightPx: rightTwips == null ? null : rightTwips / 15.0,
       indentFirstLinePx: ((firstLineTwips ?? 0) - (hangingTwips ?? 0)) == 0
           ? null
           : ((firstLineTwips ?? 0) - (hangingTwips ?? 0)) / 15.0,
@@ -925,6 +927,7 @@ class DocxToElementConverter {
     element.paraSpacingAfter = spacing.afterPx;
     element.paraIndentLeft = spacing.indentLeftPx;
     element.paraIndentFirstLine = spacing.indentFirstLinePx;
+    element.paraIndentRight = spacing.indentRightPx;
   }
 
   static String? _hexColor(String? color) {
@@ -968,9 +971,8 @@ class DocxToElementConverter {
       IElement element, String key, List<String> values) {
     if (values.isEmpty) return;
     final ext = element.extension;
-    final map = ext is Map
-        ? Map<String, dynamic>.from(ext)
-        : <String, dynamic>{};
+    final map =
+        ext is Map ? Map<String, dynamic>.from(ext) : <String, dynamic>{};
     final existing = map[key];
     map[key] = <String>[
       if (existing is List) ...existing.cast<String>(),
@@ -1037,6 +1039,7 @@ class _ParaSpacing {
   final double? afterPx;
   final double? indentLeftPx;
   final double? indentFirstLinePx;
+  final double? indentRightPx;
 
   const _ParaSpacing({
     required this.lineSpacingRule,
@@ -1045,5 +1048,6 @@ class _ParaSpacing {
     this.afterPx,
     this.indentLeftPx,
     this.indentFirstLinePx,
+    this.indentRightPx,
   });
 }

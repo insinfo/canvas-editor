@@ -209,6 +209,69 @@ class TableOperate {
 		_tableTool?.render();
 	}
 
+	/// Marca as linhas 0..linha-do-cursor como cabeçalho repetido
+	/// (`pagingRepeat`/`w:tblHeader`) — como o "Repetir Linhas de Cabeçalho"
+	/// do Word — ou desmarca todas quando a linha atual já é cabeçalho.
+	/// Só opera na PRIMEIRA parte de uma tabela paginada: nas continuações as
+	/// linhas de cabeçalho são clones sintéticos (a reconstituição os descarta).
+	void toggleTableHeaderRow() {
+		final dynamic positionContext = _position?.getPositionContext();
+		if (positionContext == null || positionContext.isTable != true) {
+			return;
+		}
+		final int? index = positionContext.index as int?;
+		final int? trIndex = positionContext.trIndex as int?;
+		if (index == null || trIndex == null) {
+			return;
+		}
+		final List<IElement> elementList = _draw.getOriginalElementList();
+		if (index < 0 || index >= elementList.length) {
+			return;
+		}
+		final IElement element = elementList[index];
+		if ((element.pagingIndex ?? 0) != 0) {
+			return;
+		}
+		final List<ITr>? trList = element.trList;
+		if (trList == null || trIndex < 0 || trIndex >= trList.length) {
+			return;
+		}
+		final bool turnOn = trList[trIndex].pagingRepeat != true;
+		if (turnOn) {
+			for (int r = 0; r <= trIndex; r++) {
+				trList[r].pagingRepeat = true;
+			}
+		} else {
+			for (final ITr tr in trList) {
+				tr.pagingRepeat = null;
+			}
+		}
+		_draw.render(IDrawOption(curIndex: 0));
+		_tableTool?.render();
+	}
+
+	/// True quando a linha do cursor está marcada como cabeçalho repetido.
+	bool isTableHeaderRowActive() {
+		final dynamic positionContext = _position?.getPositionContext();
+		if (positionContext == null || positionContext.isTable != true) {
+			return false;
+		}
+		final int? index = positionContext.index as int?;
+		final int? trIndex = positionContext.trIndex as int?;
+		if (index == null || trIndex == null) {
+			return false;
+		}
+		final List<IElement> elementList = _draw.getOriginalElementList();
+		if (index < 0 || index >= elementList.length) {
+			return false;
+		}
+		final List<ITr>? trList = elementList[index].trList;
+		if (trList == null || trIndex < 0 || trIndex >= trList.length) {
+			return false;
+		}
+		return trList[trIndex].pagingRepeat == true;
+	}
+
 	void insertTableBottomRow() {
 		final dynamic positionContext = _position?.getPositionContext();
 		if (positionContext == null || positionContext.isTable != true) {

@@ -84,6 +84,7 @@ IElement _cloneElement(
       paraSpacingAfter: source.paraSpacingAfter,
       paraIndentLeft: source.paraIndentLeft,
       paraIndentFirstLine: source.paraIndentFirstLine,
+      paraIndentRight: source.paraIndentRight,
       hide: source.hide,
       conceptId: source.conceptId,
       actualSize: source.actualSize,
@@ -131,6 +132,7 @@ IElement _cloneElement(
     paraSpacingAfter: source.paraSpacingAfter,
     paraIndentLeft: source.paraIndentLeft,
     paraIndentFirstLine: source.paraIndentFirstLine,
+    paraIndentRight: source.paraIndentRight,
     textDecoration: _cloneTextDecoration(source.textDecoration),
     hide: source.hide,
     groupIds: source.groupIds?.toList(),
@@ -800,6 +802,8 @@ dynamic _getElementAttr(IElement element, String attr) {
       return element.paraIndentLeft;
     case 'paraIndentFirstLine':
       return element.paraIndentFirstLine;
+    case 'paraIndentRight':
+      return element.paraIndentRight;
     case 'letterSpacing':
       return element.letterSpacing;
     case 'textDecoration':
@@ -973,6 +977,9 @@ void _setElementAttr(IElement element, String attr, dynamic value) {
       break;
     case 'paraIndentFirstLine':
       element.paraIndentFirstLine = value as double?;
+      break;
+    case 'paraIndentRight':
+      element.paraIndentRight = value as double?;
       break;
     case 'letterSpacing':
       element.letterSpacing = value as double?;

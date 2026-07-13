@@ -248,6 +248,15 @@ class Draw {
   // restante fica pendente. Inspirado no Google Docs/Kix, novas páginas só são
   // descobertas quando a rolagem encosta no fim já conhecido; não há corrida
   // em background para paginar o documento inteiro logo após abrir.
+  // Repintura dirigida do fast path (P2+): faixa de rows recomputadas pelo
+  // _tryFastParagraphLayout e se a altura do parágrafo ficou idêntica —
+  // quando fica, só as páginas dessa faixa redesenham no _lazyRender.
+  int? _fastLayoutDirtyRowIndexStart;
+  int? _fastLayoutDirtyRowIndexEnd;
+  bool _fastLayoutHeightUnchanged = false;
+  int? _fastRepaintFromPage;
+  int? _fastRepaintToPage;
+
   Timer? _progressiveTimer;
   int _progressiveLayoutVersion = 0;
   _RowLayoutState? _progressiveResume;
@@ -463,6 +472,56 @@ class Draw {
     final int version = _progressiveLayoutVersion;
     _progressiveTimer =
         Timer(_progressiveTickDelay, () => _progressiveTick(version));
+  }
+
+  /// Conclui SINCRONAMENTE a paginação progressiva pendente (F5.5). Usado
+  /// quando um consumidor precisa de posições além da fronteira materializada:
+  /// navegação para bookmark/título, Ctrl+End, benchmarks. No fluxo normal a
+  /// paginação continua crescendo sob demanda pela rolagem.
+  void finishProgressiveLayout() {
+    final _RowLayoutState? state = _progressiveResume;
+    final IComputeRowListPayload? payload = _progressiveRowPayload;
+    if (state == null || payload == null) {
+      return;
+    }
+    _progressiveTimer?.cancel();
+    _progressiveTimer = null;
+    _progressiveLayoutVersion += 1;
+    while (!state.done) {
+      state.budgetRows = 1 << 20;
+      final List<IRow> rows = computeRowList(payload, resume: state);
+      _rowList
+        ..clear()
+        ..addAll(rows);
+    }
+    final List<List<IRow>> pageRows = _computePageList();
+    _pageRowList
+      ..clear()
+      ..addAll(pageRows);
+    _computedElementCount = _elementList.length;
+    (_position as Position?)?.computePositionList();
+    _syncPageCanvases();
+    if (getIsPagingMode()) {
+      _lazyRender();
+    } else {
+      _immediateRender();
+    }
+    _listener?.pageSizeChange?.call(_pageRowList.length);
+    if (_eventBus?.isSubscribe?.call('pageSizeChange') == true) {
+      _eventBus.emit('pageSizeChange', _pageRowList.length);
+    }
+    _progressiveResume = null;
+    _progressiveRowPayload = null;
+    _progressiveTargetPage = null;
+    (_area as Area?)?.compute();
+    if (_mode != EditorMode.print) {
+      final Search? search = _search as Search?;
+      final String? keyword = search?.getSearchKeyword();
+      if (keyword != null && keyword.isNotEmpty) {
+        search?.compute(keyword);
+      }
+      (_control as Control?)?.computeHighlightList();
+    }
   }
 
   List<int> getVisiblePageNoList() => List<int>.from(_visiblePageNoList);
@@ -2109,7 +2168,16 @@ class Draw {
       );
       final double computedOffsetX = curRow.offsetX ??
           (element.listId != null ? (listStyleMap[element.listId!] ?? 0) : 0);
-      final double availableWidth = innerWidth - computedOffsetX;
+      // `w:ind@right`: reduz a largura útil da linha; clamp para nunca
+      // deixar a linha estreita demais (evita loop de wrap degenerado).
+      double paraRightIndent = (element.paraIndentRight ?? 0) * scale;
+      if (paraRightIndent > 0 &&
+          innerWidth - computedOffsetX - paraRightIndent < 50) {
+        final double clamped = innerWidth - computedOffsetX - 50;
+        paraRightIndent = clamped > 0 ? clamped : 0;
+      }
+      final double availableWidth =
+          innerWidth - computedOffsetX - paraRightIndent;
       final bool isStartElement = curRow.elementList.length == 1;
       if (isStartElement) {
         x += computedOffsetX;
@@ -3386,6 +3454,21 @@ class Draw {
       sliceRows[j].rowIndex = baseRowIndex + j;
     }
     final int rowDelta = sliceRows.length - (rowEnd - rowStart);
+    // Repintura dirigida (modelo OnlyOffice OnRecalculatePage): se o nº de
+    // rows e a altura total do parágrafo não mudaram, nada abaixo dele se
+    // move — só a(s) página(s) que contêm o parágrafo precisam redesenhar.
+    double oldSliceHeight = 0;
+    for (int j = rowStart; j < rowEnd; j++) {
+      oldSliceHeight += _rowList[j].height + (_rowList[j].offsetY ?? 0);
+    }
+    double newSliceHeight = 0;
+    for (final IRow row in sliceRows) {
+      newSliceHeight += row.height + (row.offsetY ?? 0);
+    }
+    _fastLayoutDirtyRowIndexStart = baseRowIndex;
+    _fastLayoutDirtyRowIndexEnd = baseRowIndex + sliceRows.length;
+    _fastLayoutHeightUnchanged =
+        rowDelta == 0 && (oldSliceHeight - newSliceHeight).abs() < 0.005;
     for (int j = rowEnd; j < _rowList.length; j++) {
       final IRow row = _rowList[j];
       row.startIndex += delta;
@@ -4146,8 +4229,16 @@ class Draw {
     if (_lazyRenderObserver != null &&
         _observedPageCount == _pageList.length &&
         _livePages.isNotEmpty) {
+      // Repintura dirigida (P2+): quando o fast path delimitou a mudança,
+      // pula as páginas vivas fora da faixa suja (consume-once).
+      final int? repaintFrom = _fastRepaintFromPage;
+      final int? repaintTo = _fastRepaintToPage;
+      _fastRepaintFromPage = null;
+      _fastRepaintToPage = null;
       for (final int i in _livePages.toList(growable: false)) {
         if (i >= 0 && i < _pageRowList.length) {
+          if (repaintFrom != null && i < repaintFrom) continue;
+          if (repaintTo != null && i > repaintTo) continue;
           _setPageCanvasLive(i, true);
           _drawPage(
             IDrawPagePayload(
@@ -4161,6 +4252,8 @@ class Draw {
       }
       return;
     }
+    _fastRepaintFromPage = null;
+    _fastRepaintToPage = null;
     _disconnectLazyRender();
     // Buffer (~1 viewport) para materializar as páginas um pouco antes de
     // entrarem na tela e só liberar quando já saíram com folga — evita
@@ -4274,6 +4367,9 @@ class Draw {
     _progressiveResume = null;
     _progressiveRowPayload = null;
     _progressiveTargetPage = null;
+    // Faixa de repintura dirigida vale só para o render que a produziu.
+    _fastRepaintFromPage = null;
+    _fastRepaintToPage = null;
     final IDrawOption renderOption = option ?? IDrawOption();
     final bool isCompute = renderOption.isCompute ?? true;
     final bool isLazy = renderOption.isLazy ?? true;
@@ -4307,6 +4403,9 @@ class Draw {
       // parágrafo editado e reusa todas as outras. Precisa rodar ANTES do
       // reset de floatPositionList (usa a lista como guarda).
       bool fastLayoutDone = isRowListPrecomputed;
+      _fastLayoutDirtyRowIndexStart = null;
+      _fastLayoutDirtyRowIndexEnd = null;
+      _fastLayoutHeightUnchanged = false;
       if (!fastLayoutDone &&
           renderOption.fastLayoutIndex != null &&
           !isSourceHistory) {
@@ -4379,6 +4478,38 @@ class Draw {
       _pageRowList
         ..clear()
         ..addAll(pageRows);
+      // Repintura dirigida (P2+): mapeia a faixa de rows recomputadas pelo
+      // fast path para páginas. Altura idêntica → só as páginas da faixa;
+      // altura mudou → da 1ª página da faixa em diante (nada ACIMA muda).
+      _fastRepaintFromPage = null;
+      _fastRepaintToPage = null;
+      final int? dirtyRowStart = _fastLayoutDirtyRowIndexStart;
+      final int? dirtyRowEnd = _fastLayoutDirtyRowIndexEnd;
+      // Busca ativa: highlights de outras páginas podem mudar com a edição —
+      // sem repintura dirigida nesse caso.
+      final bool searchActive = search?.getSearchKeyword()?.isNotEmpty == true;
+      if (fastLayoutDone &&
+          !searchActive &&
+          dirtyRowStart != null &&
+          dirtyRowEnd != null) {
+        int? fromPage;
+        int? toPage;
+        for (int p = 0; p < _pageRowList.length; p++) {
+          final List<IRow> rowsOfPage = _pageRowList[p];
+          if (rowsOfPage.isEmpty) continue;
+          final int first = rowsOfPage.first.rowIndex;
+          final int last = rowsOfPage.last.rowIndex;
+          if (last >= dirtyRowStart && fromPage == null) fromPage = p;
+          if (first < dirtyRowEnd) toPage = p;
+          if (first >= dirtyRowEnd) break;
+        }
+        if (fromPage != null) {
+          _fastRepaintFromPage = fromPage;
+          if (_fastLayoutHeightUnchanged && toPage != null) {
+            _fastRepaintToPage = toPage;
+          }
+        }
+      }
       // Enquanto a paginação progressiva não termina, `_rowList` é parcial —
       // 0 desabilita o fast path de edição (que assume o layout completo);
       // uma edição durante a paginação cai no relayout completo (correto).
@@ -4835,6 +4966,8 @@ class Draw {
   /// rola a viewport (mesma mecânica do locationCatalog). Retorna `false`
   /// quando o bookmark não existe no documento.
   bool locationBookmark(String name) {
+    // O alvo pode estar além da fronteira da paginação sob demanda.
+    finishProgressiveLayout();
     final List<IElement> elementList =
         (getOriginalElementList() as List).cast<IElement>();
 
@@ -4892,8 +5025,8 @@ class Draw {
       trId: context['trId'] as String?,
       tableId: context['tableId'] as String?,
     ));
-    rangeManager.setRange(endIndex, endIndex,
-        context['tableId'] as String?, null, null, null, null);
+    rangeManager.setRange(endIndex, endIndex, context['tableId'] as String?,
+        null, null, null, null);
     render(IDrawOption(
       curIndex: endIndex,
       isSetCursor: true,

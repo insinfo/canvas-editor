@@ -442,6 +442,7 @@ class EditorToDocx {
     final double? afterPx = paragraphAnchor?.paraSpacingAfter;
     final double? indentLeftPx = paragraphAnchor?.paraIndentLeft;
     final double? firstLinePx = paragraphAnchor?.paraIndentFirstLine;
+    final double? indentRightPx = paragraphAnchor?.paraIndentRight;
     final WpSpacing? spacing =
         lineRule == null && beforePx == null && afterPx == null
             ? base?.spacing
@@ -459,20 +460,23 @@ class EditorToDocx {
                         : (lineValue * 15).round(),
                 lineRule: lineRule ?? base?.spacing?.lineRule,
               );
-    final WpIndent? indent = indentLeftPx == null && firstLinePx == null
-        ? base?.indent
-        : WpIndent(
-            leftTwips: indentLeftPx == null
-                ? base?.indent?.leftTwips
-                : (indentLeftPx * 15).round(),
-            rightTwips: base?.indent?.rightTwips,
-            firstLineTwips: firstLinePx != null && firstLinePx >= 0
-                ? (firstLinePx * 15).round()
-                : null,
-            hangingTwips: firstLinePx != null && firstLinePx < 0
-                ? (-firstLinePx * 15).round()
-                : null,
-          );
+    final WpIndent? indent =
+        indentLeftPx == null && firstLinePx == null && indentRightPx == null
+            ? base?.indent
+            : WpIndent(
+                leftTwips: indentLeftPx == null
+                    ? base?.indent?.leftTwips
+                    : (indentLeftPx * 15).round(),
+                rightTwips: indentRightPx == null
+                    ? base?.indent?.rightTwips
+                    : (indentRightPx * 15).round(),
+                firstLineTwips: firstLinePx != null && firstLinePx >= 0
+                    ? (firstLinePx * 15).round()
+                    : null,
+                hangingTwips: firstLinePx != null && firstLinePx < 0
+                    ? (-firstLinePx * 15).round()
+                    : null,
+              );
 
     return WpParagraph(
       properties: base == null &&

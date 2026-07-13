@@ -1,5 +1,22 @@
 # Plano de expansão — aproximar o editor do Word/Google Docs
 
+## Estado de execução
+
+| Item | Estado | Evidência |
+|---|---|---|
+| M1 §4.1 títulos customizados (outlineLvl herdado) | ✅ já funcionava (cascata `resolveParagraph`) — coberto por teste novo | `test/word/bookmark_internal_link_test.dart` |
+| M1 §4.2 bookmarks + links internos | ✅ (2026-07-13) captura `w:bookmarkStart/End` → `extension['bookmarks']` + XML p/ regen; `Draw.locationBookmark`; clique em `#anchor` navega; `executeLocationBookmark` | 5 testes VM; round-trip byte-idêntico mantido |
+| PERF baseline honesto | ✅ bench consertado (shell legada + sanidade de teclas + `finishLayout`) — a medição anterior era inválida (teclas não chegavam ao editor) | `tool/bench/typing_bench.dart` |
+| PERF §6.1 repintura dirigida | ✅ (2026-07-13) fast path delimita rows sujas → `_lazyRender` repinta só a(s) página(s) afetadas (altura igual) ou da 1ª suja em diante; guarda p/ busca ativa. **TR: 165→68 ms/tecla (2,4×)**; ETP 56 ms | campos `_fastRepaint*` em draw.dart; bench |
+| PERF `finishProgressiveLayout()` | ✅ conclui a paginação sob demanda sincronamente — corrige navegação p/ além da fronteira (bookmark/catálogo) e destrava o bench | draw.dart; usado por locationBookmark/locationCatalog |
+| PERF §6.4 métricas actualBoundingBox | ✅ já implementado no fallback canvas (nada a fazer) | draw.dart:2492-2513 |
+| M2 §7 régua | ✅ (2026-07-13) linha-guia pontilhada no arrasto, controle 3 peças (▽ firstLine / △ hanging / □ caixa), recuo direito arrastável, sync com o cursor por frame | widget_ruler.dart + CSS |
+| M2 §7b `paraIndentRight` | ✅ modelo + layout (largura útil da row, com clamp) + conversão `w:ind@right` + export + régua | teste em title_export_test |
+| M3 header/footer multi-tipo | ⬜ | — |
+| M4 repeat header row + abas contextuais | ⬜ | — |
+| M5 TOC no corpo + tab stops | ⬜ | — |
+| PERF §6.2 modularização draw.dart / §6.3 workers | ⬜ | — |
+
 Data: 2026-07-13. Baseado em: exploração completa do `lib/` atual, do OnlyOffice
 DocumentServer (`D:\EuroOfficeNative\DocumentServer\sdkjs\word` — **apenas referência
 conceitual, AGPL, não copiar código**), do relatório Kix
