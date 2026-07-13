@@ -121,8 +121,6 @@ class Zone {
       return;
     }
 
-    final List<double> margins = _draw.getMargins();
-    final double innerWidth = _draw.getInnerWidth();
     final double pageHeight = _draw.getHeight();
     final double pageGap = _draw.getPageGap();
     final double offsetX = _indicatorTitleTranslate[0] * scale;
@@ -144,56 +142,29 @@ class Zone {
     _indicatorContainer = DivElement()
       ..classes.add('${editor_constants.editorPrefix}-zone-indicator');
 
+    // Como no Word: UMA linha tracejada na LARGURA TOTAL da página, na
+    // fronteira entre a zona e o corpo, com o rótulo na borda esquerda.
+    final double pageWidth = _draw.getWidth();
     for (int p = 0; p < pageList.length; p++) {
       final double startY = (pageHeight + pageGap) * p + indicatorTop;
-      final double indicatorLeftX = margins[3] - _indicatorPadding;
-      final double indicatorRightX =
-          margins[3] + innerWidth + _indicatorPadding;
-      final double indicatorTopY = isHeaderZone
-          ? startY - _indicatorPadding
-          : startY + indicatorHeight + _indicatorPadding;
-      final double indicatorBottomY = isHeaderZone
+      final double boundaryY = isHeaderZone
           ? startY + indicatorHeight + _indicatorPadding
           : startY - _indicatorPadding;
 
+      final SpanElement boundaryLine = SpanElement()
+        ..classes.add(
+            '${editor_constants.editorPrefix}-zone-indicator-border__bottom')
+        ..style.top = '${boundaryY}px'
+        ..style.width = '${pageWidth}px'
+        ..style.marginLeft = '0';
+      _indicatorContainer!.append(boundaryLine);
+
       final DivElement indicatorTitle = DivElement()
         ..text = _i18n.t('frame.${isHeaderZone ? 'header' : 'footer'}')
-        ..style.top = '${indicatorBottomY}px'
+        ..style.top = '${boundaryY}px'
         ..style.transform =
             'translate(${offsetX}px, ${offsetY}px) scale($scale)';
       _indicatorContainer!.append(indicatorTitle);
-
-      final SpanElement lineTop = SpanElement()
-        ..classes
-            .add('${editor_constants.editorPrefix}-zone-indicator-border__top')
-        ..style.top = '${indicatorTopY}px'
-        ..style.width = '${innerWidth}px'
-        ..style.marginLeft = '${margins[3]}px';
-      _indicatorContainer!.append(lineTop);
-
-      final SpanElement lineLeft = SpanElement()
-        ..classes
-            .add('${editor_constants.editorPrefix}-zone-indicator-border__left')
-        ..style.top = '${startY}px'
-        ..style.height = '${indicatorHeight}px'
-        ..style.left = '${indicatorLeftX}px';
-      _indicatorContainer!.append(lineLeft);
-
-      final SpanElement lineBottom = SpanElement()
-        ..classes.add(
-            '${editor_constants.editorPrefix}-zone-indicator-border__bottom')
-        ..style.top = '${indicatorBottomY}px'
-        ..style.width = '${innerWidth}px'
-        ..style.marginLeft = '${margins[3]}px';
-      _indicatorContainer!.append(lineBottom);
-
-      final SpanElement lineRight = SpanElement()
-        ..classes.add(
-            '${editor_constants.editorPrefix}-zone-indicator-border__right')
-        ..style.top = '${startY}px'
-        ..style.height = '${indicatorHeight}px'
-        ..style.left = '${indicatorRightX}px';
-      _indicatorContainer!.append(lineRight);
     }
 
     _container.append(_indicatorContainer!);

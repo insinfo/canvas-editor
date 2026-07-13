@@ -634,6 +634,14 @@
   top: 24px;
   width: 23px;
 }
+/* Escala da página ativa: desliza com o scroll (translateY via JS). */
+.ce-ruler-vertical__inner {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 0;
+  will-change: transform;
+}
 .ce-ruler-corner {
   position: absolute;
   top: 0;
@@ -767,6 +775,12 @@
   border-left: 1px dashed #5b6470;
   pointer-events: none;
 }
+/* Hover dos controles da régua (feedback estilo Word). */
+.ce-ruler__indent--first:hover { border-top-color: #185abd; }
+.ce-ruler__indent--hanging:hover,
+.ce-ruler__indent--right:hover { border-bottom-color: #185abd; }
+.ce-ruler__indent--leftbox:hover { background: #185abd; }
+.ce-ruler__margin-handle:hover::after { border-left-color: #185abd; }
 
 /* ── Indicador de zona (Cabeçalho/Rodapé): moldura tracejada + label ───── */
 .ce-zone-indicator {

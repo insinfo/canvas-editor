@@ -68,17 +68,26 @@ class WidgetRuler extends UiComponent {
   // Linha-guia vertical (Word/OnlyOffice) durante o arrasto.
   DivElement? _guide;
 
+  // Régua vertical estilo Word: a escala representa a PÁGINA ATIVA (a do
+  // cursor) e desliza com o scroll — rolar sem clicar não re-ancora.
+  DivElement? _verticalInner;
+  bool _scrollHooked = false;
+
+  // Durante a seleção por arrasto a régua não atualiza (Word) — sincroniza
+  // uma vez no mouseup.
+  bool _pointerDown = false;
+
   void refresh() {
     _scale = (_draw.getOptions().scale ?? 1).toDouble();
     // getWidth/getHeight/getMargins já incluem scale.
     _pageWidth = _draw.getWidth();
-    final double pageHeight = _draw.getHeight();
     _margins = List<double>.from(_draw.getMargins());
     final double pxPerCm = 96 / 2.54 * _scale;
     final int viewportHeight = root.parent?.clientHeight ?? 520;
     final double verticalHeight =
-        (viewportHeight - 24).clamp(180, pageHeight).toDouble();
+        (viewportHeight - 24).clamp(180, 1 << 20).toDouble();
 
+    _hookScrollOnce();
     _readParagraphIndents();
     _horizontal.style.width = '${_pageWidth}px';
     // Como no Word: a régua vertical fica encostada à ESQUERDA da área de
@@ -88,13 +97,49 @@ class WidgetRuler extends UiComponent {
       ..left = '0';
     _corner.style.left = '0';
     _buildHorizontal(pxPerCm);
-    _buildVertical(pxPerCm, verticalHeight);
+    _buildVertical(pxPerCm);
+  }
+
+  void _hookScrollOnce() {
+    final Element? scroller = root.parent;
+    if (_scrollHooked || scroller == null) return;
+    _scrollHooked = true;
+    listen(scroller.onScroll, (_) {
+      window.requestAnimationFrame((_) => _syncVerticalScroll());
+    });
+    // Seleção por arrasto: pausa o sync dos marcadores até o mouseup.
+    listen(document.onMouseDown, (MouseEvent event) {
+      if (event.button == 0) _pointerDown = true;
+    });
+    listen(document.onMouseUp, (_) {
+      if (!_pointerDown) return;
+      _pointerDown = false;
+      syncSelection();
+    });
+  }
+
+  /// Desliza a escala vertical para acompanhar a página ATIVA no viewport.
+  void _syncVerticalScroll() {
+    final DivElement? inner = _verticalInner;
+    if (inner == null) return;
+    try {
+      final int pageNo = _draw.getPageNo();
+      final dynamic page = _draw.getPage(pageNo);
+      if (page is! Element) return;
+      final Rectangle<num> pageRect = page.getBoundingClientRect();
+      final Rectangle<num> rulerRect = _vertical.getBoundingClientRect();
+      final double offset = (pageRect.top - rulerRect.top).toDouble();
+      inner.style.transform = 'translateY(${offset}px)';
+    } catch (_) {}
   }
 
   /// Sincronização leve com o cursor: re-lê os recuos do parágrafo da
   /// seleção e reposiciona só os marcadores (sem reconstruir os ticks).
   void syncSelection() {
     if (_drag != _RulerDrag.none) return;
+    // Durante o arrasto de seleção de texto a régua fica parada (Word);
+    // o mouseup dispara o sync final.
+    if (_pointerDown) return;
     if (_markerFirstLine == null) return;
     final double beforeLeft = _indentLeft;
     final double beforeFirst = _firstLine;
@@ -190,17 +235,26 @@ class WidgetRuler extends UiComponent {
     setX(_markerRight, _pageWidth - right - _indentRight);
   }
 
-  void _buildVertical(double pxPerCm, double extent) {
+  void _buildVertical(double pxPerCm) {
     _vertical.children.clear();
+    final double pageHeight = _draw.getHeight();
     final double top = _margins[0];
     final double bottom = _margins[2];
-    _vertical.append(DivElement()
+    // A escala cobre a página INTEIRA e desliza com o scroll (translateY em
+    // _syncVerticalScroll), como no Word — o viewport da régua só recorta.
+    final DivElement inner = DivElement()
+      ..classes.add('ce-ruler-vertical__inner')
+      ..style.height = '${pageHeight}px';
+    inner.append(DivElement()
       ..classes.add('ce-ruler__paper')
-      ..style.top = '${top.clamp(0, extent)}px'
+      ..style.top = '${top.clamp(0, pageHeight)}px'
       ..style.height =
-          '${(extent - top - bottom).clamp(0, extent).toDouble()}px');
-    _appendTicks(_vertical,
-        extent: extent, pxPerCm: pxPerCm, zero: top, horizontal: false);
+          '${(pageHeight - top - bottom).clamp(0, pageHeight).toDouble()}px');
+    _appendTicks(inner,
+        extent: pageHeight, pxPerCm: pxPerCm, zero: top, horizontal: false);
+    _vertical.append(inner);
+    _verticalInner = inner;
+    _syncVerticalScroll();
   }
 
   DivElement _marginShade({required bool start, required double size}) {
