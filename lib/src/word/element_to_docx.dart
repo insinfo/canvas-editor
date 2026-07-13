@@ -303,6 +303,14 @@ class EditorToDocx {
     return extension is Map && extension[flag] == true;
   }
 
+  static List<String>? _extensionStrings(IElement element, String key) {
+    final extension = element.extension;
+    if (extension is! Map) return null;
+    final value = extension[key];
+    if (value is! List || value.isEmpty) return null;
+    return value.cast<String>();
+  }
+
   static int? _stampOf(IElement element) {
     final id = element.externalId;
     if (id == null || !id.startsWith('wp:')) return null;
@@ -352,7 +360,20 @@ class EditorToDocx {
       pendingRun.add(content);
     }
 
+    final deferredBookmarkEnds = <String>[];
     for (final element in flattened) {
+      // Bookmarks capturados na abertura (extension['wpBookmark*Xml']) são
+      // re-emitidos para não sumirem quando o parágrafo é regenerado — os
+      // ends vão para o fim do parágrafo (âncora de título/TOC típica).
+      final bookmarkStarts = _extensionStrings(element, 'wpBookmarkStartXml');
+      if (bookmarkStarts != null) {
+        flushRun();
+        for (final xml in bookmarkStarts) {
+          inlines.add(WpPreservedInline('w:bookmarkStart', xml));
+        }
+      }
+      final bookmarkEnds = _extensionStrings(element, 'wpBookmarkEndXml');
+      if (bookmarkEnds != null) deferredBookmarkEnds.addAll(bookmarkEnds);
       if (_hasFlag(element, 'wpMarker')) continue; // numeração vem do numPr
       if (_hasFlag(element, 'wpBr')) {
         // Quebra(s) de linha w:br — value contém apenas '\n's.
@@ -389,6 +410,9 @@ class EditorToDocx {
       }
     }
     flushRun();
+    for (final xml in deferredBookmarkEnds) {
+      inlines.add(WpPreservedInline('w:bookmarkEnd', xml));
+    }
 
     final rowFlex = flattened.isEmpty ? null : flattened.first.rowFlex;
     final jc = switch (rowFlex) {

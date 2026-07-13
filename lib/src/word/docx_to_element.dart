@@ -116,6 +116,11 @@ class DocxToElementConverter {
   final List<String> _notes = [];
   final List<DocxTextBox> _textBoxes = [];
 
+  /// Nomes de bookmarks vindos de blocos preservados (`w:bookmarkStart` entre
+  /// parágrafos) aguardando o próximo elemento convertido para servir de alvo
+  /// de navegação (`extension['bookmarks']`).
+  final List<String> _pendingBookmarkNames = [];
+
   DocxToElementConverter._(this.file)
       : _resolver = FormatResolver(file.styles),
         _counters = NumberingCounters(file.numbering);
@@ -294,7 +299,14 @@ class DocxToElementConverter {
           if (converted != null) elements.add(converted);
           first = false;
         case WpPreservedBlock preserved:
-          _notes.add('bloco preservado não renderizado: ${preserved.qname}');
+          if (preserved.qname == 'w:bookmarkStart') {
+            // O bloco continua preservado no body (round-trip); aqui só
+            // registramos o alvo de navegação para o próximo elemento.
+            final name = _xmlAttribute(preserved.xml, 'w:name');
+            if (name != null) _pendingBookmarkNames.add(name);
+          } else if (preserved.qname != 'w:bookmarkEnd') {
+            _notes.add('bloco preservado não renderizado: ${preserved.qname}');
+          }
       }
       if (stampBlocks) {
         for (var i = startLength; i < elements.length; i++) {
@@ -451,6 +463,9 @@ class DocxToElementConverter {
     final rowFlex = _rowFlex(pPr.jc);
     final spacing = _paraSpacing(pPr);
     final elements = <IElement>[];
+    final bookmarkNames = <String>[];
+    final bookmarkStartXml = <String>[];
+    final bookmarkEndXml = <String>[];
 
     // Numeração multinível → marcador textual inline (motor real na F4.2).
     final numPr = pPr.numPr;
@@ -505,7 +520,36 @@ class DocxToElementConverter {
           if (preserved.qname == 'mc:AlternateContent') {
             _notes.add('text box (carimbo) preservado, sem render '
                 '(placeholder na Fase 4.8)');
+          } else if (preserved.qname == 'w:bookmarkStart') {
+            final name = _xmlAttribute(preserved.xml, 'w:name');
+            if (name != null) {
+              bookmarkNames.add(name);
+              bookmarkStartXml.add(preserved.xml);
+            }
+          } else if (preserved.qname == 'w:bookmarkEnd') {
+            bookmarkEndXml.add(preserved.xml);
           }
+      }
+    }
+
+    // Bookmarks: alvo de navegação (extension['bookmarks']) no primeiro
+    // elemento-folha do parágrafo + XML original para re-emissão quando o
+    // parágrafo for regenerado no save (extension['wpBookmark*Xml']).
+    final pendingNames = List<String>.from(_pendingBookmarkNames);
+    if (bookmarkNames.isNotEmpty ||
+        pendingNames.isNotEmpty ||
+        bookmarkEndXml.isNotEmpty) {
+      if (elements.isNotEmpty) {
+        _pendingBookmarkNames.clear();
+        final target = _firstLeaf(elements.first);
+        _mergeExtensionList(
+            target, 'bookmarks', [...pendingNames, ...bookmarkNames]);
+        _mergeExtensionList(target, 'wpBookmarkStartXml', bookmarkStartXml);
+        _mergeExtensionList(target, 'wpBookmarkEndXml', bookmarkEndXml);
+      } else {
+        // Parágrafo vazio: o alvo fica para o próximo elemento convertido
+        // (o XML original se perde na regeneração — nota de fidelidade).
+        _pendingBookmarkNames.addAll(bookmarkNames);
       }
     }
 
@@ -892,6 +936,47 @@ class DocxToElementConverter {
     final fill = shading?.fill;
     if (fill == null || fill == 'auto') return null;
     return '#$fill';
+  }
+
+  /// Valor de um atributo num fragmento XML preservado (com unescape básico).
+  static String? _xmlAttribute(String xml, String name) {
+    final match = RegExp('$name="([^"]*)"').firstMatch(xml);
+    if (match == null) return null;
+    return match
+        .group(1)!
+        .replaceAll('&lt;', '<')
+        .replaceAll('&gt;', '>')
+        .replaceAll('&quot;', '"')
+        .replaceAll('&apos;', "'")
+        .replaceAll('&amp;', '&');
+  }
+
+  /// Primeiro elemento-folha (desce por valueList de containers como
+  /// hyperlink) — é o elemento que sobrevive ao achatamento do
+  /// formatElementList em runtime, então é onde a extensão de bookmark fica.
+  static IElement _firstLeaf(IElement element) {
+    var target = element;
+    while (target.valueList != null && target.valueList!.isNotEmpty) {
+      target = target.valueList!.first;
+    }
+    return target;
+  }
+
+  /// Mescla [values] na lista `extension[key]` do elemento (criando o mapa
+  /// de extensão se preciso — os mapas existentes podem ser const).
+  static void _mergeExtensionList(
+      IElement element, String key, List<String> values) {
+    if (values.isEmpty) return;
+    final ext = element.extension;
+    final map = ext is Map
+        ? Map<String, dynamic>.from(ext)
+        : <String, dynamic>{};
+    final existing = map[key];
+    map[key] = <String>[
+      if (existing is List) ...existing.cast<String>(),
+      ...values,
+    ];
+    element.extension = map;
   }
 
   static TitleLevel _titleLevel(int outlineLvl) => switch (outlineLvl) {

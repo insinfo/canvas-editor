@@ -3033,6 +3033,10 @@ class CommandAdapt {
     }
   }
 
+  /// Navega até um bookmark interno (extension['bookmarks'] da conversão
+  /// DOCX) — implementação no Draw, compartilhada com o clique em hyperlink.
+  bool locationBookmark(String name) => draw.locationBookmark(name) == true;
+
   void wordTool() {
     final List<IElement> elementList =
         _castElementList(draw.getMainElementList());

@@ -63,6 +63,11 @@ class HyperlinkParticle {
     if (url == null || url.isEmpty) {
       return;
     }
+    // Link interno (#bookmark): navega dentro do documento, como no Word.
+    if (url.startsWith('#')) {
+      _draw.locationBookmark(url.substring(1));
+      return;
+    }
     final WindowBase newTab = window.open(url, '_blank');
     js_util.setProperty(newTab, 'opener', null);
   }
