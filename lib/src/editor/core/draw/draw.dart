@@ -2804,13 +2804,15 @@ class Draw {
             element.areaId != preElement?.areaId) {
           newRow.offsetY = (element.area!.top ?? 0) * scale;
         }
-        // F4.3: `w:spacing` before/after — o ZERO abre o parágrafo, então a
-        // primeira linha recebe o before dele + o after do parágrafo anterior
-        // (preElement é o último elemento do parágrafo que terminou).
+        // F4.3: `w:spacing` before/after — o espaço entre parágrafos é o
+        // MÁXIMO de (after do anterior, before do atual), como o Word
+        // renderiza os DOCX do corpus (medido no PDF golden: gap de 6pt
+        // entre Nivel2 before=120/after=120 — a soma daria 12pt e inflava
+        // a paginação: TR 150 vs 140 do Word).
         if (element.value == ZERO) {
-          final double paraSpacing = ((element.paraSpacingBefore ?? 0) +
-                  (preElement?.paraSpacingAfter ?? 0)) *
-              scale;
+          final double before = (element.paraSpacingBefore ?? 0) * scale;
+          final double prevAfter = (preElement?.paraSpacingAfter ?? 0) * scale;
+          final double paraSpacing = before > prevAfter ? before : prevAfter;
           if (paraSpacing > 0) {
             newRow.offsetY = (newRow.offsetY ?? 0) + paraSpacing;
           }
@@ -3440,13 +3442,18 @@ class Draw {
       ),
     );
 
-    // No recorte o ZERO do parágrafo é i==0 (sem preElement): repõe o
-    // `w:spacing after` do parágrafo anterior no offsetY da 1ª linha (F4.3).
+    // No recorte o ZERO do parágrafo é i==0 (sem preElement): o i==0 já
+    // aplicou o `before`; repõe só o EXCESSO do `after` do parágrafo
+    // anterior quando ele é maior (regra max(after, before) — F4.3).
     if (sliceRows.isNotEmpty && pStart > 0) {
+      final double scale = _resolveScale();
       final double prevAfter =
-          (elementList[pStart - 1].paraSpacingAfter ?? 0) * _resolveScale();
-      if (prevAfter > 0) {
-        sliceRows.first.offsetY = (sliceRows.first.offsetY ?? 0) + prevAfter;
+          (elementList[pStart - 1].paraSpacingAfter ?? 0) * scale;
+      final double before =
+          (elementList[pStart].paraSpacingBefore ?? 0) * scale;
+      if (prevAfter > before) {
+        sliceRows.first.offsetY =
+            (sliceRows.first.offsetY ?? 0) + (prevAfter - before);
       }
     }
     // Reindexa o recorte e desloca as rows seguintes.

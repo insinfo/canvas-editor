@@ -115,6 +115,12 @@ class WidgetStatusBar extends UiComponent {
     _wordLabel.text = count == 1 ? '1 palavra' : '$count palavras';
   }
 
+  /// Esconde o contador de palavras (config.showWordCount = false — a
+  /// contagem é O(doc) por mudança e pode ser desligada em docs grandes).
+  void hideWordCount() {
+    _wordLabel.style.display = 'none';
+  }
+
   void setScale(double scale) {
     final int percent = (scale * 100).floor();
     _zoomLabel.text = '$percent%';

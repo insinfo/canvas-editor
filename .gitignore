@@ -18,3 +18,9 @@ resources/01.zip
 
 # Lock files do Word
 ~$*
+
+# Capturas de referência (Word Online etc.) — não versionar
+resources/word.example/
+resources/word.example.zip
+resources/01/
+resources/01.zip
