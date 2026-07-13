@@ -10,6 +10,7 @@ import '../../dataset/enum/common.dart';
 import '../../dataset/enum/control.dart';
 import '../../dataset/enum/editor.dart';
 import '../../dataset/enum/element.dart';
+import '../../dataset/enum/observer.dart' show MoveDirection;
 import '../../dataset/enum/row.dart';
 import '../../interface/draw.dart';
 import '../../interface/editor.dart';
@@ -4826,6 +4827,95 @@ class Draw {
     }
     (_hyperlinkParticle as HyperlinkParticle?)?.clearHyperlinkPopup();
     (_dateParticle as DateParticle?)?.clearDatePicker();
+  }
+
+  /// Navega até um bookmark interno (alvo `#nome` de hyperlink interno/TOC):
+  /// procura o elemento marcado na conversão DOCX com
+  /// `extension['bookmarks']` contendo [name], posiciona o cursor nele e
+  /// rola a viewport (mesma mecânica do locationCatalog). Retorna `false`
+  /// quando o bookmark não existe no documento.
+  bool locationBookmark(String name) {
+    final List<IElement> elementList =
+        (getOriginalElementList() as List).cast<IElement>();
+
+    bool hasBookmark(IElement element) {
+      final dynamic extension = element.extension;
+      if (extension is! Map) return false;
+      final dynamic bookmarks = extension['bookmarks'];
+      return bookmarks is List && bookmarks.contains(name);
+    }
+
+    Map<String, dynamic>? locate(List<IElement> list) {
+      for (var e = 0; e < list.length; e++) {
+        final IElement element = list[e];
+        if (element.type == ElementType.table) {
+          final List<ITr>? trList = element.trList;
+          if (trList != null) {
+            for (var r = 0; r < trList.length; r++) {
+              final tdList = trList[r].tdList;
+              for (var d = 0; d < tdList.length; d++) {
+                final Map<String, dynamic>? inner = locate(tdList[d].value);
+                if (inner != null) {
+                  inner['isTable'] = true;
+                  inner['index'] = e;
+                  inner['trIndex'] = r;
+                  inner['tdIndex'] = d;
+                  inner['tdId'] = tdList[d].id;
+                  inner['trId'] = trList[r].id;
+                  inner['tableId'] = element.id;
+                  return inner;
+                }
+              }
+            }
+          }
+        }
+        if (hasBookmark(element)) {
+          return <String, dynamic>{'isTable': false, 'endIndex': e};
+        }
+      }
+      return null;
+    }
+
+    final Map<String, dynamic>? context = locate(elementList);
+    if (context == null) return false;
+    final Position? position = _position as Position?;
+    final RangeManager? rangeManager = _rangeManager as RangeManager?;
+    if (position == null || rangeManager == null) return false;
+    final bool isTable = context['isTable'] == true;
+    final int endIndex = context['endIndex'] as int;
+    position.setPositionContext(IPositionContext(
+      isTable: isTable,
+      index: context['index'] as int?,
+      trIndex: context['trIndex'] as int?,
+      tdIndex: context['tdIndex'] as int?,
+      tdId: context['tdId'] as String?,
+      trId: context['trId'] as String?,
+      tableId: context['tableId'] as String?,
+    ));
+    rangeManager.setRange(endIndex, endIndex,
+        context['tableId'] as String?, null, null, null, null);
+    render(IDrawOption(
+      curIndex: endIndex,
+      isSetCursor: true,
+      isCompute: false,
+      isSubmitHistory: false,
+    ));
+    final List<dynamic> positionList =
+        position.getPositionList() as List<dynamic>;
+    if (endIndex >= 0 && endIndex < positionList.length) {
+      final dynamic cursorPosition = positionList[endIndex];
+      if (cursorPosition is IElementPosition) {
+        position.setCursorPosition(cursorPosition);
+        final dynamic cursor = _cursor;
+        try {
+          cursor?.moveCursorToVisible(IMoveCursorToVisibleOption(
+            cursorPosition: cursorPosition,
+            direction: MoveDirection.down,
+          ));
+        } catch (_) {}
+      }
+    }
+    return true;
   }
 
   IPositionContext _clonePositionContext(IPositionContext source) {

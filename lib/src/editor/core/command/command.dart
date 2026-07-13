@@ -339,6 +339,10 @@ class Command {
   void executeLocationCatalog(String titleId) =>
       _adapt.locationCatalog(titleId);
 
+  /// Navega até um bookmark interno (alvo de hyperlink `#nome`).
+  bool executeLocationBookmark(String name) =>
+      _adapt.locationBookmark(name);
+
   void executeWordTool() => _adapt.wordTool();
 
   String? executeSetGroup() => _adapt.setGroup();
