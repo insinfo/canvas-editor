@@ -81,10 +81,12 @@ class WidgetRuler extends UiComponent {
 
     _readParagraphIndents();
     _horizontal.style.width = '${_pageWidth}px';
+    // Como no Word: a régua vertical fica encostada à ESQUERDA da área de
+    // visualização (não colada na página); só a escala acompanha a página.
     _vertical.style
       ..height = '${verticalHeight}px'
-      ..left = 'calc(50% - ${_pageWidth / 2 + 24}px)';
-    _corner.style.left = 'calc(50% - ${_pageWidth / 2 + 24}px)';
+      ..left = '0';
+    _corner.style.left = '0';
     _buildHorizontal(pxPerCm);
     _buildVertical(pxPerCm, verticalHeight);
   }

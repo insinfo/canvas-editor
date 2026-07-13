@@ -73,6 +73,7 @@ import 'particle/subscript_particle.dart';
 import 'particle/table/table_operate.dart';
 import 'particle/table/table_particle.dart';
 import 'particle/table/table_tool.dart';
+import 'particle/text_box_tool.dart';
 import 'particle/text_particle.dart';
 import 'particle/superscript_particle.dart';
 import 'particle/white_space_particle.dart';
@@ -140,6 +141,7 @@ class Draw {
     _radioParticle = RadioParticle(this);
     _separatorParticle = SeparatorParticle(this);
     _hyperlinkParticle = HyperlinkParticle(this);
+    _textBoxTool = TextBoxTool(this);
     _dateParticle = DateParticle(this);
     _pageBreakParticle = PageBreakParticle(this);
     _search = Search(this);
@@ -286,6 +288,7 @@ class Draw {
   dynamic _tableParticle;
   dynamic _tableOperate;
   dynamic _hyperlinkParticle;
+  TextBoxTool? _textBoxTool;
   dynamic _search;
   dynamic _background;
   dynamic _margin;
@@ -4932,6 +4935,7 @@ class Draw {
   dynamic getLabelParticle() => _labelParticle;
   dynamic getLineBreakParticle() => _lineBreakParticle;
   dynamic getHyperlinkParticle() => _hyperlinkParticle;
+  TextBoxTool? getTextBoxTool() => _textBoxTool;
   dynamic getSearch() => _search;
   dynamic getGroup() => _group;
   dynamic getControl() => _control;
@@ -4957,6 +4961,7 @@ class Draw {
       } catch (_) {}
     }
     (_hyperlinkParticle as HyperlinkParticle?)?.clearHyperlinkPopup();
+    _textBoxTool?.clear();
     (_dateParticle as DateParticle?)?.clearDatePicker();
   }
 
