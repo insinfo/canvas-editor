@@ -330,6 +330,7 @@ Future<void> main(List<String> args) async {
       if (msg.type == ConsoleMessageType.error) {
         stderr.writeln('[page:error] ${msg.text}');
       } else if ((msg.text?.startsWith('[render]') ?? false) ||
+          (msg.text?.startsWith('[input]') ?? false) ||
           (msg.text?.startsWith('[open]') ?? false)) {
         stdout.writeln(msg.text);
       }

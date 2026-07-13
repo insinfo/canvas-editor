@@ -4620,6 +4620,11 @@ class Draw {
       }
     });
 
+    if (debugRenderTiming) {
+      window.console.log('[render] post(cursor/história): '
+          '${(window.performance.now() - _tPhase).toStringAsFixed(0)}ms');
+    }
+
     // F5.5/Kix: se a 1ª fatia não cobriu o documento inteiro, fica pendente.
     // O ScrollObserver chamará ensureProgressiveLayoutForPage ao se aproximar
     // do fim conhecido, fazendo o total de páginas crescer sob demanda.

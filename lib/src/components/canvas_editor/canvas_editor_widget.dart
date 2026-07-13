@@ -17,6 +17,7 @@ import '../../editor/interface/page_break.dart';
 import '../../word/docx_to_element.dart';
 import '../../word/element_to_docx.dart';
 import '../../word/quill_delta.dart';
+import '../../word/textbox_sync.dart';
 import '../core/ui_component.dart';
 import 'widget_loading_overlay.dart';
 import 'widget_floating_toolbar.dart';
@@ -122,6 +123,7 @@ class CanvasEditorWidget
   String? _openedDocxName;
   List<IElement>? _openedConvertedMain;
   List<IElement>? _openedOriginalMain;
+  List<DocxTextBox> _openedTextBoxes = const <DocxTextBox>[];
 
   @override
   Command get command => editor.command;
@@ -555,6 +557,8 @@ class CanvasEditorWidget
       // Referência de "intocado" para o save: materializada só no 1º save.
       _openedConvertedMain = converted.main;
       _openedOriginalMain = null;
+      // Origem dos carimbos p/ o sync no save (F3 follow-up).
+      _openedTextBoxes = converted.headerTextBoxes;
 
       if (fileName != null) {
         root.querySelector('.ce-word-titlebar__title')?.text = fileName;
@@ -565,6 +569,50 @@ class CanvasEditorWidget
       }
     } finally {
       loading.hide();
+    }
+  }
+
+  /// F3 follow-up: aplica edições do carimbo (texto/geometria feitos no
+  /// TextBoxTool) ao header part correspondente — patch cirúrgico por regex
+  /// (txbxContent + extent + posOffset); o resto do part fica byte a byte.
+  /// Limitação: 1 carimbo por part (o patch textual é global no part).
+  void _syncHeaderTextBoxes(DocxFile file) {
+    final List<DocxTextBox> originals = _openedTextBoxes;
+    if (originals.isEmpty) return;
+    final dynamic header = (editor.getDraw() as dynamic).getHeader();
+    final List<header_model.IHeaderTextBox> live =
+        (header.getTextBoxes() as List).cast<header_model.IHeaderTextBox>();
+    if (live.length != originals.length) return;
+    for (int i = 0; i < originals.length; i++) {
+      final DocxTextBox src = originals[i];
+      final header_model.IHeaderTextBox tb = live[i];
+      final String? partName = src.partName;
+      if (partName == null) continue;
+      if (originals.where((DocxTextBox o) => o.partName == partName).length >
+          1) {
+        continue; // patch textual é global no part — só com carimbo único
+      }
+      final String srcText = src.elements.map((IElement e) => e.value).join();
+      final String liveText = tb.elements.map((IElement e) => e.value).join();
+      final bool changed = srcText != liveText ||
+          (src.widthPx - tb.widthPx).abs() > 0.5 ||
+          (src.heightPx - tb.heightPx).abs() > 0.5 ||
+          (src.offsetYPx - tb.offsetYPx).abs() > 0.5 ||
+          tb.offsetXPx != null;
+      if (!changed) continue;
+      final String? partXml = file.package.partString(partName);
+      if (partXml == null) continue;
+      file.package.setPartString(
+        partName,
+        patchHeaderTextBoxXml(
+          partXml,
+          elements: tb.elements,
+          widthPx: tb.widthPx,
+          heightPx: tb.heightPx,
+          offsetXPx: tb.offsetXPx,
+          offsetYPx: tb.offsetYPx,
+        ),
+      );
     }
   }
 
@@ -585,6 +633,7 @@ class CanvasEditorWidget
         as List<IElement>;
     final List<IElement> currentMain = value.data.main;
     EditorToDocx.apply(file, currentMain, _openedOriginalMain!);
+    _syncHeaderTextBoxes(file);
     final Uint8List bytes = DocxWriter.write(file);
     // Reancora o modelo no arquivo salvo para saves subsequentes.
     _openedDocx = DocxReader.read(bytes);
