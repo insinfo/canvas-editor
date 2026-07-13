@@ -122,6 +122,15 @@
   color: #185abd;
   font-weight: 600;
 }
+/* Abas contextuais (Ferramentas de Tabela/Imagem, estilo Word). */
+.ce-word-tabs button.ce-word-tab--contextual {
+  color: #8250a8;
+  background: #f7f3fb;
+}
+.ce-word-tabs button.ce-word-tab--contextual.active {
+  border-bottom-color: #8250a8;
+  color: #8250a8;
+}
 
 .ce-word-panels { min-height: 88px; }
 

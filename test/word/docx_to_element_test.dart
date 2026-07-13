@@ -91,6 +91,24 @@ void main() {
       expect(text, contains('TERMO DE REFERÊNCIA'));
     });
 
+    test('F4.6: variantes first/even de header/footer expostas na conversão',
+        () {
+      // ETP: default+first; TR: default+first+even. Nos dois, titlePg e
+      // evenAndOddHeaders estão DESLIGADOS — a renderização continua só com
+      // o default, mas as variantes ficam convertidas e disponíveis.
+      expect(etp.headerFirst, isNotNull);
+      expect(etp.titlePage, isFalse);
+      expect(tr.headerFirst, isNotNull);
+      expect(tr.headerEven, isNotNull);
+      expect(tr.footerEven, isNotNull);
+      expect(tr.titlePage, isFalse);
+      expect(tr.evenAndOddHeaders, isFalse);
+      expect(
+        tr.notes.any((n) => n.contains('variante inativa')),
+        isTrue,
+      );
+    });
+
     test('TR: tabela grande tem merges resolvidos (colspan/rowspan)', () {
       final tables = <IElement>[
         for (final e in tr.main)

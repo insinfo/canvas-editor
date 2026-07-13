@@ -276,7 +276,11 @@ class CanvasEditorWidget
     // Régua acompanha o parágrafo do cursor (recuos), como no Word —
     // reposiciona só os marcadores, sem reconstruir os ticks.
     _ruler?.syncSelection();
-    _scheduler.schedule(_floatingToolbar?.refresh ?? () {});
+    _scheduler.schedule(() {
+      _floatingToolbar?.refresh();
+      // Abas contextuais do ribbon (Tabela/Imagem) seguem a seleção.
+      _ribbon?.syncSelectionContext(resolveSelectionContext(command));
+    });
   }
 
   void _handleContentChange() {
@@ -523,6 +527,21 @@ class CanvasEditorWidget
             fillColor: tb.fillColor,
           ),
       ]);
+
+      // F4.6: variantes de header/footer (primeira página diferente / par-
+      // ímpar) selecionadas por página no render dos frames.
+      draw.getHeader().setVariants(
+            first: converted.headerFirst,
+            even: converted.headerEven,
+            titlePage: converted.titlePage,
+            evenAndOdd: converted.evenAndOddHeaders,
+          );
+      draw.getFooter().setVariants(
+            first: converted.footerFirst,
+            even: converted.footerEven,
+            titlePage: converted.titlePage,
+            evenAndOdd: converted.evenAndOddHeaders,
+          );
 
       draw.getRange().clearRange();
       command.executeSetValue(IEditorData(

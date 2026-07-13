@@ -16,233 +16,318 @@ import '../../zone/zone.dart';
 import '../draw.dart';
 
 class Header {
-	Header(Draw draw, [List<IElement>? data])
-			: _draw = draw,
-				_position = draw.getPosition() as Position,
-				_zone = draw.getZone(),
-				_options = draw.getOptions(),
-				_elementList = List<IElement>.from(data ?? const <IElement>[]),
-				_rowList = <IRow>[],
-				_positionList = <IElementPosition>[];
+  Header(Draw draw, [List<IElement>? data])
+      : _draw = draw,
+        _position = draw.getPosition() as Position,
+        _zone = draw.getZone(),
+        _options = draw.getOptions(),
+        _elementList = List<IElement>.from(data ?? const <IElement>[]),
+        _rowList = <IRow>[],
+        _positionList = <IElementPosition>[];
 
-	final Draw _draw;
-	final Position _position;
-	final Zone _zone;
-	final IEditorOption _options;
+  final Draw _draw;
+  final Position _position;
+  final Zone _zone;
+  final IEditorOption _options;
 
-	List<IElement> _elementList;
-	List<IRow> _rowList;
-	List<IElementPosition> _positionList;
-	List<IHeaderTextBox> _textBoxes = const <IHeaderTextBox>[];
+  List<IElement> _elementList;
+  List<IRow> _rowList;
+  List<IElementPosition> _positionList;
+  List<IHeaderTextBox> _textBoxes = const <IHeaderTextBox>[];
 
-	void setTextBoxes(List<IHeaderTextBox> boxes) => _textBoxes = boxes;
+  // F4.6: variantes por página, como no Word — `first` (w:titlePg) na 1ª
+  // página e `even` (evenAndOddHeaders) nas páginas pares. A edição in-place
+  // continua no default; as variantes são renderizadas.
+  List<IElement> _firstElementList = <IElement>[];
+  List<IElement> _evenElementList = <IElement>[];
+  List<IRow> _firstRowList = <IRow>[];
+  List<IRow> _evenRowList = <IRow>[];
+  List<IElementPosition> _firstPositionList = <IElementPosition>[];
+  List<IElementPosition> _evenPositionList = <IElementPosition>[];
+  bool _titlePage = false;
+  bool _evenAndOdd = false;
 
-	List<IHeaderTextBox> getTextBoxes() => _textBoxes;
+  void setVariants({
+    List<IElement>? first,
+    List<IElement>? even,
+    bool titlePage = false,
+    bool evenAndOdd = false,
+  }) {
+    _firstElementList = List<IElement>.from(first ?? const <IElement>[]);
+    _evenElementList = List<IElement>.from(even ?? const <IElement>[]);
+    _titlePage = titlePage;
+    _evenAndOdd = evenAndOdd;
+  }
 
-	bool hasTextBoxes() => _textBoxes.isNotEmpty;
+  bool _useFirstOn(int pageNo) =>
+      _titlePage && pageNo == 0 && _firstElementList.isNotEmpty;
 
-	void clearTextBoxes() {
-		_textBoxes = const <IHeaderTextBox>[];
-	}
+  // pageNo é 0-based: pageNo 1 = página 2 (par).
+  bool _useEvenOn(int pageNo) =>
+      _evenAndOdd && pageNo.isOdd && _evenElementList.isNotEmpty;
 
-	dynamic _drawDynamic<T>(T Function(dynamic target) callback) {
-		try {
-			return callback(_draw as dynamic);
-		} catch (_) {
-			return null;
-		}
-	}
+  void setTextBoxes(List<IHeaderTextBox> boxes) => _textBoxes = boxes;
 
-	List<IRow> getRowList() => _rowList;
+  List<IHeaderTextBox> getTextBoxes() => _textBoxes;
 
-	void setElementList(List<IElement> elementList) {
-		_elementList = elementList;
-	}
+  bool hasTextBoxes() => _textBoxes.isNotEmpty;
 
-	List<IElement> getElementList() => _elementList;
+  void clearTextBoxes() {
+    _textBoxes = const <IHeaderTextBox>[];
+  }
 
-	List<IElementPosition> getPositionList() => _positionList;
+  dynamic _drawDynamic<T>(T Function(dynamic target) callback) {
+    try {
+      return callback(_draw as dynamic);
+    } catch (_) {
+      return null;
+    }
+  }
 
-	void compute() {
-		recovery();
-		_computeRowList();
-		_computePositionList();
-	}
+  List<IRow> getRowList() => _rowList;
 
-	void recovery() {
-		_rowList = <IRow>[];
-		_positionList = <IElementPosition>[];
-	}
+  void setElementList(List<IElement> elementList) {
+    _elementList = elementList;
+  }
 
-	void _computeRowList() {
-		final double innerWidth = _draw.getInnerWidth();
-		final List<double> margins = _draw.getMargins();
-		final List<IElement> surroundElementList =
-				element_utils.pickSurroundElementList(_elementList);
-		final List<IRow> rows = _drawDynamic((dynamic target) {
-					final dynamic result = target.computeRowList(
-						IComputeRowListPayload(
-							startX: margins[3],
-							startY: getHeaderTop(),
-							innerWidth: innerWidth,
-							elementList: _elementList,
-							surroundElementList: surroundElementList,
-						),
-					);
-					if (result is List) {
-						return result.whereType<IRow>().toList();
-					}
-					return <IRow>[];
-				}) as List<IRow>? ??
-				const <IRow>[];
-		_rowList = List<IRow>.from(rows);
-	}
+  List<IElement> getElementList() => _elementList;
 
-	void _computePositionList() {
-		final double headerTop = getHeaderTop();
-		final double innerWidth = _draw.getInnerWidth();
-		final List<double> margins = _draw.getMargins();
-		final double startX = margins[3];
-		final double startY = headerTop;
-		_position.computePageRowPosition(
-			IComputePageRowPositionPayload(
-				positionList: _positionList,
-				rowList: _rowList,
-				pageNo: 0,
-				startRowIndex: 0,
-				startIndex: 0,
-				startX: startX,
-				startY: startY,
-				innerWidth: innerWidth,
-				zone: EditorZone.header,
-			),
-		);
-	}
+  List<IElementPosition> getPositionList() => _positionList;
 
-	double getHeaderTop() {
-		final IHeader header = _resolveHeader();
-		if (header.disabled == true) {
-			return 0;
-		}
-		final double top = (header.top ?? 0).toDouble();
-		final double scale = (_options.scale ?? 1).toDouble();
-		return (top * scale).floorToDouble();
-	}
+  void compute() {
+    recovery();
+    _rowList = _computeRowListFor(_elementList);
+    _computePositionListFor(_rowList, _positionList);
+    if (_titlePage && _firstElementList.isNotEmpty) {
+      _firstRowList = _computeRowListFor(_firstElementList);
+      _computePositionListFor(_firstRowList, _firstPositionList);
+    }
+    if (_evenAndOdd && _evenElementList.isNotEmpty) {
+      _evenRowList = _computeRowListFor(_evenElementList);
+      _computePositionListFor(_evenRowList, _evenPositionList);
+    }
+  }
 
-	double getMaxHeight() {
-		final IHeader header = _resolveHeader();
-		final MaxHeightRatio ratio = header.maxHeightRadio ?? MaxHeightRatio.quarter;
-		final double mapping = maxHeightRadioMapping[ratio] ?? 0;
-		final double height = _draw.getHeight();
-		return math.min(height, height * mapping).floorToDouble();
-	}
+  void recovery() {
+    _rowList = <IRow>[];
+    _positionList = <IElementPosition>[];
+    _firstRowList = <IRow>[];
+    _firstPositionList = <IElementPosition>[];
+    _evenRowList = <IRow>[];
+    _evenPositionList = <IElementPosition>[];
+  }
 
-	double getHeight() {
-		final IHeader header = _resolveHeader();
-		if (header.disabled == true) {
-			return 0;
-		}
-		final double maxHeight = getMaxHeight();
-		final double rowHeight = getRowHeight();
-		return rowHeight > maxHeight ? maxHeight : rowHeight;
-	}
+  List<IRow> _computeRowListFor(List<IElement> elementList) {
+    final double innerWidth = _draw.getInnerWidth();
+    final List<double> margins = _draw.getMargins();
+    final List<IElement> surroundElementList =
+        element_utils.pickSurroundElementList(elementList);
+    final List<IRow> rows = _drawDynamic((dynamic target) {
+          final dynamic result = target.computeRowList(
+            IComputeRowListPayload(
+              startX: margins[3],
+              startY: getHeaderTop(),
+              innerWidth: innerWidth,
+              elementList: elementList,
+              surroundElementList: surroundElementList,
+            ),
+          );
+          if (result is List) {
+            return result.whereType<IRow>().toList();
+          }
+          return <IRow>[];
+        }) as List<IRow>? ??
+        const <IRow>[];
+    return List<IRow>.from(rows);
+  }
 
-	double getRowHeight() {
-		double total = 0;
-		for (final IRow row in _rowList) {
-			total += row.height;
-		}
-		return total;
-	}
+  void _computePositionListFor(
+      List<IRow> rowList, List<IElementPosition> positionList) {
+    final double headerTop = getHeaderTop();
+    final double innerWidth = _draw.getInnerWidth();
+    final List<double> margins = _draw.getMargins();
+    final double startX = margins[3];
+    final double startY = headerTop;
+    _position.computePageRowPosition(
+      IComputePageRowPositionPayload(
+        positionList: positionList,
+        rowList: rowList,
+        pageNo: 0,
+        startRowIndex: 0,
+        startIndex: 0,
+        startX: startX,
+        startY: startY,
+        innerWidth: innerWidth,
+        zone: EditorZone.header,
+      ),
+    );
+  }
 
-	double getExtraHeight() {
-		final List<double> margins = _draw.getMargins();
-		final double headerHeight = getHeight();
-		final double headerTop = getHeaderTop();
-		final double extraHeight = headerTop + headerHeight - margins[0];
-		return extraHeight <= 0 ? 0 : extraHeight;
-	}
+  double getHeaderTop() {
+    final IHeader header = _resolveHeader();
+    if (header.disabled == true) {
+      return 0;
+    }
+    final double top = (header.top ?? 0).toDouble();
+    final double scale = (_options.scale ?? 1).toDouble();
+    return (top * scale).floorToDouble();
+  }
 
-	void render(CanvasRenderingContext2D ctx, int pageNo) {
-		ctx.save();
-		final IHeader header = _resolveHeader();
-		ctx.globalAlpha = _zone.isHeaderActive() ? 1 : (header.inactiveAlpha ?? 1);
-		final double innerWidth = _draw.getInnerWidth();
-		final double maxHeight = getMaxHeight();
-		final List<IRow> renderRows = <IRow>[];
-		double curHeight = 0;
-		for (final IRow row in _rowList) {
-			if (curHeight + row.height > maxHeight) {
-				break;
-			}
-			renderRows.add(row);
-			curHeight += row.height;
-		}
-		_drawDynamic((dynamic target) {
-			target.drawRow(
-				ctx,
-				IDrawRowPayload(
-					elementList: _elementList,
-					positionList: _positionList,
-					rowList: renderRows,
-					pageNo: pageNo,
-					startIndex: 0,
-					innerWidth: innerWidth,
-					zone: EditorZone.header,
-				),
-			);
-			return null;
-		});
-		_renderTextBoxes(ctx, pageNo);
-		ctx.restore();
-	}
+  double getMaxHeight() {
+    final IHeader header = _resolveHeader();
+    final MaxHeightRatio ratio =
+        header.maxHeightRadio ?? MaxHeightRatio.quarter;
+    final double mapping = maxHeightRadioMapping[ratio] ?? 0;
+    final double height = _draw.getHeight();
+    return math.min(height, height * mapping).floorToDouble();
+  }
 
-		// Desenha as caixas de texto flutuantes do cabecalho (carimbos, F4.8):
-		// borda + fill no canto e o texto via o pipeline de layout/render.
-		void _renderTextBoxes(CanvasRenderingContext2D ctx, int pageNo) {
-			if (_textBoxes.isEmpty) return;
-			final double scale = (_options.scale ?? 1).toDouble();
-			final double innerWidth = _draw.getInnerWidth();
-			final List<double> margins = _draw.getMargins();
-			final double headerTop = getHeaderTop();
-			const double pad = 4;
-			for (final IHeaderTextBox tb in _textBoxes) {
-				final double w = tb.widthPx * scale;
-				final double left = margins[3] + (tb.alignRight ? (innerWidth - w) : 0);
-				final double top = headerTop + tb.offsetYPx * scale;
-				final double innerBoxWidth = w - 2 * pad * scale;
-				final List<IRow> rows = _drawDynamic((dynamic target) {
-					final dynamic r = target.computeRowList(
-						IComputeRowListPayload(innerWidth: innerBoxWidth, elementList: tb.elements));
-					return r is List ? r.whereType<IRow>().toList() : <IRow>[];
-				}) as List<IRow>? ?? const <IRow>[];
-				double contentH = 0;
-				for (final IRow r in rows) { contentH += r.height + (r.offsetY ?? 0); }
-				final double h = math.max(tb.heightPx * scale, contentH + 2 * pad * scale);
-				ctx.save();
-				if (tb.fillColor != null) { ctx..fillStyle = tb.fillColor!..fillRect(left, top, w, h); }
-				ctx..strokeStyle = tb.borderColor ?? '#000000'..lineWidth = tb.borderWidthPx * scale..strokeRect(left, top, w, h);
-				ctx.restore();
-				final List<IElementPosition> positions = <IElementPosition>[];
-				_position.computePageRowPosition(IComputePageRowPositionPayload(
-					positionList: positions, rowList: rows, pageNo: 0, startRowIndex: 0,
-					startIndex: 0, startX: left + pad * scale, startY: top + pad * scale,
-					innerWidth: innerBoxWidth, zone: EditorZone.header));
-				_drawDynamic((dynamic target) {
-					target.drawRow(ctx, IDrawRowPayload(elementList: tb.elements,
-						positionList: positions, rowList: rows, pageNo: pageNo, startIndex: 0,
-						innerWidth: innerBoxWidth, zone: EditorZone.header));
-					return null;
-				});
-			}
-		}
+  double getHeight() {
+    final IHeader header = _resolveHeader();
+    if (header.disabled == true) {
+      return 0;
+    }
+    final double maxHeight = getMaxHeight();
+    final double rowHeight = getRowHeight();
+    return rowHeight > maxHeight ? maxHeight : rowHeight;
+  }
 
-	IHeader _resolveHeader() {
-		final IHeader header = _options.header ??= IHeader();
-		header.disabled ??= false;
-		header.top ??= 0;
-		header.inactiveAlpha ??= 0.6;
-		header.maxHeightRadio ??= MaxHeightRatio.quarter;
-		return header;
-	}
+  double getRowHeight() {
+    double total = 0;
+    for (final IRow row in _rowList) {
+      total += row.height;
+    }
+    return total;
+  }
+
+  double getExtraHeight() {
+    final List<double> margins = _draw.getMargins();
+    final double headerHeight = getHeight();
+    final double headerTop = getHeaderTop();
+    final double extraHeight = headerTop + headerHeight - margins[0];
+    return extraHeight <= 0 ? 0 : extraHeight;
+  }
+
+  void render(CanvasRenderingContext2D ctx, int pageNo) {
+    ctx.save();
+    final IHeader header = _resolveHeader();
+    ctx.globalAlpha = _zone.isHeaderActive() ? 1 : (header.inactiveAlpha ?? 1);
+    final double innerWidth = _draw.getInnerWidth();
+    final double maxHeight = getMaxHeight();
+    // F4.6: variante por página (first/even), exceto com a zona ativa —
+    // durante a edição mostra o default, que é o que está sendo editado.
+    List<IElement> elementList = _elementList;
+    List<IRow> rowSource = _rowList;
+    List<IElementPosition> positionList = _positionList;
+    if (!_zone.isHeaderActive()) {
+      if (_useFirstOn(pageNo)) {
+        elementList = _firstElementList;
+        rowSource = _firstRowList;
+        positionList = _firstPositionList;
+      } else if (_useEvenOn(pageNo)) {
+        elementList = _evenElementList;
+        rowSource = _evenRowList;
+        positionList = _evenPositionList;
+      }
+    }
+    final List<IRow> renderRows = <IRow>[];
+    double curHeight = 0;
+    for (final IRow row in rowSource) {
+      if (curHeight + row.height > maxHeight) {
+        break;
+      }
+      renderRows.add(row);
+      curHeight += row.height;
+    }
+    _drawDynamic((dynamic target) {
+      target.drawRow(
+        ctx,
+        IDrawRowPayload(
+          elementList: elementList,
+          positionList: positionList,
+          rowList: renderRows,
+          pageNo: pageNo,
+          startIndex: 0,
+          innerWidth: innerWidth,
+          zone: EditorZone.header,
+        ),
+      );
+      return null;
+    });
+    _renderTextBoxes(ctx, pageNo);
+    ctx.restore();
+  }
+
+  // Desenha as caixas de texto flutuantes do cabecalho (carimbos, F4.8):
+  // borda + fill no canto e o texto via o pipeline de layout/render.
+  void _renderTextBoxes(CanvasRenderingContext2D ctx, int pageNo) {
+    if (_textBoxes.isEmpty) return;
+    final double scale = (_options.scale ?? 1).toDouble();
+    final double innerWidth = _draw.getInnerWidth();
+    final List<double> margins = _draw.getMargins();
+    final double headerTop = getHeaderTop();
+    const double pad = 4;
+    for (final IHeaderTextBox tb in _textBoxes) {
+      final double w = tb.widthPx * scale;
+      final double left = margins[3] + (tb.alignRight ? (innerWidth - w) : 0);
+      final double top = headerTop + tb.offsetYPx * scale;
+      final double innerBoxWidth = w - 2 * pad * scale;
+      final List<IRow> rows = _drawDynamic((dynamic target) {
+            final dynamic r = target.computeRowList(IComputeRowListPayload(
+                innerWidth: innerBoxWidth, elementList: tb.elements));
+            return r is List ? r.whereType<IRow>().toList() : <IRow>[];
+          }) as List<IRow>? ??
+          const <IRow>[];
+      double contentH = 0;
+      for (final IRow r in rows) {
+        contentH += r.height + (r.offsetY ?? 0);
+      }
+      final double h =
+          math.max(tb.heightPx * scale, contentH + 2 * pad * scale);
+      ctx.save();
+      if (tb.fillColor != null) {
+        ctx
+          ..fillStyle = tb.fillColor!
+          ..fillRect(left, top, w, h);
+      }
+      ctx
+        ..strokeStyle = tb.borderColor ?? '#000000'
+        ..lineWidth = tb.borderWidthPx * scale
+        ..strokeRect(left, top, w, h);
+      ctx.restore();
+      final List<IElementPosition> positions = <IElementPosition>[];
+      _position.computePageRowPosition(IComputePageRowPositionPayload(
+          positionList: positions,
+          rowList: rows,
+          pageNo: 0,
+          startRowIndex: 0,
+          startIndex: 0,
+          startX: left + pad * scale,
+          startY: top + pad * scale,
+          innerWidth: innerBoxWidth,
+          zone: EditorZone.header));
+      _drawDynamic((dynamic target) {
+        target.drawRow(
+            ctx,
+            IDrawRowPayload(
+                elementList: tb.elements,
+                positionList: positions,
+                rowList: rows,
+                pageNo: pageNo,
+                startIndex: 0,
+                innerWidth: innerBoxWidth,
+                zone: EditorZone.header));
+        return null;
+      });
+    }
+  }
+
+  IHeader _resolveHeader() {
+    final IHeader header = _options.header ??= IHeader();
+    header.disabled ??= false;
+    header.top ??= 0;
+    header.inactiveAlpha ??= 0.6;
+    header.maxHeightRadio ??= MaxHeightRatio.quarter;
+    return header;
+  }
 }

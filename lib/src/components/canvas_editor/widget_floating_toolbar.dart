@@ -7,6 +7,32 @@ import '../core/ui_component.dart';
 /// Modo contextual exibido pela mini-toolbar.
 enum FloatingToolbarMode { hidden, text, table, image }
 
+/// Resolve o contexto da seleção atual (texto/tabela/imagem) — usado pela
+/// mini-toolbar e pelas abas contextuais do ribbon.
+FloatingToolbarMode resolveSelectionContext(Command command) {
+  final IRange range = command.getRange();
+  final bool isTable = range.tableId != null;
+  final bool isCollapsed = range.startIndex == range.endIndex &&
+      (!isTable ||
+          (range.startTrIndex == range.endTrIndex &&
+              range.startTdIndex == range.endTdIndex));
+  // Dentro de tabela o caret normalmente está colapsado em uma única
+  // célula. Ainda assim os comandos estruturais da tabela devem aparecer.
+  if (isTable) {
+    return FloatingToolbarMode.table;
+  }
+  if (isCollapsed) {
+    // getRangeContext também materializa coordenadas lazy; mantenha essa
+    // consulta fora do caminho quente das seleções textuais não colapsadas.
+    final RangeContext? context = command.getRangeContext();
+    if (context?.startElement.type == ElementType.image) {
+      return FloatingToolbarMode.image;
+    }
+    return FloatingToolbarMode.hidden;
+  }
+  return FloatingToolbarMode.text;
+}
+
 /// Mini-toolbar contextual posicionada junto à seleção no canvas.
 ///
 /// Ela usa o [RangeContext] e a posição calculada pelo core; não observa cada
@@ -92,6 +118,9 @@ class WidgetFloatingToolbar extends UiComponent {
           _command.executeMergeTableCell),
       _button('splitCells', 'ti-arrows-split-2', 'Desfazer mesclagem',
           _command.executeCancelMergeTableCell),
+      _divider(),
+      _button('repeatHeader', 'ti-table-options', 'Repetir linhas de cabeçalho',
+          _command.executeToggleTableHeaderRow),
     ]);
   }
 
@@ -191,29 +220,7 @@ class WidgetFloatingToolbar extends UiComponent {
   }
 
   /// Decide o modo contextual a partir do range atual.
-  FloatingToolbarMode _resolveMode() {
-    final IRange range = _command.getRange();
-    final bool isTable = range.tableId != null;
-    final bool isCollapsed = range.startIndex == range.endIndex &&
-        (!isTable ||
-            (range.startTrIndex == range.endTrIndex &&
-                range.startTdIndex == range.endTdIndex));
-    // Dentro de tabela o caret normalmente está colapsado em uma única
-    // célula. Ainda assim os comandos estruturais da tabela devem aparecer.
-    if (isTable) {
-      return FloatingToolbarMode.table;
-    }
-    if (isCollapsed) {
-      // getRangeContext também materializa coordenadas lazy; mantenha essa
-      // consulta fora do caminho quente das seleções textuais não colapsadas.
-      final RangeContext? context = _command.getRangeContext();
-      if (context?.startElement.type == ElementType.image) {
-        return FloatingToolbarMode.image;
-      }
-      return FloatingToolbarMode.hidden;
-    }
-    return FloatingToolbarMode.text;
-  }
+  FloatingToolbarMode _resolveMode() => resolveSelectionContext(_command);
 
   /// Mostra a toolbar conforme o contexto: texto, tabela ou imagem.
   void refresh() {
@@ -233,6 +240,11 @@ class WidgetFloatingToolbar extends UiComponent {
         _mode == FloatingToolbarMode.text ? 'contents' : 'none';
     _tableGroup.style.display =
         _mode == FloatingToolbarMode.table ? 'contents' : 'none';
+    if (_mode == FloatingToolbarMode.table) {
+      _buttons['repeatHeader']
+          ?.classes
+          .toggle('active', _command.getIsTableHeaderRowActive());
+    }
     _imageGroup.style.display =
         _mode == FloatingToolbarMode.image ? 'contents' : 'none';
     if (_mode == FloatingToolbarMode.image) {

@@ -2,6 +2,8 @@
 
 import 'dart:html';
 
+import 'package:canvas_text_editor/ce_fonts.dart' as ce_fonts;
+
 import '../../dataset/constant/common.dart';
 import '../../dataset/constant/element.dart';
 import '../../dataset/constant/title.dart';
@@ -3053,6 +3055,171 @@ class CommandAdapt {
   /// DOCX) — implementação no Draw, compartilhada com o clique em hyperlink.
   bool locationBookmark(String name) => draw.locationBookmark(name) == true;
 
+  /// Insere/atualiza o Sumário no corpo (plano_expansao §4.3): coleta os
+  /// títulos do documento, garante um bookmark-âncora em cada um e monta
+  /// entradas "texto ..... página" com hyperlink interno e recuo por nível.
+  /// Rodar de novo substitui o sumário existente (região marcada com
+  /// extension['toc']). O alinhamento do número usa preenchimento de pontos
+  /// medido pela métrica TTF (right-tab real fica para F4.4).
+  void insertToc() {
+    if (_isReadonly() || _isDisabled()) return;
+    if (draw.getZone().isMainActive() != true) return;
+    draw.finishProgressiveLayout();
+
+    final List<IElement> elementList =
+        _castElementList(draw.getOriginalMainElementList());
+    final List<dynamic> positionList =
+        position.getPositionList() as List<dynamic>;
+
+    List<String>? bookmarksOf(IElement element) {
+      final dynamic ext = element.extension;
+      if (ext is! Map) return null;
+      final dynamic names = ext['bookmarks'];
+      if (names is! List || names.isEmpty) return null;
+      return names.cast<String>();
+    }
+
+    void mergeExtension(IElement element, Map<String, Object> add) {
+      final dynamic ext = element.extension;
+      final Map<String, dynamic> map =
+          ext is Map ? Map<String, dynamic>.from(ext) : <String, dynamic>{};
+      add.forEach((String key, Object value) {
+        final dynamic existing = map[key];
+        if (value is List<String> && existing is List) {
+          map[key] = <String>[...existing.cast<String>(), ...value];
+        } else {
+          map[key] = value;
+        }
+      });
+      element.extension = map;
+    }
+
+    // 1) Coleta os títulos (lista achatada: cada elemento carrega titleId).
+    final List<_TocEntry> entries = <_TocEntry>[];
+    String? curTitleId;
+    for (int i = 0; i < elementList.length; i++) {
+      final IElement el = elementList[i];
+      final String? titleId = el.titleId;
+      if (titleId == null) {
+        curTitleId = null;
+        continue;
+      }
+      final bool isText = el.type == null && el.value != ZERO;
+      if (titleId == curTitleId) {
+        if (isText && entries.isNotEmpty) entries.last.text += el.value;
+        continue;
+      }
+      curTitleId = titleId;
+      entries.add(_TocEntry(
+        index: i,
+        level: el.level ?? TitleLevel.first,
+        text: isText ? el.value : '',
+      ));
+    }
+    if (entries.isEmpty) return;
+
+    // 2) Garante bookmark-âncora em cada título (reusa os existentes do
+    // Word, ex. _TocNNN; cria e exporta os novos via wpBookmark*Xml).
+    int bookmarkSeq = 0;
+    for (final _TocEntry entry in entries) {
+      final IElement el = elementList[entry.index];
+      final List<String>? existing = bookmarksOf(el);
+      if (existing != null) {
+        entry.anchor = existing.first;
+      } else {
+        final String name =
+            '_TocCe${getUUID().replaceAll('-', '').substring(0, 8)}';
+        final int xmlId = 20000 + bookmarkSeq;
+        mergeExtension(el, <String, Object>{
+          'bookmarks': <String>[name],
+          'wpBookmarkStartXml': <String>[
+            '<w:bookmarkStart w:id="$xmlId" w:name="$name"/>'
+          ],
+          'wpBookmarkEndXml': <String>['<w:bookmarkEnd w:id="$xmlId"/>'],
+        });
+        entry.anchor = name;
+      }
+      if (entry.index < positionList.length) {
+        final dynamic pos = positionList[entry.index];
+        if (pos is IElementPosition) entry.pageNo = pos.pageNo + 1;
+      }
+      bookmarkSeq++;
+    }
+
+    // 3) Métrica p/ o preenchimento de pontos (TTF; fallback aproximado).
+    final double scale = (options.scale ?? 1).toDouble();
+    final double innerWidth = draw.getInnerWidth() / (scale == 0 ? 1 : scale);
+    final ce_fonts.FontMetrics? fontMetrics =
+        ce_fonts.FontRegistry.instance.lookup(options.defaultFont ?? 'Arial');
+    double textWidth(String text, double size) =>
+        fontMetrics?.measureWidth(text, size) ?? text.length * size * 0.52;
+
+    // 4) Monta o bloco do sumário.
+    final String tocId = getUUID();
+    Map<String, dynamic> tocExt() => <String, dynamic>{'toc': tocId};
+    const double entrySize = 16;
+    final List<IElement> toc = <IElement>[];
+    toc.add(IElement(value: '\n')..extension = tocExt());
+    toc.add(
+        IElement(value: 'Sumário', bold: true, size: 21)..extension = tocExt());
+    for (final _TocEntry entry in entries) {
+      final String text = entry.text.trim();
+      if (text.isEmpty) continue;
+      final int levelIndex = TitleLevel.values.indexOf(entry.level);
+      final double indent = levelIndex * 16.0;
+      final String pageText = '${entry.pageNo ?? '?'}';
+      final double used = indent +
+          textWidth(text, entrySize) +
+          textWidth(' $pageText', entrySize);
+      final double dotWidth = textWidth('.', entrySize);
+      final double free = innerWidth - used - 8;
+      final int dots = free > 0 && dotWidth > 0 ? (free / dotWidth).floor() : 3;
+      toc.add(IElement(value: '\n')
+        ..extension = tocExt()
+        ..paraIndentLeft = indent);
+      toc.add(IElement(
+        value: '',
+        type: ElementType.hyperlink,
+        url: '#${entry.anchor}',
+        hyperlinkId: getUUID(),
+        valueList: <IElement>[
+          IElement(value: text, size: entrySize.round())
+            ..extension = tocExt()
+            ..paraIndentLeft = indent,
+        ],
+      )
+        ..extension = tocExt()
+        ..paraIndentLeft = indent);
+      toc.add(IElement(
+          value: ' ${'.' * (dots < 3 ? 3 : dots)} $pageText',
+          size: entrySize.round())
+        ..extension = tocExt()
+        ..paraIndentLeft = indent);
+    }
+    toc.add(IElement(value: '\n')..extension = tocExt());
+
+    // 5) Substitui o sumário existente (região extension['toc']) ou insere
+    // no cursor.
+    int tocStart = -1;
+    int tocEnd = -1;
+    for (int i = 0; i < elementList.length; i++) {
+      final dynamic ext = elementList[i].extension;
+      if (ext is Map && ext['toc'] != null) {
+        if (tocStart == -1) tocStart = i;
+        tocEnd = i;
+      } else if (tocStart != -1 && tocEnd != -1 && i > tocEnd + 1) {
+        break;
+      }
+    }
+    if (tocStart != -1) {
+      draw.spliceElementList(
+          elementList, tocStart, tocEnd - tocStart + 1, <IElement>[]);
+      final int anchorIndex = (tocStart - 1).clamp(0, elementList.length - 1);
+      range.setRange(anchorIndex, anchorIndex);
+    }
+    insertElementList(toc);
+  }
+
   void wordTool() {
     final List<IElement> elementList =
         _castElementList(draw.getMainElementList());
@@ -4357,4 +4524,15 @@ class _ElementDeltaHistory {
   final bool isSetCursor;
   List<IElement>? afterSnapshot;
   IRange? afterRange;
+}
+
+/// Entrada do Sumário (insertToc): título coletado + âncora + página.
+class _TocEntry {
+  _TocEntry({required this.index, required this.level, required this.text});
+
+  final int index;
+  final TitleLevel level;
+  String text;
+  String? anchor;
+  int? pageNo;
 }

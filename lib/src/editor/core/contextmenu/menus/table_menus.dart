@@ -241,6 +241,32 @@ List<IRegisterContextMenu> get tableMenus => <IRegisterContextMenu>[
         ],
       ),
       IRegisterContextMenu(
+        key: _tableKey.repeatHeaderRow,
+        i18nPath: 'contextmenu.table.repeatHeaderRow',
+        icon: 'insert-top-row',
+        when: (payload) {
+          if (payload.isReadonly ||
+              !payload.isInTable ||
+              payload.options.mode == EditorMode.form) {
+            return false;
+          }
+          // Como no Word: habilita quando o cursor está numa linha do topo
+          // (candidata a cabeçalho) ou numa linha já marcada (p/ desmarcar).
+          final int? trIndex = payload.trIndex;
+          final List<ITr>? trList = payload.tableElement?.trList;
+          if (trIndex == null || trList == null || trIndex >= trList.length) {
+            return false;
+          }
+          if ((payload.tableElement?.pagingIndex ?? 0) != 0) {
+            return false;
+          }
+          return trIndex == 0 ||
+              trList[trIndex].pagingRepeat == true ||
+              trList[trIndex - 1].pagingRepeat == true;
+        },
+        callback: (command, _) => command.executeToggleTableHeaderRow(),
+      ),
+      IRegisterContextMenu(
         key: _tableKey.mergeCell,
         i18nPath: 'contextmenu.table.mergeCell',
         icon: 'merge-cell',
