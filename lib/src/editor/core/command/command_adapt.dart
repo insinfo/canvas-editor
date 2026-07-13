@@ -2001,11 +2001,14 @@ class CommandAdapt {
         mode: EditorMode.print,
       ),
     );
+    // width/height das options são double (px) — a API de impressão usa int.
     printImageBase64(
       base64List,
-      width: width,
-      height: height,
-      direction: paperDirection,
+      width: (width as num?)?.round() ?? 794,
+      height: (height as num?)?.round() ?? 1123,
+      direction: paperDirection is PaperDirection
+          ? paperDirection
+          : PaperDirection.vertical,
     );
     if (scale != null && scale != 1) {
       draw.setPageScale(scale);

@@ -86,13 +86,10 @@ class WidgetRibbon extends UiComponent {
     _setDisabled('undo', !style.undo);
     _setDisabled('redo', !style.redo);
 
-    if (_optionExists(_fontSelect, style.font)) {
-      _fontSelect.value = style.font;
-    }
-    final String sizeValue = '${style.size.round()}';
-    if (_optionExists(_sizeSelect, sizeValue)) {
-      _sizeSelect.value = sizeValue;
-    }
+    // O select SEMPRE acompanha o contexto (Word): valores fora da lista fixa
+    // ganham uma opção dinâmica (marcada) em vez de manter o valor anterior.
+    _selectValueEnsuring(_fontSelect, style.font);
+    _selectValueEnsuring(_sizeSelect, '${style.size.round()}');
 
     // `recoveryRangeStyle` emite type=null durante transições de foco. Não
     // deixe esse payload transitório alternar Título/Normal na ribbon.
@@ -125,6 +122,24 @@ class WidgetRibbon extends UiComponent {
 
   bool _optionExists(SelectElement select, String value) =>
       select.options.any((OptionElement option) => option.value == value);
+
+  /// Seta o valor do select criando uma opção dinâmica quando o valor do
+  /// contexto não está na lista fixa (fonte/tamanho fora do catálogo).
+  void _selectValueEnsuring(SelectElement select, String value) {
+    if (value.isEmpty || value == '0') return;
+    if (!_optionExists(select, value)) {
+      // Remove a opção dinâmica anterior (mantém a lista fixa enxuta).
+      for (final OptionElement option in select.options.toList()) {
+        if (option.dataset['dynamic'] == '1') option.remove();
+      }
+      final OptionElement dynamicOption = OptionElement(
+        data: value,
+        value: value,
+      )..dataset['dynamic'] = '1';
+      select.append(dynamicOption);
+    }
+    select.value = value;
+  }
 
   // -----------------------------------------------------------------------
   // Construção
