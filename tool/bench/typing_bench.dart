@@ -113,6 +113,83 @@ void main() {
           app.editor.getDraw().finishProgressiveLayout();
           return (html.window.performance.now() - start).toDouble();
         }),
+        // Fidelidade G3: primeiro texto de cada página (p/ comparar com o
+        // PDF do Word página a página e achar onde a divergência acumula).
+        'pageStarts': js_util.allowInterop(() {
+          final draw = app.editor.getDraw();
+          final pages = draw.getPageRowList();
+          final starts = <String>[];
+          for (final rows in pages) {
+            final buffer = StringBuffer();
+            for (final row in rows) {
+              for (final el in row.elementList) {
+                final v = el.value;
+                if (v != '​' && v != '\n') buffer.write(v);
+                if (buffer.length > 60) break;
+              }
+              if (buffer.length > 60) break;
+              // tabela: usa o texto da 1ª célula
+              if (buffer.isEmpty) {
+                for (final el in row.elementList) {
+                  final trList = el.trList;
+                  if (trList != null && trList.isNotEmpty) {
+                    for (final td in trList.first.tdList) {
+                      for (final e2 in td.value) {
+                        final v2 = e2.value;
+                        if (v2 != '​' && v2 != '\n') buffer.write(v2);
+                        if (buffer.length > 60) break;
+                      }
+                      if (buffer.length > 60) break;
+                    }
+                  }
+                  if (buffer.length > 60) break;
+                }
+              }
+            }
+            starts.add(buffer.toString().replaceAll('|','/'));
+          }
+          return starts.join('|');
+        }),
+        // Fidelidade: rows do parágrafo cujo texto começa com [prefix]
+        // (altura/offset/nº de linhas + estilo do 1º elemento).
+        'paragraphProbe': js_util.allowInterop((String prefix) {
+          final draw = app.editor.getDraw();
+          final els = draw.getOriginalMainElementList();
+          int start = -1;
+          for (var i = 0; i < els.length; i++) {
+            if (els[i].value == '​' || els[i].value == '\n') continue;
+            final probe = StringBuffer();
+            var j = i;
+            while (j < els.length && probe.length < prefix.length) {
+              final v = els[j].value;
+              if (v != '​' && v != '\n') probe.write(v);
+              j++;
+            }
+            if (probe.toString().startsWith(prefix)) {
+              start = i;
+              break;
+            }
+          }
+          if (start < 0) return 'not-found';
+          var pStart = start;
+          while (pStart > 0 && els[pStart].value != '​') pStart--;
+          var pEnd = start + 1;
+          while (pEnd < els.length && els[pEnd].value != '​') pEnd++;
+          final rows = draw.getRowList();
+          final out = <String>[];
+          for (final row in rows) {
+            if (row.startIndex >= pStart && row.startIndex < pEnd) {
+              out.add('h=${row.height.toStringAsFixed(1)} '
+                  'oy=${(row.offsetY ?? 0).toStringAsFixed(1)} '
+                  'n=${row.elementList.length}');
+            }
+          }
+          final el = els[start];
+          return 'el(sz=${el.size} f=${el.font} lsr=${el.lineSpacingRule} '
+              'lsv=${el.lineSpacingValue} b=${el.paraSpacingBefore} '
+              'a=${el.paraSpacingAfter} rm=${el.rowMargin})  '
+              'rows=${out.length}  ${out.join(' ; ')}';
+        }),
         // F5.4a: nº de canvases com backing store vivo (largura > 1) vs total,
         // e memória aproximada do backing store (MB).
         'canvasMemStats': js_util.allowInterop(() {
@@ -388,6 +465,27 @@ Future<void> main(List<String> args) async {
           'tr_pages_final',
           (await page.evaluate<num?>('() => window.__perf.pageCount()'))
               ?.toInt());
+      if (args.contains('--marks')) {
+        final marks = await page
+            .evaluate<String?>('() => window.__perf.pageStarts()');
+        stdout.writeln('[marks-tr]');
+        final parts = (marks ?? '').split('|');
+        for (var i = 0; i < parts.length; i++) {
+          stdout.writeln('${i + 1}: ${parts[i]}');
+        }
+        for (final prefix in <String>[
+          '2.12. Os sistemas',
+          '2.17.1.4. Permitir',
+          '2.1. A presente',
+        ]) {
+          final probe = await page.evaluate<String?>(
+            '(p) => window.__perf.paragraphProbe(p)',
+            args: <dynamic>[prefix],
+          );
+          stdout.writeln('[probe] "$prefix": $probe');
+        }
+        return;
+      }
       stdout.writeln('[tableStats] '
           '${await page.evaluate<String?>('() => window.__perf.tableStats()')}');
       stdout.writeln('[canvasMem] '

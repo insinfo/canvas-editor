@@ -52,6 +52,7 @@ class CanvasEditorConfig {
     this.onCommentDeleted,
     this.showFloatingToolbar = true,
     this.showRulers = true,
+    this.showWordCount = true,
   });
 
   final CanvasEditorWidgetMode mode;
@@ -69,6 +70,10 @@ class CanvasEditorConfig {
   final void Function(CanvasEditorComment comment)? onCommentDeleted;
   final bool showFloatingToolbar;
   final bool showRulers;
+
+  /// Contagem de palavras na status bar. É O(doc) por mudança (debounce) —
+  /// desligue em documentos muito grandes para digitação mais leve.
+  final bool showWordCount;
 }
 
 /// Embeddable facade for Dart Web and AngularDart applications.
@@ -225,6 +230,7 @@ class CanvasEditorWidget
     statusBar = WidgetStatusBar(command)
       ..setVisible(
           config.showStatusBar && config.mode == CanvasEditorWidgetMode.editor);
+    if (!config.showWordCount) statusBar.hideWordCount();
     root.append(statusBar.root);
 
     loading = WidgetLoadingOverlay(root);
@@ -297,6 +303,8 @@ class CanvasEditorWidget
   }
 
   void _scheduleWordCount() {
+    // Contagem é O(doc); desligável p/ documentos muito grandes.
+    if (!config.showWordCount) return;
     _wordCountDebounce?.cancel();
     _wordCountDebounce = Timer(const Duration(milliseconds: 250), () async {
       try {
