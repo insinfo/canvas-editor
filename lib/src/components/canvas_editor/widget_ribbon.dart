@@ -13,6 +13,7 @@ abstract class CanvasEditorShellActions {
   Future<void> downloadDocx([String? fileName]);
   Future<void> exportCurrentPageImage();
   Future<void> downloadPdf([String? fileName]);
+  Future<void> printDocument();
   void openFind({bool focusReplace = false});
   void toggleCatalog();
   void toggleComments();
@@ -182,8 +183,8 @@ class WidgetRibbon extends UiComponent {
         _button('save', 'ti-device-floppy', 'Baixar DOCX',
             () => _actions.downloadDocx(),
             labeled: true),
-        _button(
-            'print', 'ti-printer', 'Imprimir', () => _command.executePrint(),
+        _button('print', 'ti-printer', 'Imprimir',
+            () => unawaited(_actions.printDocument()),
             labeled: true),
       ]),
       _group('Exportar', <Element>[
@@ -1039,7 +1040,8 @@ class WidgetCompactToolbar extends UiComponent {
           () => _command.executeRowFlex(RowFlex.right)),
       _button('search', 'ti-search', 'Localizar (Ctrl+F)',
           () => _actions.openFind()),
-      _button('print', 'ti-printer', 'Imprimir', () => _command.executePrint()),
+      _button('print', 'ti-printer', 'Imprimir',
+          () => unawaited(_actions.printDocument())),
     ]);
     return toolbar;
   }

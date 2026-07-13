@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:html';
+import 'dart:js_util' as js_util;
 import 'dart:typed_data';
 
 import 'package:canvas_text_editor/ce_docx.dart';
@@ -807,10 +808,75 @@ class CanvasEditorWidget
   void viewerZoomIn() => command.executePageScaleAdd();
 
   @override
-  void viewerPrint() => command.executePrint();
+  void viewerPrint() => unawaited(printDocument());
 
   @override
   void viewerDownload() => unawaited(downloadDocx());
+
+  /// Imprime via PDF VETORIAL num iframe oculto (como um leitor de PDF) —
+  /// texto nítido em qualquer impressora, sem rasterizar páginas.
+  @override
+  Future<void> printDocument() async {
+    await loading.show('Preparando impressão…');
+    String? url;
+    try {
+      Uint8List bytes;
+      try {
+        await _ensureFullPagination();
+        bytes = exportPdfBytes();
+      } catch (_) {
+        bytes = await _exportRasterPdfFallback();
+      }
+      url = Url.createObjectUrlFromBlob(
+        Blob(<Object>[bytes], 'application/pdf'),
+      );
+      // SEM tamanho, mas NÃO oculto (display/visibility/opacity quebram o
+      // print do viewer de PDF em alguns browsers).
+      final IFrameElement frame = IFrameElement()
+        ..style.position = 'fixed'
+        ..style.right = '0'
+        ..style.bottom = '0'
+        ..style.width = '0'
+        ..style.height = '0'
+        ..style.border = 'none'
+        ..setAttribute('aria-hidden', 'true')
+        ..src = url;
+      // O visualizador de PDF embutido monta de forma assíncrona após o
+      // onLoad — tenta imprimir com retry até pegar (máx ~6s).
+      void tryPrint(int attempt) {
+        try {
+          final dynamic win = frame.contentWindow;
+          if (win != null) {
+            js_util.callMethod(win, 'focus', <Object>[]);
+            js_util.callMethod(win, 'print', <Object>[]);
+            return;
+          }
+        } catch (error) {
+          window.console.warn('printDocument: tentativa $attempt falhou '
+              '($error)');
+        }
+        if (attempt < 12) {
+          Timer(const Duration(milliseconds: 500), () => tryPrint(attempt + 1));
+        }
+      }
+
+      frame.onLoad.first.then((_) {
+        Timer(const Duration(milliseconds: 600), () => tryPrint(0));
+      });
+      document.body?.append(frame);
+      final String createdUrl = url;
+      // O diálogo de impressão segura o iframe; limpa com folga generosa.
+      Timer(const Duration(seconds: 90), () {
+        frame.remove();
+        Url.revokeObjectUrl(createdUrl);
+      });
+    } catch (error) {
+      config.onError?.call(error);
+      if (url != null) Url.revokeObjectUrl(url);
+    } finally {
+      loading.hide();
+    }
+  }
 
   void destroy() {
     _wordCountDebounce?.cancel();
