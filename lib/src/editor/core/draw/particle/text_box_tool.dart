@@ -65,6 +65,11 @@ class TextBoxTool {
 
   void _select(HeaderTextBoxRect rect) {
     _selectedIndex = rect.index;
+    // Esconde o caret do editor — a seleção é da caixa, não de texto
+    // (sem isto o cursor da posição anterior fica visível, gigante).
+    try {
+      (_draw.getCursor() as dynamic)?.recoveryCursor();
+    } catch (_) {}
     _renderOverlay(rect);
   }
 
@@ -133,6 +138,27 @@ class TextBoxTool {
       ..append(barButton('ti-pencil', 'Editar texto', () {
         _openEditPanel(rect);
       }));
+    // Cor de fundo da caixa (input nativo) + limpar fundo.
+    final InputElement fillInput = InputElement(type: 'color')
+      ..classes.add('$editorPrefix-textbox-tool__fill')
+      ..title = 'Cor de fundo';
+    final List<IHeaderTextBox> boxesNow = _header.getTextBoxes();
+    if (_selectedIndex >= 0 && _selectedIndex < boxesNow.length) {
+      final String? fill = boxesNow[_selectedIndex].fillColor;
+      if (fill != null && fill.startsWith('#') && fill.length == 7) {
+        fillInput.value = fill;
+      }
+    }
+    fillInput.onMouseDown.listen((MouseEvent e) => e.stopPropagation());
+    fillInput.onChange.listen((_) {
+      final String? value = fillInput.value;
+      if (value == null || value.isEmpty) return;
+      _mutateBox((IHeaderTextBox tb) => tb.fillColor = value);
+    });
+    bar.append(fillInput);
+    bar.append(barButton('ti-droplet-off', 'Sem cor de fundo', () {
+      _mutateBox((IHeaderTextBox tb) => tb.fillColor = null);
+    }));
     overlay.append(bar);
     _container.append(overlay);
     _overlay = overlay;

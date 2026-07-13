@@ -3158,10 +3158,14 @@ class CommandAdapt {
     final String tocId = getUUID();
     Map<String, dynamic> tocExt() => <String, dynamic>{'toc': tocId};
     const double entrySize = 16;
+    // O título fica FORA do campo TOC no export (o F9 do Word substitui o
+    // resultado do campo — o título não pode ser engolido).
+    Map<String, dynamic> tocTitleExt() =>
+        <String, dynamic>{'toc': tocId, 'tocTitle': true};
     final List<IElement> toc = <IElement>[];
-    toc.add(IElement(value: '\n')..extension = tocExt());
-    toc.add(
-        IElement(value: 'Sumário', bold: true, size: 21)..extension = tocExt());
+    toc.add(IElement(value: '\n')..extension = tocTitleExt());
+    toc.add(IElement(value: 'Sumário', bold: true, size: 21)
+      ..extension = tocTitleExt());
     for (final _TocEntry entry in entries) {
       final String text = entry.text.trim();
       if (text.isEmpty) continue;

@@ -61,6 +61,21 @@ class Footer {
   bool _useEvenOn(int pageNo) =>
       _evenAndOdd && pageNo.isOdd && _evenElementList.isNotEmpty;
 
+  // F4.6: edição in-place da variante (ver Header).
+  String _activeVariant = 'default';
+
+  void setActiveVariantForPage(int pageNo) {
+    _activeVariant = _useFirstOn(pageNo)
+        ? 'first'
+        : _useEvenOn(pageNo)
+            ? 'even'
+            : 'default';
+  }
+
+  void resetActiveVariant() {
+    _activeVariant = 'default';
+  }
+
   dynamic _drawDynamic<T>(T Function(dynamic target) callback) {
     try {
       return callback(_draw as dynamic);
@@ -69,15 +84,27 @@ class Footer {
     }
   }
 
-  List<IRow> getRowList() => _rowList;
+  List<IRow> getRowList() => switch (_activeVariant) {
+        'first' => _firstRowList,
+        'even' => _evenRowList,
+        _ => _rowList,
+      };
 
   void setElementList(List<IElement> elementList) {
     _elementList = elementList;
   }
 
-  List<IElement> getElementList() => _elementList;
+  List<IElement> getElementList() => switch (_activeVariant) {
+        'first' => _firstElementList,
+        'even' => _evenElementList,
+        _ => _elementList,
+      };
 
-  List<IElementPosition> getPositionList() => _positionList;
+  List<IElementPosition> getPositionList() => switch (_activeVariant) {
+        'first' => _firstPositionList,
+        'even' => _evenPositionList,
+        _ => _positionList,
+      };
 
   void compute() {
     recovery();
@@ -195,20 +222,18 @@ class Footer {
     ctx.globalAlpha = _zone.isFooterActive() ? 1 : (footer.inactiveAlpha ?? 1);
     final double innerWidth = _draw.getInnerWidth();
     final double maxHeight = getMaxHeight();
-    // F4.6: variante por página (first/even), exceto com a zona ativa.
+    // F4.6: variante por página (first/even) SEMPRE (edição in-place).
     List<IElement> elementList = _elementList;
     List<IRow> rowSource = _rowList;
     List<IElementPosition> positionList = _positionList;
-    if (!_zone.isFooterActive()) {
-      if (_useFirstOn(pageNo)) {
-        elementList = _firstElementList;
-        rowSource = _firstRowList;
-        positionList = _firstPositionList;
-      } else if (_useEvenOn(pageNo)) {
-        elementList = _evenElementList;
-        rowSource = _evenRowList;
-        positionList = _evenPositionList;
-      }
+    if (_useFirstOn(pageNo)) {
+      elementList = _firstElementList;
+      rowSource = _firstRowList;
+      positionList = _firstPositionList;
+    } else if (_useEvenOn(pageNo)) {
+      elementList = _evenElementList;
+      rowSource = _evenRowList;
+      positionList = _evenPositionList;
     }
     final List<IRow> renderRows = <IRow>[];
     double curHeight = 0;

@@ -4603,7 +4603,10 @@ class Draw {
         final dynamic tableTool = _tableTool;
         tableTool?.render?.call();
       }
-      if (isCompute && _mode != EditorMode.print && !getZone().isMainActive()) {
+      // Moldura tracejada + label "Cabeçalho"/"Rodapé": mantida viva em
+      // QUALQUER render enquanto a zona não-main está ativa (as edições da
+      // caixa de texto renderizam com isCompute:false).
+      if (_mode != EditorMode.print && !getZone().isMainActive()) {
         getZone().drawZoneIndicator();
       }
       if (oldPageSize != _pageRowList.length) {

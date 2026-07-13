@@ -813,6 +813,15 @@
   color: #27364b;
 }
 .ce-textbox-tool__bar button:hover { background: #eef3fa; }
+.ce-textbox-tool__fill {
+  width: 24px;
+  height: 22px;
+  padding: 0;
+  border: 1px solid #c6cdd6;
+  border-radius: 3px;
+  background: transparent;
+  cursor: pointer;
+}
 .ce-textbox-tool__editor {
   position: absolute;
   z-index: 31;
