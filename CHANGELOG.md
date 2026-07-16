@@ -167,6 +167,82 @@ page-faithful raster output.
   row/column operations still expose multi-second global-layout work.
 - Full E2E smoke suite passes: 39/39.
 
+### Performance Refactor Completion (2026-07-15)
+
+This section supersedes the interim performance figures above for the current
+worktree. Final measurements use release dart2js (`-O2`), headless Chrome and
+the real 122,603-element, 143-page TR DOCX.
+
+Completed:
+
+- [x] Replaced whole-document work in the text hot path with typed reversible
+  mutations, one-pass range splices and multi-paragraph fast layout for Enter,
+  Backspace, Delete, selection replacement and rich-text formatting.
+- [x] Added convergent local pagination (`PageRowIndex`), page-segmented
+  positions (`PagePositionIndex`) and stable anchors so a normal edit recomputes
+  one position page and reuses the unaffected page prefix/suffix.
+- [x] Added stable document locators for main content, default/first/even
+  header/footer variants and recursively nested table cells. Exact table IDs
+  take precedence; `pagingId` is accepted only when unambiguous.
+- [x] Replaced recursive/unbounded history restorers with an absolute baseline,
+  a forward checkpoint and a bounded callback window. A 10,000-operation
+  Enter/text stress test with four retained endpoints restores through one
+  consolidated splice plus four callbacks and retains four undo payload units.
+- [x] Moved the deep history baseline into `setValue`/first render. Opening now
+  owns that cost; the first focus or selection does not clone the document.
+- [x] Added guarded dirty-row canvas repaint. Common height-stable edits repaint
+  only the changed rectangle; floats, search, areas, controls, graffiti,
+  watermark, pending images or ambiguous geometry safely fall back to a full
+  page repaint.
+- [x] Stopped ribbon and contextual mini-toolbar reconstruction for selection
+  style changes, preserving the selected font size/title style while toggling
+  bold or italic.
+- [x] Kept progressive layout, visible-page canvas virtualization and
+  incremental page publication integrated with the new mutation pipeline.
+
+Final release measurements:
+
+| Scenario | Result |
+|---|---:|
+| First four usable TR pages, including undo baseline | 1,639 ms |
+| Complete progressive TR pagination | +2,235 ms |
+| TR typing observed by Puppeteer | **26.1 ms/key** |
+| Warm TR input handler | **6–15 ms/key** |
+| ETP typing observed by Puppeteer | 34.2 ms/key |
+| Warm ETP input handler | 8–10 ms/key |
+| Enter + text on TR | 61.2 ms/pair (~30.6 ms per CDP event) |
+| Delete a 1,081-element TR selection | **31–48 ms** |
+| First TR focus/selection | 16.5–37.4 ms; deep snapshots 2 → 2 |
+| Fast selected-text bold or italic | **3.5 ms each** |
+| Common keystroke repaint | **1–6 ms**, normally 1–2 ms |
+
+The final 11-key TR sample used 11 fast layouts and no full layout, recomputed
+one position page per key, reused 142 pagination pages and performed nine
+partial repaints. The 1,081-element Delete previously spent 433 ms in the old
+splice alone and exceeded three seconds when it triggered global layout.
+
+Validation completed for this final refactor:
+
+- [x] `dart analyze --fatal-infos` with no diagnostics.
+- [x] 61 core tests covering document mutations, bounded history, layout,
+  positions, rendering and observers.
+- [x] 40 Word/document tests covering document conversion and round-trip
+  behavior.
+- [x] Focused browser E2E coverage for Enter/text, eager `setValue` baseline,
+  first-header history, nested-table-cell replay, protected deletion, ribbon and
+  mini-toolbar updates, 24-point title styling and multi-paragraph formatting
+  without full layout.
+
+Known remaining work:
+
+- [ ] Make physical table fragments fully derived or regionally repartition
+  them when an earlier edit changes vertical flow. On the audited TR document,
+  the first explicit full layout converges from 1,727 rows/144 pages to 1,731
+  rows/143 pages and a second full layout is identical, so this is a stable
+  deferred repartition rather than cumulative corruption.
+- [ ] Move structural table row/column commands off the full-layout path; these
+  remain a separate multi-second hot path from normal text editing.
+
 ### Architecture
 
 - Added an OnlyOffice-based architecture/performance plan in

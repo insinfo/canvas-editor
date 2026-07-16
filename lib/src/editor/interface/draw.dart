@@ -24,6 +24,13 @@ class IDrawOption {
   bool? isLazy;
   bool? isInit;
   bool? isSourceHistory;
+
+  /// Emite `contentChange` sem acoplar a notificação à criação de snapshots.
+  ///
+  /// Transações tipadas já registram seu próprio delta e, portanto, renderizam
+  /// com [isSubmitHistory] falso. Ainda assim, consumidores como autosave
+  /// precisam receber a mesma notificação das mutações legadas.
+  bool? notifyContentChange;
   bool? isFirstRender;
 
   IDrawOption({
@@ -37,6 +44,7 @@ class IDrawOption {
     this.isLazy,
     this.isInit,
     this.isSourceHistory,
+    this.notifyContentChange,
     this.isFirstRender,
   });
 }

@@ -5,6 +5,29 @@ Este roteiro deve ser atualizado para cada etapa concluida
 sempre em cada etapa utiliza dart analyze para checar os problemas de sintaxe e corrigir 
 tambem utiliza webdev build  para ver se compila
 
+## Marco de performance — estado em 2026-07-15
+
+Este checklist substitui, para o estado atual do runtime, as simplificações de
+MVP descritas mais abaixo. “Concluído” vale para a edição textual incremental;
+operações estruturais continuam usando fallback integral quando necessário.
+
+- [x] Hot path textual: splice em lote e relayout restrito aos parágrafos
+  afetados por digitação, Enter, Backspace e Delete de seleção.
+- [x] Histórico: deltas/transações compactos, coalescência de rajadas, replay
+  iterativo e checkpoints com retenção limitada.
+- [x] Paginação: repaginação a partir da row suja, reuso de prefixo/sufixo de
+  páginas e continuação progressiva sem agregação quadrática.
+- [x] Posição: cache por página e âncoras estáveis para rebase incremental de
+  índices, rows e páginas.
+- [x] Repaint: faixa de páginas sujas e clip somente das rows textuais quando a
+  geometria antiga/nova é comprovadamente estável, com fallback conservador.
+- [x] Toolbar: ribbon e mini-toolbar contextual recebem patches granulares de
+  estado; negrito/itálico não forçam rebuild completo nem alteram a fonte.
+- [ ] Reflow regional físico dos fragmentos de tabelas paginadas quando edições
+  deslocarem suas partições entre páginas.
+- [ ] Operações estruturais com invalidação própria e extrações futuras do
+  monólito de layout/draw para tabelas, floats, áreas, controles e aninhamentos.
+
 Passo 0: Configuração do Projeto
 Crie um projeto Dart para Web: Use o comando dart create -t web C:\MyDartProjects\canvas-editor-port.
 ja foi criado C:\MyDartProjects\canvas-editor-port\lib\src 

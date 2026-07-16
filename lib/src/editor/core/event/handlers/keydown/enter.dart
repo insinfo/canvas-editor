@@ -9,6 +9,8 @@ import '../../../../interface/range.dart';
 import '../../../../utils/element.dart' as element_utils;
 import '../../../draw/draw.dart' show Draw;
 import '../../../draw/particle/list_particle.dart';
+import '../../../layout/layout_invalidation.dart';
+import '../../../layout/layout_request.dart';
 import '../../../range/range_manager.dart';
 import '../../canvas_event.dart' show CanvasEvent;
 
@@ -27,8 +29,7 @@ void enter(KeyboardEvent evt, CanvasEvent host) {
   final int startIndex = range.startIndex;
   final int endIndex = range.endIndex;
   final bool isCollapsed = rangeManager.getIsCollapsed() == true;
-  final List<IElement> elementList =
-      (draw.getElementList() as List?)?.cast<IElement>() ?? <IElement>[];
+  final List<IElement> elementList = draw.getElementList();
 
   if (startIndex < 0 || startIndex >= elementList.length) {
     return;
@@ -78,8 +79,8 @@ void enter(KeyboardEvent evt, CanvasEvent host) {
       (endIndex + 1 >= elementList.length ||
           elementList[endIndex + 1].titleId != endElement.titleId);
   if (!isTitleBoundary) {
-  final IElement? copyElement =
-    rangeManager.getRangeAnchorStyle(elementList, endIndex);
+    final IElement? copyElement =
+        rangeManager.getRangeAnchorStyle(elementList, endIndex);
     if (copyElement != null) {
       enterText
         ..rowFlex = copyElement.rowFlex
@@ -102,6 +103,7 @@ void enter(KeyboardEvent evt, CanvasEvent host) {
   final dynamic control = draw.getControl();
   final dynamic activeControl = control?.ensureActiveControl();
   int? curIndex;
+  LayoutInvalidation? mutationInvalidation;
 
   if (activeControl != null && control.getIsRangeWithinControl() == true) {
     curIndex = (control.setValue(<IElement>[enterText]) as num?)?.toInt();
@@ -114,32 +116,34 @@ void enter(KeyboardEvent evt, CanvasEvent host) {
       return;
     }
     final int index = cursorPosition.index;
-    if (isCollapsed) {
-      draw.spliceElementList(elementList, index + 1, 0, <IElement>[enterText]);
-    } else {
-      draw.spliceElementList(
-        elementList,
-        startIndex + 1,
-        endIndex - startIndex,
-        <IElement>[enterText],
-      );
-    }
     curIndex = index + 1;
+    mutationInvalidation = draw.applyTextMutation(
+      elementList: elementList,
+      start: isCollapsed ? index + 1 : startIndex + 1,
+      deleteCount: isCollapsed ? 0 : endIndex - startIndex,
+      replacement: <IElement>[enterText],
+      curIndex: curIndex,
+      mergeKey: evt.shiftKey == true ? 'soft-break' : 'text-insert',
+    );
   }
 
   if (curIndex != null && curIndex >= 0) {
     rangeManager.setRange(curIndex, curIndex);
-    draw.render(IDrawOption(
-      curIndex: curIndex,
-      // Enter em docs grandes travava por 2 motivos: (1) snapshot de undo
-      // síncrono (clone O(doc)) a cada Enter e (2) relayout completo
-      // (computeRowList medindo ~122k elementos). Espelha o input: adia o
-      // snapshot para o fim da rajada e recorta o relayout ao parágrafo do
-      // cursor. O fast path retorna false com segurança dentro de
-      // tabela/lista/área/controle/float, caindo no caminho completo.
-      isSubmitHistoryDeferred: true,
-      fastLayoutIndex: curIndex,
-    ));
+    if (mutationInvalidation != null) {
+      draw.renderUpdate(
+        LayoutRequest(
+          invalidation: mutationInvalidation,
+          curIndex: curIndex,
+          notifyContentChange: true,
+        ),
+      );
+    } else {
+      draw.render(IDrawOption(
+        curIndex: curIndex,
+        isSubmitHistoryDeferred: true,
+        fastLayoutIndex: curIndex,
+      ));
+    }
   }
 
   evt.preventDefault();

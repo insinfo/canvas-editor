@@ -82,17 +82,23 @@ class WidgetFloatingToolbar extends UiComponent {
 
   void _buildTextCommands() {
     _textGroup.children.addAll(<Element>[
-      _button('bold', 'ti-bold', 'Negrito', _command.executeBold),
-      _button('italic', 'ti-italic', 'Itálico', _command.executeItalic),
+      _button('bold', 'ti-bold', 'Negrito', _command.executeBold,
+          refreshAfterAction: false),
+      _button('italic', 'ti-italic', 'Itálico', _command.executeItalic,
+          refreshAfterAction: false),
       _button(
-          'underline', 'ti-underline', 'Sublinhado', _command.executeUnderline),
+          'underline', 'ti-underline', 'Sublinhado', _command.executeUnderline,
+          refreshAfterAction: false),
       _button(
-          'strike', 'ti-strikethrough', 'Tachado', _command.executeStrikeout),
+          'strike', 'ti-strikethrough', 'Tachado', _command.executeStrikeout,
+          refreshAfterAction: false),
       _divider(),
       _button(
-          'copy', 'ti-copy', 'Copiar', () => unawaited(_command.executeCopy())),
+          'copy', 'ti-copy', 'Copiar', () => unawaited(_command.executeCopy()),
+          refreshAfterAction: false),
       _button('clear', 'ti-clear-formatting', 'Limpar formatação',
-          _command.executeFormat),
+          _command.executeFormat,
+          refreshAfterAction: false),
     ]);
   }
 
@@ -178,8 +184,9 @@ class WidgetFloatingToolbar extends UiComponent {
     String id,
     String icon,
     String label,
-    void Function() action,
-  ) {
+    void Function() action, {
+    bool refreshAfterAction = true,
+  }) {
     final ButtonElement button = ButtonElement()
       ..type = 'button'
       ..title = label
@@ -188,7 +195,9 @@ class WidgetFloatingToolbar extends UiComponent {
       ..onMouseDown.listen((MouseEvent event) => event.preventDefault())
       ..onClick.listen((_) {
         action();
-        refresh();
+        if (refreshAfterAction) {
+          refresh();
+        }
       });
     _buttons[id] = button;
     return button;
@@ -199,6 +208,9 @@ class WidgetFloatingToolbar extends UiComponent {
     ..setAttribute('aria-hidden', 'true');
 
   void syncStyle(IRangeStyle style) {
+    if (style.type == null) {
+      return;
+    }
     _buttons['bold']?.classes.toggle('active', style.bold);
     _buttons['italic']?.classes.toggle('active', style.italic);
     _buttons['underline']?.classes.toggle('active', style.underline);

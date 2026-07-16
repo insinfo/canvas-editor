@@ -68,7 +68,6 @@ bool _isFastCompatibleParagraph(List<editor_core.IElement> elements, int index) 
     end++;
   }
   editor_core.RowFlex? rowFlex;
-  var rowFlexSeen = false;
   for (var i = start; i < end; i++) {
     final el = elements[i];
     final type = el.type;
@@ -83,11 +82,13 @@ bool _isFastCompatibleParagraph(List<editor_core.IElement> elements, int index) 
         el.controlId != null ||
         el.imgDisplay != null ||
         el.pagingId != null) return false;
-    if (!rowFlexSeen) {
-      rowFlex = el.rowFlex;
-      rowFlexSeen = true;
-    } else if (el.rowFlex != rowFlex) {
-      return false;
+    final elementRowFlex = el.rowFlex;
+    if (elementRowFlex != null) {
+      if (rowFlex == null) {
+        rowFlex = elementRowFlex;
+      } else if (elementRowFlex != rowFlex) {
+        return false;
+      }
     }
   }
   return true;
@@ -157,7 +158,6 @@ String _selectionInfo(EditorApp app) {
     'rowFlex': 0,
   };
   editor_core.RowFlex? rowFlex;
-  var rowFlexSeen = false;
   for (var i = start; i < end; i++) {
     final el = elements[i];
     if (el.listId != null) flags['list'] = flags['list']! + 1;
@@ -168,11 +168,13 @@ String _selectionInfo(EditorApp app) {
     if (el.type != null && el.type != editor_core.ElementType.text) {
       flags['nonText'] = flags['nonText']! + 1;
     }
-    if (!rowFlexSeen) {
-      rowFlex = el.rowFlex;
-      rowFlexSeen = true;
-    } else if (el.rowFlex != rowFlex) {
-      flags['rowFlex'] = flags['rowFlex']! + 1;
+    final elementRowFlex = el.rowFlex;
+    if (elementRowFlex != null) {
+      if (rowFlex == null) {
+        rowFlex = elementRowFlex;
+      } else if (elementRowFlex != rowFlex) {
+        flags['rowFlex'] = flags['rowFlex']! + 1;
+      }
     }
   }
   final fastCompatible = _isFastCompatibleParagraph(elements, index);
@@ -350,6 +352,9 @@ void main() {
         'pageCount': js_util.allowInterop(() {
           return app.editor.getDraw().getPageList().length;
         }),
+        'finishProgressiveLayout': js_util.allowInterop(() {
+          app.editor.getDraw().finishProgressiveLayout();
+        }),
         'selectMode': js_util.allowInterop((String mode) {
           return _selectMode(app, mode);
         }),
@@ -469,7 +474,12 @@ Future<void> main() async {
     ),
   )..createSync(recursive: true);
 
-  await _copyDirectory(Directory('web'), buildDir);
+  // A antiga shell raiz `web/` nao existe mais. Use a mesma fixture estavel
+  // do E2E/typing bench para que o gate de comandos continue reproduzivel.
+  await _copyDirectory(
+    Directory(p.join('test', 'e2e', 'fixtures', 'legacy_shell')),
+    buildDir,
+  );
   final mainPath = p.join(buildDir.path, 'main.dart');
   File(mainPath).writeAsStringSync(_benchMainSource);
 
@@ -526,6 +536,9 @@ Future<void> main() async {
     );
 
     report('open_tr_ms', await _openDocx(page, 'tr.docx'));
+    await page.evaluate<void>(
+      '() => window.__cmdPerf.finishProgressiveLayout()',
+    );
     await page.waitForFunction(
       '() => window.__cmdPerf.pageCount() > 100',
       timeout: const Duration(minutes: 2),

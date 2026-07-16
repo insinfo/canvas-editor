@@ -11,6 +11,38 @@
 
 ---
 
+## Marco de performance — estado em 2026-07-15
+
+> “Concluído” neste marco significa que a infraestrutura incremental prevista
+> para edição textual está implementada e coberta por diagnóstico/testes. Isso
+> não declara que toda mutação estrutural já atende ao orçamento global de
+> 16 ms.
+
+- [x] **Hot path textual:** splice em lote, relayout do intervalo de parágrafos
+  afetado e caminhos rápidos para digitação, Enter, Backspace e Delete de
+  seleção, sem varrer ou deslocar repetidamente a cauda inteira do documento.
+- [x] **Histórico:** transações textuais compactas, coalescência de rajadas,
+  replay iterativo e checkpoints/limites de retenção, evitando cadeias
+  recursivas e snapshots profundos por tecla.
+- [x] **Paginação incremental:** repaginação a partir da row suja, com reuso de
+  prefixo/sufixo de páginas e publicação progressiva sem agregação quadrática.
+- [x] **Posições incrementais:** cache por página, âncoras compartilhadas para
+  rebase de índices/rows/páginas e recomputação apenas das páginas alteradas.
+- [x] **Repaint dirigido:** páginas vivas fora da faixa suja são preservadas; se
+  altura, página e geometria permanecem estáveis, somente o retângulo das rows
+  textuais sujas é limpo e redesenhado, com fallback integral conservador para
+  floats, busca, áreas, graffiti, watermark, controles e imagens pendentes.
+- [x] **Ribbon e mini-toolbar contextual:** atualização granular do estado dos
+  comandos de texto, sem reconstrução completa das toolbars e sem alterar
+  indevidamente família/tamanho da fonte ao alternar negrito ou itálico.
+- [ ] **Reflow regional físico de tabelas:** convergir incrementalmente os
+  fragmentos físicos de tabelas paginadas quando uma edição anterior deslocar
+  quebras/partições; o full layout continua sendo o fallback de correção.
+- [ ] **Operações estruturais e extrações futuras:** criar invalidações regionais
+  próprias para mutações de tabela, float, área, controle e estruturas
+  aninhadas, e continuar extraindo responsabilidades do monólito de layout/draw
+  sem misturá-las ao hot path textual já estabilizado.
+
 ## 0. Estado de execução
 
 | Fase | Estado | Evidência |

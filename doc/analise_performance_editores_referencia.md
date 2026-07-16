@@ -158,3 +158,113 @@ O que funcionou nesta rodada para achar gargalos e divergências de fidelidade:
   de que o espaçamento entre parágrafos é `max(after,before)`, não soma).
 
 Regra de ouro: **medir só em release** (`dart run tool/serve_web.dart`).
+
+---
+
+## 6. Estado implementado após a grande refatoração (2026-07-15)
+
+Esta seção atualiza o estado comparativo das seções 1–3. A arquitetura continua
+canvas-first e o layout editável continua na main thread, mas o hot path agora
+aplica os mesmos princípios observados no OnlyOffice/Kix: mutação descreve a
+invalidação, layout e paginação convergem regionalmente, posições são
+segmentadas por página e somente a região visual suja é repintada.
+
+### 6.1 Paridade arquitetural alcançada
+
+- [x] **Mutações tipadas e escopo de recálculo:** `DocumentModel`,
+  `DocumentTransaction`, `DocumentMutation`, `DocumentRange` e
+  `LayoutInvalidation` substituem decisões puramente ad-hoc no caminho de
+  Input, Enter, Backspace, Delete, IME e comandos ricos.
+- [x] **Fast layout multiparágrafo:** o recorte recompõe todos os parágrafos
+  tocados e a próxima fronteira estável. Splices de inserção/remoção movem a
+  cauda uma vez; exclusão com elementos protegidos não executa mais um
+  `removeAt` por item.
+- [x] **Paginação por convergência:** `PageRowIndex` começa na primeira row suja,
+  reaproveita prefixo/sufixo e para ao reencontrar páginas estáveis. A publicação
+  progressiva reinspeciona apenas a antiga última página.
+- [x] **Posições segmentadas:** `PagePositionIndex` e as âncoras de posição
+  recompõem a página afetada, rebaseiam páginas posteriores e reconstruem o
+  índice global a partir dos comprimentos por página, em O(páginas), sem
+  achatar os 122.603 elementos a cada tecla.
+- [x] **Locators estáveis:** `DocumentLocatorIndex` cobre main,
+  header/footer default/first/even e células de tabelas recursivamente
+  aninhadas. O replay procura `tableId` exato primeiro e só usa `pagingId`
+  inequívoco; mudanças de topologia invalidam a região proprietária.
+- [x] **Histórico compacto e limitado:** `HistoryTimeline`/`HistoryRestorer`
+  usam baseline absoluto, checkpoint forward-only e uma janela limitada de
+  callbacks, sem cadeia recursiva ou clone profundo por tecla. Em 10.000
+  operações alternando Enter/texto com quatro endpoints retidos, o restore
+  executa um splice consolidado + quatro callbacks e retém quatro unidades de
+  payload de undo.
+- [x] **Baseline fora da interação:** o clone profundo necessário à
+  compatibilidade com operações legadas acontece no primeiro render de
+  `setValue`. Primeiro clique/seleção não acrescenta snapshot.
+- [x] **Pintura de rows sujas:** quando altura e geometria permanecem estáveis,
+  o canvas limpa e redesenha somente o retângulo afetado. Floats, busca, áreas,
+  controles, graffiti, watermark, imagem pendente e geometria ambígua mantêm o
+  fallback seguro de página completa.
+- [x] **Chrome de edição incremental:** ribbon e mini-toolbar contextual
+  atualizam somente o estado dos controles. Alternar normal/negrito/itálico não
+  reconstrói as toolbars nem troca fonte/tamanho/título por um payload
+  transitório incompleto.
+- [x] **Virtualização preservada:** paginação progressiva sob demanda,
+  `PageCanvasManager`, overscan e backing stores dormentes continuam limitando
+  trabalho e memória às páginas relevantes ao viewport.
+
+### 6.2 Resultado final em release
+
+Medições com dart2js `-O2`, Chrome headless e o DOCX TR real
+(`PGCTIC1_-_TR_-_SISTEMA_GESTAO_PUBLICA__Recuperação_Automática_.docx`), com
+122.603 elementos e 143 páginas após completar a paginação:
+
+| Cenário | Resultado final |
+|---|---:|
+| Primeiras 4 páginas utilizáveis, incluindo baseline de undo | 1.639 ms |
+| Completar a paginação progressiva do TR | +2.235 ms |
+| Digitação TR observada pelo Puppeteer | **26,1 ms/tecla** |
+| Handler TR após aquecimento | **6–15 ms/tecla** |
+| Digitação ETP observada pelo Puppeteer | 34,2 ms/tecla |
+| Handler ETP em regime estável | 8–10 ms/tecla |
+| Enter + texto no TR | 61,2 ms/par (≈30,6 ms por evento CDP) |
+| Excluir seleção de 1.081 elementos no TR | **31–48 ms** |
+| Primeiro foco/seleção no TR | 16,5–37,4 ms; snapshots 2 → 2 |
+| Bold ou italic em seleção textual fast | **3,5 ms** cada |
+| Repaint de tecla comum | **1–6 ms**, normalmente 1–2 ms |
+
+Na amostra final de 11 teclas houve 11 fast layouts, nenhum layout completo,
+uma página de posições recomposta por tecla, 142 páginas de paginação
+reutilizadas e nove repaints parciais. A exclusão de 1.081 elementos gastava
+433 ms apenas no splice anterior e passava de três segundos quando caía no
+layout global. O custo interno de handler já entra no orçamento de ~16 ms após
+aquecimento; a média vista pelo Puppeteer também contém despacho CDP/browser.
+
+### 6.3 Validação executada
+
+- [x] `dart analyze --fatal-infos`: sem diagnósticos.
+- [x] 61 testes de núcleo verdes para documento, histórico, layout, posição,
+  rendering e observers, incluindo 10.000 deltas e locators aninhados.
+- [x] 40 testes de Word/documento verdes para conversão e round-trip.
+- [x] E2E focados verdes para Enter/texto, baseline no `setValue`, variante
+  first de header, célula aninhada atravessando checkpoint absoluto, exclusão
+  protegida, ribbon, mini-toolbar, título em tamanho 24 e formatação
+  multiparágrafo sem layout completo.
+
+Esta rodada não reivindica uma nova execução da suíte E2E completa; a matriz
+acima é exatamente a cobertura final executada para a refatoração.
+
+### 6.4 Limite restante: fragmentos físicos de tabela
+
+- [ ] **Reparticionamento regional de tabelas:** se uma edição anterior a uma
+  tabela já fragmentada muda o fluxo vertical, o fast path repagina as rows,
+  mas não recria imediatamente todas as fronteiras físicas dos fragmentos da
+  tabela. No TR auditado, o primeiro full layout converge de 1.727 rows/144
+  páginas para 1.731 rows/143 páginas; um segundo full layout produz exatamente
+  o mesmo resultado. Portanto, não há acumulação ou corrupção progressiva — há
+  um estado derivado que fica pendente até o full layout.
+- [ ] **Correção definitiva:** tornar os fragmentos estado puramente derivado ou
+  implementar reflow/reparticionamento a partir da região da tabela afetada.
+  Forçar full layout a cada Enter foi rejeitado porque restauraria a pausa de
+  aproximadamente 3,3 segundos que esta refatoração eliminou.
+- [ ] **Comandos estruturais de tabela:** inserir/remover linha ou coluna ainda
+  usa layout completo e pode custar segundos. É um hot path separado; edição,
+  Enter, seleção, Delete e formatação textual permanecem incrementais.

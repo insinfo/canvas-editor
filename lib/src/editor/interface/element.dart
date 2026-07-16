@@ -489,6 +489,7 @@ class IElement
   /// 'auto' (value = múltiplo de single), 'atLeast' ou 'exact' (value = px).
   String? lineSpacingRule;
   double? lineSpacingValue;
+
   /// `w:before`/`w:after` do parágrafo em px (aplicados no offsetY da
   /// primeira linha do parágrafo/do seguinte).
   double? paraSpacingBefore;
@@ -532,6 +533,11 @@ class IElement
   /// gigante do TR (94% do conteúdo), custando ~250-450 ms/tecla. Não serializado.
   double? lastPositionedTablePreY;
   int? lastPositionedPageNo;
+
+  /// Identidade do layout da primeira célula usado para produzir o cache de
+  /// posições acima. `tablePreY/pageNo` iguais não bastam quando o conteúdo de
+  /// uma célula mudou sem mover a tabela.
+  Object? lastPositionedFirstCellRowList;
   @override
   TableBorder? borderType;
   @override
@@ -757,11 +763,46 @@ class IElementMetrics {
   });
 }
 
+/// Shared offsets for all positions produced by one page.
+///
+/// A local edit can move every later page/index without changing its geometry.
+/// Keeping the displacement here makes that rebase O(pages), instead of
+/// rewriting every [IElementPosition] in the document.
+class IElementPositionAnchor {
+  IElementPositionAnchor({
+    int pageOffset = 0,
+    this.indexOffset = 0,
+    this.rowIndexOffset = 0,
+    this.pageParent,
+  }) : _pageOffset = pageOffset;
+
+  int _pageOffset;
+  int indexOffset;
+  int rowIndexOffset;
+  final IElementPositionAnchor? pageParent;
+
+  int get pageOffset => _pageOffset + (pageParent?.pageOffset ?? 0);
+
+  set pageOffset(int value) {
+    _pageOffset = value - (pageParent?.pageOffset ?? 0);
+  }
+
+  void shift({
+    int pageDelta = 0,
+    int indexDelta = 0,
+    int rowIndexDelta = 0,
+  }) {
+    _pageOffset += pageDelta;
+    indexOffset += indexDelta;
+    rowIndexOffset += rowIndexDelta;
+  }
+}
+
 class IElementPosition {
-  int pageNo;
-  int index;
+  int _pageNo;
+  int _index;
   String value;
-  int rowIndex;
+  int _rowIndex;
   int rowNo;
   double ascent;
   double lineHeight;
@@ -777,12 +818,13 @@ class IElementPosition {
   double coordX;
   double coordY;
   Map<String, List<double>>? _coordinate;
+  final IElementPositionAnchor? anchor;
 
   IElementPosition({
-    required this.pageNo,
-    required this.index,
+    required int pageNo,
+    required int index,
     required this.value,
-    required this.rowIndex,
+    required int rowIndex,
     required this.rowNo,
     required this.ascent,
     required this.lineHeight,
@@ -793,7 +835,29 @@ class IElementPosition {
     this.coordX = 0,
     this.coordY = 0,
     Map<String, List<double>>? coordinate,
-  }) : _coordinate = coordinate;
+    this.anchor,
+  })  : _pageNo = pageNo - (anchor?.pageOffset ?? 0),
+        _index = index - (anchor?.indexOffset ?? 0),
+        _rowIndex = rowIndex - (anchor?.rowIndexOffset ?? 0),
+        _coordinate = coordinate;
+
+  int get pageNo => _pageNo + (anchor?.pageOffset ?? 0);
+
+  set pageNo(int value) {
+    _pageNo = value - (anchor?.pageOffset ?? 0);
+  }
+
+  int get index => _index + (anchor?.indexOffset ?? 0);
+
+  set index(int value) {
+    _index = value - (anchor?.indexOffset ?? 0);
+  }
+
+  int get rowIndex => _rowIndex + (anchor?.rowIndexOffset ?? 0);
+
+  set rowIndex(int value) {
+    _rowIndex = value - (anchor?.rowIndexOffset ?? 0);
+  }
 
   /// Materializado sob demanda (lazy) e cacheado; a maioria das posições
   /// nunca tem as coordenadas lidas entre um render e o seguinte.

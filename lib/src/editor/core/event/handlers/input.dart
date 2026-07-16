@@ -11,6 +11,8 @@ import '../../../utils/element.dart';
 import '../../../utils/index.dart';
 import '../canvas_event.dart' show CanvasEvent, CompositionInfo;
 import '../../draw/draw.dart' show Draw;
+import '../../layout/layout_invalidation.dart';
+import '../../layout/layout_request.dart';
 import '../../range/range_manager.dart';
 
 void input(String data, CanvasEvent host) {
@@ -40,7 +42,45 @@ void input(String data, CanvasEvent host) {
   }
   final IRangeElementStyle? defaultStyle =
       rangeManager.getDefaultStyle() ?? compositionInfo?.defaultStyle;
+  final IRange preCompositionRange = rangeManager.getRange();
+  final List<IElement> elementList = draw.getElementList();
+  final int originalStartIndex =
+      compositionInfo?.originalStartIndex ?? preCompositionRange.startIndex;
+  final List<IElement> originalRemovedElements;
+  if (compositionInfo != null) {
+    originalRemovedElements = compositionInfo.originalRemovedElements;
+  } else {
+    final int selectionStart = preCompositionRange.startIndex + 1;
+    final int selectionCount =
+        preCompositionRange.endIndex - preCompositionRange.startIndex;
+    originalRemovedElements = selectionCount > 0 &&
+            selectionStart >= 0 &&
+            selectionStart + selectionCount <= elementList.length
+        ? cloneElementList(
+            elementList.sublist(
+              selectionStart,
+              selectionStart + selectionCount,
+            ),
+          )
+        : <IElement>[];
+  }
   removeComposingInput(host);
+  if (!isComposing && compositionInfo != null) {
+    final List<IElement> restoredSelection =
+        cloneElementList(originalRemovedElements);
+    if (restoredSelection.isNotEmpty) {
+      draw.spliceElementList(
+        elementList,
+        originalStartIndex + 1,
+        0,
+        restoredSelection,
+      );
+    }
+    rangeManager.setRange(
+      originalStartIndex,
+      originalStartIndex + restoredSelection.length,
+    );
+  }
   if (!isComposing) {
     final dynamic cursor = draw.getCursor();
     cursor?.clearAgentDomValue();
@@ -49,8 +89,6 @@ void input(String data, CanvasEvent host) {
   final IRange currentRange = rangeManager.getRange();
   final int startIndex = currentRange.startIndex;
   final int endIndex = currentRange.endIndex;
-  final List<IElement> elementList =
-      (draw.getElementList() as List).cast<IElement>();
   final IElement? copyElement =
       rangeManager.getRangeAnchorStyle(elementList, endIndex);
   if (copyElement == null) {
@@ -71,6 +109,7 @@ void input(String data, CanvasEvent host) {
   final dynamic control = draw.getControl();
   final dynamic activeControl = control?.ensureActiveControl();
   int curIndex = -1;
+  LayoutInvalidation? mutationInvalidation;
   if (control != null &&
       activeControl != null &&
       control.getIsRangeWithinControl() == true) {
@@ -85,13 +124,6 @@ void input(String data, CanvasEvent host) {
     }
   } else {
     final int start = startIndex + 1;
-    if (startIndex != endIndex) {
-      draw.spliceElementList(
-        elementList,
-        start,
-        endIndex - startIndex,
-      );
-    }
     formatElementContext(
       elementList,
       inputData,
@@ -100,25 +132,43 @@ void input(String data, CanvasEvent host) {
         editorOptions: draw.getOptions() as IEditorOption?,
       ),
     );
-    draw.spliceElementList(elementList, start, 0, inputData);
     curIndex = startIndex + inputData.length;
+    mutationInvalidation = draw.applyTextMutation(
+      elementList: elementList,
+      start: start,
+      deleteCount: endIndex - startIndex,
+      replacement: inputData,
+      curIndex: curIndex,
+      // Enter e caracteres consecutivos formam a mesma rajada inseridora. Isso
+      // mantém Enter+digitação repetidos em um único splice/restorer compacto.
+      mergeKey: 'text-insert',
+      recordHistory: !isComposing,
+    );
   }
   if (curIndex >= 0) {
     final double preRenderT =
         timing ? html.window.performance.now().toDouble() : 0;
     rangeManager.setRange(curIndex, curIndex);
-    draw.render(
-      IDrawOption(
-        curIndex: curIndex,
-        isSubmitHistory: !isComposing,
-        // Digitação: snapshot de undo adiado para o fim da rajada
-        // (P1 do plano de otimização — evita clone O(doc) por tecla).
-        isSubmitHistoryDeferred: true,
-        // P2: relayout restrito ao parágrafo do cursor quando as
-        // guardas do fast path valem.
-        fastLayoutIndex: curIndex,
-      ),
-    );
+    if (mutationInvalidation != null) {
+      draw.renderUpdate(
+        LayoutRequest(
+          invalidation: mutationInvalidation,
+          curIndex: curIndex,
+          notifyContentChange: !isComposing,
+        ),
+      );
+    } else {
+      // Conteudo de control ainda usa o fallback legado ate que Table/Control
+      // changes sejam migrados para transactions tipadas.
+      draw.render(
+        IDrawOption(
+          curIndex: curIndex,
+          isSubmitHistory: !isComposing,
+          isSubmitHistoryDeferred: true,
+          fastLayoutIndex: curIndex,
+        ),
+      );
+    }
     if (timing) {
       final double end = html.window.performance.now().toDouble();
       html.window.console.log('[input] pre='
@@ -134,11 +184,16 @@ void input(String data, CanvasEvent host) {
       endIndex: curIndex,
       value: text,
       defaultStyle: defaultStyle,
+      originalStartIndex: originalStartIndex,
+      originalRemovedElements: originalRemovedElements,
     );
   }
 }
 
-void removeComposingInput(CanvasEvent host) {
+void removeComposingInput(
+  CanvasEvent host, {
+  bool restoreOriginalSelection = false,
+}) {
   final CompositionInfo? info = host.compositionInfo;
   if (info == null) {
     return;
@@ -149,10 +204,31 @@ void removeComposingInput(CanvasEvent host) {
   if (startIndex >= 0 && endIndex >= startIndex) {
     final int removeCount = endIndex - startIndex;
     if (removeCount > 0 && startIndex + 1 + removeCount <= elementList.length) {
-      elementList.removeRange(startIndex + 1, startIndex + 1 + removeCount);
+      (host.getDraw() as Draw).spliceElementList(
+        elementList,
+        startIndex + 1,
+        removeCount,
+      );
     }
     final RangeManager rangeManager = host.getDraw().getRange() as RangeManager;
-    rangeManager.setRange(startIndex, startIndex);
+    if (restoreOriginalSelection) {
+      final List<IElement> restored =
+          cloneElementList(info.originalRemovedElements);
+      if (restored.isNotEmpty) {
+        (host.getDraw() as Draw).spliceElementList(
+          elementList,
+          info.originalStartIndex + 1,
+          0,
+          restored,
+        );
+      }
+      rangeManager.setRange(
+        info.originalStartIndex,
+        info.originalStartIndex + restored.length,
+      );
+    } else {
+      rangeManager.setRange(startIndex, startIndex);
+    }
   }
   host.compositionInfo = null;
 }
