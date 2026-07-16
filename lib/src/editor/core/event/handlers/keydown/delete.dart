@@ -3,6 +3,8 @@ import 'dart:html';
 import '../../../../interface/draw.dart';
 import '../../../../interface/element.dart';
 import '../../../../interface/range.dart';
+import '../../../layout/layout_invalidation.dart';
+import '../../../layout/layout_request.dart';
 
 bool _isHiddenElement(IElement? element) {
   if (element == null) {
@@ -13,29 +15,43 @@ bool _isHiddenElement(IElement? element) {
       element.area?.hide == true;
 }
 
-void _deleteHideElement(dynamic host) {
+List<IElement> _elementListOf(dynamic draw) {
+  final dynamic value = draw.getElementList();
+  return value is List<IElement>
+      ? value
+      : (value as List?)?.whereType<IElement>().toList() ?? <IElement>[];
+}
+
+bool _deleteHideElement(dynamic host) {
   final dynamic draw = host.getDraw();
   final dynamic rangeManager = draw.getRange();
   final IRange range = rangeManager.getRange() as IRange;
-  final List<IElement> elementList =
-      (draw.getElementList() as List?)?.cast<IElement>() ?? <IElement>[];
+  final List<IElement> elementList = _elementListOf(draw);
 
   final int index = range.startIndex + 1;
   if (index < 0 || index >= elementList.length) {
-    return;
+    return false;
   }
   if (!_isHiddenElement(elementList[index])) {
-    return;
+    return false;
+  }
+
+  draw.flushDeferredHistory();
+  if (draw.getHistoryManager().isStackEmpty() == true) {
+    draw.submitHistory(range.endIndex);
   }
 
   var pointer = index;
+  var changed = false;
   while (pointer < elementList.length) {
     final IElement element = elementList[pointer];
     int? newIndex;
     if (element.controlId != null) {
       newIndex = (draw.getControl().removeControl(pointer) as num?)?.toInt();
+      changed = true;
     } else {
       draw.spliceElementList(elementList, pointer, 1);
+      changed = true;
       newIndex = pointer;
     }
 
@@ -49,6 +65,7 @@ void _deleteHideElement(dynamic host) {
     }
     pointer = newIndex;
   }
+  return changed;
 }
 
 void del(KeyboardEvent evt, dynamic host) {
@@ -66,16 +83,15 @@ void del(KeyboardEvent evt, dynamic host) {
   final int startIndex = range.startIndex;
   final int endIndex = range.endIndex;
   final bool isCrossRowCol = range.isCrossRowCol == true;
-  final List<IElement> elementList =
-      (draw.getElementList() as List?)?.cast<IElement>() ?? <IElement>[];
+  final List<IElement> elementList = _elementListOf(draw);
   final dynamic control = draw.getControl();
   final dynamic activeControl = control?.ensureActiveControl();
 
-  if (rangeManager.getIsCollapsed() == true) {
-    _deleteHideElement(host);
-  }
+  final bool hiddenMutation =
+      rangeManager.getIsCollapsed() == true ? _deleteHideElement(host) : false;
 
   int? curIndex;
+  LayoutInvalidation? mutationInvalidation;
   if (isCrossRowCol) {
     final dynamic rowCol = draw.getTableParticle().getRangeRowCol();
     if (rowCol == null) {
@@ -122,19 +138,22 @@ void del(KeyboardEvent evt, dynamic host) {
       curIndex = index - 1;
     } else {
       final bool isCollapsed = rangeManager.getIsCollapsed() == true;
-      if (!isCollapsed) {
-        draw.spliceElementList(
-          elementList,
-          startIndex + 1,
-          endIndex - startIndex,
-        );
-      } else {
-        if (index + 1 >= elementList.length) {
-          return;
-        }
-        draw.spliceElementList(elementList, index + 1, 1);
-      }
       curIndex = isCollapsed ? index : startIndex;
+      final int mutationStart = isCollapsed ? index + 1 : startIndex + 1;
+      final int mutationDeleteCount = isCollapsed ? 1 : endIndex - startIndex;
+      if (mutationStart < 0 ||
+          mutationStart + mutationDeleteCount > elementList.length) {
+        return;
+      }
+      mutationInvalidation = draw.applyTextMutation(
+        elementList: elementList,
+        start: mutationStart,
+        deleteCount: mutationDeleteCount,
+        replacement: const <IElement>[],
+        curIndex: curIndex,
+        mergeKey: 'delete',
+        forceSnapshotHistory: hiddenMutation,
+      ) as LayoutInvalidation?;
     }
   }
 
@@ -151,12 +170,20 @@ void del(KeyboardEvent evt, dynamic host) {
     );
   } else {
     rangeManager.setRange(curIndex, curIndex);
-    draw.render(IDrawOption(
-      curIndex: curIndex,
-      // Rajadas de delete: undo agrupado + relayout só do parágrafo
-      // (P1/P2 do plano de otimização; guardas caem p/ relayout completo).
-      isSubmitHistoryDeferred: true,
-      fastLayoutIndex: curIndex,
-    ));
+    if (mutationInvalidation != null) {
+      draw.renderUpdate(
+        LayoutRequest(
+          invalidation: mutationInvalidation,
+          curIndex: curIndex,
+          notifyContentChange: true,
+        ),
+      );
+    } else {
+      draw.render(IDrawOption(
+        curIndex: curIndex,
+        isSubmitHistoryDeferred: true,
+        fastLayoutIndex: curIndex,
+      ));
+    }
   }
 }

@@ -151,6 +151,7 @@ class IComputePageRowPositionPayload {
   int? trIndex;
   int? tdValueIndex;
   EditorZone? zone;
+  IElementPositionAnchor? positionAnchor;
 
   IComputePageRowPositionPayload({
     required this.positionList,
@@ -167,6 +168,7 @@ class IComputePageRowPositionPayload {
     this.trIndex,
     this.tdValueIndex,
     this.zone,
+    this.positionAnchor,
   });
 }
 

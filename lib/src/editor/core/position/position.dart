@@ -1,3 +1,5 @@
+import 'dart:collection';
+
 import '../../dataset/constant/common.dart';
 import '../../dataset/enum/common.dart';
 import '../../dataset/enum/control.dart';
@@ -14,6 +16,7 @@ import '../../interface/row.dart';
 import '../../interface/table/td.dart';
 import '../../utils/element.dart' as element_utils;
 import '../../utils/index.dart' show isRectIntersect;
+import 'page_position_index.dart';
 
 class Position {
   Position(dynamic drawInstance)
@@ -34,6 +37,28 @@ class Position {
   List<IElementPosition> positionList;
   List<IFloatPosition> floatPositionList;
 
+  // Indice derivado sobre positionList. A lista global continua sendo a fonte
+  // de verdade para preservar todos os consumidores/indexes existentes.
+  final PagePositionIndex _pagePositionIndex = PagePositionIndex();
+  Map<int, List<IFloatPosition>> _floatPositionsByPage =
+      <int, List<IFloatPosition>>{};
+  List<IFloatPosition>? _indexedFloatPositionSource;
+  int _indexedFloatPositionLength = 0;
+
+  // Diagnosticos baratos para testes/regressoes de performance.
+  bool _lastHitTestUsedPageIndex = false;
+  int _lastHitTestCandidateCount = 0;
+  int _lastHitTestInspectedPositionCount = 0;
+  bool _lastFloatHitTestUsedPageIndex = false;
+  int _lastFloatHitTestCandidateCount = 0;
+
+  bool get lastHitTestUsedPageIndex => _lastHitTestUsedPageIndex;
+  int get lastHitTestCandidateCount => _lastHitTestCandidateCount;
+  int get lastHitTestInspectedPositionCount =>
+      _lastHitTestInspectedPositionCount;
+  bool get lastFloatHitTestUsedPageIndex => _lastFloatHitTestUsedPageIndex;
+  int get lastFloatHitTestCandidateCount => _lastFloatHitTestCandidateCount;
+
   // Cache de posições POR PÁGINA (perf de digitação): guarda, do último
   // computePositionList, as rows e as posições de cada página. Como cada página
   // começa sempre no mesmo startY, uma página cujas rows são as MESMAS (por
@@ -44,14 +69,27 @@ class Position {
   List<List<IRow>> _cachedPageRows = <List<IRow>>[];
   List<List<IElementPosition>> _cachedPagePositions =
       <List<IElementPosition>>[];
+  List<bool> _cachedPageReusable = <bool>[];
+  List<IElementPositionAnchor?> _cachedPageAnchors =
+      <IElementPositionAnchor?>[];
   double _cachedStartY = double.nan;
   double _cachedInnerWidth = double.nan;
+
+  int _lastRecomputedPageCount = 0;
+  int _lastRebasedPageCount = 0;
+  int _lastFlattenedPositionCount = 0;
+
+  int get lastRecomputedPageCount => _lastRecomputedPageCount;
+  int get lastRebasedPageCount => _lastRebasedPageCount;
+  int get lastFlattenedPositionCount => _lastFlattenedPositionCount;
 
   /// Invalida o cache de posições por página (chamar quando o layout muda de
   /// forma não incremental — ex.: relayout completo, novo documento).
   void invalidatePositionCache() {
     _cachedPageRows = <List<IRow>>[];
     _cachedPagePositions = <List<IElementPosition>>[];
+    _cachedPageReusable = <bool>[];
+    _cachedPageAnchors = <IElementPositionAnchor?>[];
   }
 
   List<IFloatPosition> getFloatPositionList() {
@@ -133,10 +171,36 @@ class Position {
 
   void setPositionList(List<IElementPosition> payload) {
     positionList = payload;
+    invalidatePositionCache();
+    _pagePositionIndex.rebuild(positionList);
   }
 
   void setFloatPositionList(List<IFloatPosition> payload) {
     floatPositionList = payload;
+    _rebuildFloatPositionIndex();
+  }
+
+  void _rebuildFloatPositionIndex() {
+    final Map<int, List<IFloatPosition>> next = <int, List<IFloatPosition>>{};
+    for (final IFloatPosition floatPosition in floatPositionList) {
+      next
+          .putIfAbsent(floatPosition.pageNo, () => <IFloatPosition>[])
+          .add(floatPosition);
+    }
+    _floatPositionsByPage = next;
+    _indexedFloatPositionSource = floatPositionList;
+    _indexedFloatPositionLength = floatPositionList.length;
+  }
+
+  List<IFloatPosition> _getFloatPositionsForPage(int pageNo) {
+    final bool canUseIndex =
+        identical(floatPositionList, _indexedFloatPositionSource) &&
+            floatPositionList.length == _indexedFloatPositionLength;
+    _lastFloatHitTestUsedPageIndex = canUseIndex;
+    if (canUseIndex) {
+      return _floatPositionsByPage[pageNo] ?? const <IFloatPosition>[];
+    }
+    return floatPositionList;
   }
 
   IComputePageRowPositionResult computePageRowPosition(
@@ -212,6 +276,7 @@ class Position {
           isLastLetter: j == elementList.length - 1,
           coordX: x,
           coordY: y,
+          anchor: payload.positionAnchor,
         );
 
         if (element.imgDisplay == ImageDisplay.surround ||
@@ -255,6 +320,12 @@ class Position {
 
         if (element.type == ElementType.table && element.hide != true) {
           final List<ITr>? trList = element.trList;
+          final IElementPositionAnchor? tablePositionAnchor =
+              payload.positionAnchor == null
+                  ? null
+                  : IElementPositionAnchor(
+                      pageParent: payload.positionAnchor,
+                    );
           // Cache de posições de célula (perf): se esta parte de tabela não se
           // moveu desde o último cálculo (mesmo tablePreY e pageNo), as posições
           // absolutas das células são idênticas — reusa as td.positionList
@@ -265,6 +336,10 @@ class Position {
               element.lastPositionedPageNo == pageNo &&
               trList.isNotEmpty &&
               trList.first.tdList.isNotEmpty &&
+              identical(
+                element.lastPositionedFirstCellRowList,
+                trList.first.tdList.first.rowList,
+              ) &&
               (trList.first.tdList.first.positionList?.isNotEmpty ?? false);
           if (trList != null && !tableCached) {
             final double tdPaddingWidth = (tdPadding[1] + tdPadding[3]);
@@ -298,6 +373,7 @@ class Position {
                     tdIndex: d,
                     trIndex: t,
                     zone: payload.zone,
+                    positionAnchor: tablePositionAnchor,
                   ),
                 );
 
@@ -346,6 +422,8 @@ class Position {
             }
             element.lastPositionedTablePreY = tablePreY;
             element.lastPositionedPageNo = pageNo;
+            element.lastPositionedFirstCellRowList =
+                trList.first.tdList.first.rowList;
           }
           x = tablePreX;
           y = tablePreY;
@@ -360,8 +438,10 @@ class Position {
   }
 
   void computePositionList() {
-    positionList = <IElementPosition>[];
     floatPositionList = <IFloatPosition>[];
+    _lastRecomputedPageCount = 0;
+    _lastRebasedPageCount = 0;
+    _lastFlattenedPositionCount = 0;
     final double innerWidth = draw.getInnerWidth();
     final List<List<IRow>> pageRowList =
         (draw.getPageRowList() as List<dynamic>).map<List<IRow>>(
@@ -385,33 +465,70 @@ class Position {
     if (startY != _cachedStartY || innerWidth != _cachedInnerWidth) {
       _cachedPageRows = <List<IRow>>[];
       _cachedPagePositions = <List<IElementPosition>>[];
+      _cachedPageReusable = <bool>[];
+      _cachedPageAnchors = <IElementPositionAnchor?>[];
       _cachedStartY = startY;
       _cachedInnerWidth = innerWidth;
     }
     var startRowIndex = 0;
+    final List<List<IElementPosition>> previousPagePositions =
+        _cachedPagePositions;
     final List<List<IRow>> newCachedRows = <List<IRow>>[];
     final List<List<IElementPosition>> newCachedPositions =
         <List<IElementPosition>>[];
+    final List<bool> newCachedReusable = <bool>[];
+    final List<IElementPositionAnchor?> newCachedAnchors =
+        <IElementPositionAnchor?>[];
+    final Map<IRow, int> previousPageByFirstRow = HashMap<IRow, int>.identity();
+    for (int page = 0; page < _cachedPageRows.length; page++) {
+      final List<IRow> rows = _cachedPageRows[page];
+      if (rows.isNotEmpty) {
+        previousPageByFirstRow[rows.first] = page;
+      }
+    }
+    final Set<int> reusedPreviousPages = <int>{};
     for (var i = 0; i < pageRowList.length; i++) {
       final List<IRow> rowList = pageRowList[i];
       final int startIndex = rowList.isNotEmpty ? rowList[0].startIndex : 0;
-      final List<IElementPosition>? reuse = _reusablePagePositions(i, rowList);
-      if (reuse != null) {
-        // Corrige apenas o índice do elemento (deslocado por edições antes
-        // desta página); as coordenadas são idênticas (mesmo startY, mesmas
-        // rows). Barato — sem realocar nem recomputar geometria.
-        final int shift =
-            startIndex - (reuse.isNotEmpty ? reuse.first.index : startIndex);
-        if (shift != 0) {
-          for (final IElementPosition p in reuse) {
-            p.index += shift;
-          }
+      int? cachedPageIndex;
+      if (!reusedPreviousPages.contains(i) &&
+          _canReusePagePositions(i, rowList)) {
+        cachedPageIndex = i;
+      } else if (rowList.isNotEmpty) {
+        final int? candidate = previousPageByFirstRow[rowList.first];
+        if (candidate != null &&
+            !reusedPreviousPages.contains(candidate) &&
+            _canReusePagePositions(candidate, rowList)) {
+          cachedPageIndex = candidate;
         }
-        positionList.addAll(reuse);
-        newCachedRows.add(rowList);
+      }
+      final List<IElementPosition>? reuse = cachedPageIndex == null
+          ? null
+          : _cachedPagePositions[cachedPageIndex];
+      if (reuse != null) {
+        // Todas as posições da página compartilham a mesma âncora. Um splice
+        // anterior desloca índice/row/page em O(1), sem visitar os caracteres.
+        reusedPreviousPages.add(cachedPageIndex!);
+        final IElementPositionAnchor anchor =
+            _cachedPageAnchors[cachedPageIndex]!;
+        final int pageDelta = i - reuse.first.pageNo;
+        final int indexDelta = startIndex - reuse.first.index;
+        final int rowDelta = startRowIndex - reuse.first.rowIndex;
+        if (pageDelta != 0 || indexDelta != 0 || rowDelta != 0) {
+          anchor.shift(
+            pageDelta: pageDelta,
+            indexDelta: indexDelta,
+            rowIndexDelta: rowDelta,
+          );
+          _lastRebasedPageCount += 1;
+        }
+        newCachedRows.add(List<IRow>.of(rowList));
         newCachedPositions.add(reuse);
+        newCachedReusable.add(true);
+        newCachedAnchors.add(anchor);
       } else {
         final List<IElementPosition> pagePositions = <IElementPosition>[];
+        final IElementPositionAnchor anchor = IElementPositionAnchor();
         final int floatsBefore = floatPositionList.length;
         computePageRowPosition(
           IComputePageRowPositionPayload(
@@ -423,40 +540,101 @@ class Position {
             startX: startX,
             startY: startY,
             innerWidth: innerWidth,
+            positionAnchor: anchor,
           ),
         );
-        positionList.addAll(pagePositions);
-        newCachedRows.add(rowList);
-        // Só cacheia páginas SEM float (o reuse pula computePageRowPosition e
-        // perderia os floats). Página com float → cache vazio (sempre recomputa).
-        newCachedPositions.add(floatPositionList.length == floatsBefore
-            ? pagePositions
-            : const <IElementPosition>[]);
+        _lastRecomputedPageCount += 1;
+        newCachedRows.add(List<IRow>.of(rowList));
+        newCachedPositions.add(pagePositions);
+        // Uma página com float precisa recomputar para repopular a lista de
+        // floats; a geometria plana ainda participa da agregação incremental.
+        newCachedReusable.add(floatPositionList.length == floatsBefore);
+        newCachedAnchors.add(anchor);
       }
       startRowIndex += rowList.length;
     }
+    _replaceFlattenedPagePositions(
+      previousPagePositions,
+      newCachedPositions,
+    );
     _cachedPageRows = newCachedRows;
     _cachedPagePositions = newCachedPositions;
+    _cachedPageReusable = newCachedReusable;
+    _cachedPageAnchors = newCachedAnchors;
+    _pagePositionIndex.rebuildFromPageLengths(
+      positionList,
+      newCachedPositions.map((List<IElementPosition> page) => page.length),
+    );
+    _rebuildFloatPositionIndex();
+  }
+
+  /// Reconciles only the changed middle of the flattened canonical list.
+  /// Identical page lists at the prefix/suffix remain untouched, so a local
+  /// edit does not concatenate every position in the document again.
+  void _replaceFlattenedPagePositions(
+    List<List<IElementPosition>> previous,
+    List<List<IElementPosition>> next,
+  ) {
+    int prefix = 0;
+    final int commonLength =
+        previous.length < next.length ? previous.length : next.length;
+    while (prefix < commonLength && identical(previous[prefix], next[prefix])) {
+      prefix += 1;
+    }
+
+    int suffix = 0;
+    while (suffix < commonLength - prefix &&
+        identical(
+          previous[previous.length - 1 - suffix],
+          next[next.length - 1 - suffix],
+        )) {
+      suffix += 1;
+    }
+
+    int replaceStart = 0;
+    for (int i = 0; i < prefix; i++) {
+      replaceStart += previous[i].length;
+    }
+    int replaceEnd = positionList.length;
+    for (int i = 0; i < suffix; i++) {
+      replaceEnd -= previous[previous.length - 1 - i].length;
+    }
+
+    final List<IElementPosition> replacement = <IElementPosition>[];
+    final int nextEnd = next.length - suffix;
+    for (int i = prefix; i < nextEnd; i++) {
+      replacement.addAll(next[i]);
+    }
+    _lastFlattenedPositionCount = replacement.length;
+    if (replaceStart == replaceEnd && replacement.isEmpty) {
+      return;
+    }
+    positionList.replaceRange(replaceStart, replaceEnd, replacement);
   }
 
   /// Retorna as posições cacheadas da página [i] se as suas rows são as MESMAS
   /// (por referência) do último cálculo e a página foi cacheada (sem float);
   /// senão null (recomputa).
-  List<IElementPosition>? _reusablePagePositions(int i, List<IRow> rowList) {
-    if (i >= _cachedPageRows.length || i >= _cachedPagePositions.length) {
-      return null;
+  bool _canReusePagePositions(int i, List<IRow> rowList) {
+    if (i >= _cachedPageRows.length ||
+        i >= _cachedPagePositions.length ||
+        i >= _cachedPageReusable.length ||
+        i >= _cachedPageAnchors.length ||
+        !_cachedPageReusable[i] ||
+        _cachedPageAnchors[i] == null) {
+      return false;
     }
     final List<IRow> cachedRows = _cachedPageRows[i];
     if (cachedRows.length != rowList.length || rowList.isEmpty) {
-      return null;
+      return false;
     }
     for (var k = 0; k < rowList.length; k++) {
       if (!identical(cachedRows[k], rowList[k])) {
-        return null;
+        return false;
       }
     }
     final List<IElementPosition> cached = _cachedPagePositions[i];
-    return cached.isEmpty ? null : cached;
+    return cached.isNotEmpty;
   }
 
   List<IElementPosition> computeRowPosition(
@@ -512,6 +690,13 @@ class Position {
     final bool isMainActive = zoneManager.isMainActive() == true;
     final int positionNo = isMainActive ? curPageNo : 0;
     final List<double> margins = _getMargins();
+    final PagePositionSlice? pageSlice =
+        _pagePositionIndex.sliceFor(currentPositionList, positionNo);
+    final int candidateStart = pageSlice?.startOffset ?? 0;
+    final int candidateEnd = pageSlice?.endOffset ?? currentPositionList.length;
+    _lastHitTestUsedPageIndex = pageSlice != null;
+    _lastHitTestCandidateCount = candidateEnd - candidateStart;
+    _lastHitTestInspectedPositionCount = 0;
 
     if (!isTable) {
       final ICurrentPosition? floatTopPosition = getFloatPositionByXY(
@@ -535,24 +720,25 @@ class Position {
       }
     }
 
-    for (var j = 0; j < currentPositionList.length; j++) {
+    for (var j = candidateStart; j < candidateEnd; j++) {
       final IElementPosition positionItem = currentPositionList[j];
       final int index = positionItem.index;
       final int pageNo = positionItem.pageNo;
+      // Se o indice estiver indisponivel (header/footer, tabela ou lista
+      // externa), filtre a pagina antes de ler `coordinate`. Isso preserva o
+      // fallback sem materializar a geometria lazy de paginas anteriores.
+      if (positionNo != pageNo) {
+        continue;
+      }
       final double left = positionItem.left;
       final bool isFirstLetter = positionItem.isFirstLetter;
+      _lastHitTestInspectedPositionCount += 1;
       final List<double> leftTop =
           positionItem.coordinate['leftTop'] ?? <double>[0, 0];
       final List<double> rightTop =
           positionItem.coordinate['rightTop'] ?? <double>[0, 0];
       final List<double> leftBottom =
           positionItem.coordinate['leftBottom'] ?? <double>[0, 0];
-      if (positionNo != pageNo) {
-        continue;
-      }
-      if (pageNo > positionNo) {
-        break;
-      }
       if (leftTop.length < 2 || rightTop.length < 2 || leftBottom.length < 2) {
         continue;
       }
@@ -723,10 +909,13 @@ class Position {
       }
     }
 
-    final List<IElementPosition> lastLetterList = currentPositionList
-        .where((IElementPosition position) =>
-            position.isLastLetter && position.pageNo == positionNo)
-        .toList();
+    final List<IElementPosition> lastLetterList = <IElementPosition>[];
+    for (var p = candidateStart; p < candidateEnd; p++) {
+      final IElementPosition position = currentPositionList[p];
+      if (position.isLastLetter && position.pageNo == positionNo) {
+        lastLetterList.add(position);
+      }
+    }
     for (var j = 0; j < lastLetterList.length; j++) {
       final IElementPosition lastLetter = lastLetterList[j];
       final int index = lastLetter.index;
@@ -739,10 +928,14 @@ class Position {
         continue;
       }
       if (y > rowLeftTop[1] && y <= rowLeftBottom[1]) {
-        final int headIndex = currentPositionList.indexWhere(
-          (IElementPosition position) =>
-              position.pageNo == positionNo && position.rowNo == rowNo,
-        );
+        var headIndex = -1;
+        for (var p = candidateStart; p < candidateEnd; p++) {
+          final IElementPosition position = currentPositionList[p];
+          if (position.pageNo == positionNo && position.rowNo == rowNo) {
+            headIndex = p;
+            break;
+          }
+        }
         if (headIndex >= 0) {
           final IElement headElement = elementList[headIndex];
           final IElementPosition headPosition = currentPositionList[headIndex];
@@ -802,7 +995,7 @@ class Position {
       }
 
       if (y <= margins[0]) {
-        for (var p = 0; p < currentPositionList.length; p++) {
+        for (var p = candidateStart; p < candidateEnd; p++) {
           final IElementPosition position = currentPositionList[p];
           if (position.pageNo != positionNo || position.rowNo != 0) {
             continue;
@@ -828,7 +1021,7 @@ class Position {
             : null;
         if (lastLetter != null) {
           final int lastRowNo = lastLetter.rowNo;
-          for (var p = 0; p < currentPositionList.length; p++) {
+          for (var p = candidateStart; p < candidateEnd; p++) {
             final IElementPosition position = currentPositionList[p];
             if (position.pageNo != positionNo || position.rowNo != lastRowNo) {
               continue;
@@ -874,8 +1067,11 @@ class Position {
     final int currentPageNo = payload.pageNo ?? draw.getPageNo();
     final EditorZone? currentZone = draw.getZone().getZone() as EditorZone?;
     final double scale = _getScale();
+    final List<IFloatPosition> pageFloatPositions =
+        _getFloatPositionsForPage(currentPageNo);
+    _lastFloatHitTestCandidateCount = pageFloatPositions.length;
 
-    for (final IFloatPosition floatPosition in floatPositionList) {
+    for (final IFloatPosition floatPosition in pageFloatPositions) {
       final IElement element = floatPosition.element;
       final bool isTable = floatPosition.isTable == true;
       if (currentPageNo != floatPosition.pageNo) {

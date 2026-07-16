@@ -35,7 +35,12 @@ import '../../utils/element.dart' as element_utils;
 import '../../utils/index.dart';
 import '../../utils/print.dart';
 import '../cursor/cursor.dart' show IMoveCursorToVisibleOption;
+import '../document/document_mutation.dart';
+import '../document/document_transaction.dart';
 import '../event/handlers/paste.dart';
+import '../history/history_view_state.dart';
+import '../layout/layout_invalidation.dart';
+import '../layout/layout_request.dart';
 
 /// Partial translation of the original TypeScript `CommandAdapt` class.
 ///
@@ -237,8 +242,11 @@ class CommandAdapt {
         _castElementList(draw.getOriginalElementList());
 
     if (tableId != null) {
-      final int tableElementIndex =
-          elementList.indexWhere((IElement el) => el.id == tableId);
+      final bool isMain =
+          identical(elementList, draw.getOriginalMainElementList());
+      final int tableElementIndex = isMain
+          ? (draw.getDocumentModel().mainIndex.lookupById(tableId) ?? -1)
+          : elementList.indexWhere((IElement el) => el.id == tableId);
       if (tableElementIndex == -1) {
         return;
       }
@@ -397,19 +405,38 @@ class CommandAdapt {
     if (validIndexes.isEmpty) {
       return null;
     }
+    // Replaying an absolute endpoint replaces table objects. A delta that
+    // captures a nested cell list would then point at the detached old table.
+    // Table changes stay on the snapshot fallback until transactions carry a
+    // stable table/cell locator instead of a raw list reference.
+    if (position.getPositionContext()?.isTable == true) {
+      return null;
+    }
     final IRange beforeRange = _cloneRange(range.getRange() as IRange);
-    final _ElementDeltaHistory delta = _ElementDeltaHistory(
+    final HistoryViewState beforeViewState = draw.captureHistoryViewState();
+    draw.flushDeferredHistory();
+    if (historyManager.isStackEmpty() == true) {
+      draw.submitHistory(beforeRange.endIndex);
+    }
+    final ElementSnapshotMutation mutation = ElementSnapshotMutation.capture(
+      elements: elementList,
       indexes: validIndexes,
-      beforeSnapshot: element_utils.cloneElementList(
-        validIndexes.map((int index) => elementList[index]).toList(),
-      ),
-      beforeRange: beforeRange,
+      cloneElements: (Iterable<IElement> source) =>
+          element_utils.cloneElementList(source.toList()),
+      impact: metricsMayChange
+          ? DocumentMutationImpact.paragraphLayout
+          : DocumentMutationImpact.repaintOnly,
+    );
+    final DocumentTransaction transaction = DocumentTransaction()
+      ..add(mutation);
+    final _ElementDeltaHistory delta = _ElementDeltaHistory(
+      transaction: transaction,
+      mutation: mutation,
+      elementList: elementList,
+      beforeViewState: beforeViewState,
       metricsMayChange: metricsMayChange,
       isSetCursor: isSetCursor,
     );
-    historyManager.replaceCurrent(() {
-      _restoreElementDeltaHistory(delta, isAfter: false);
-    });
     return delta;
   }
 
@@ -417,74 +444,69 @@ class CommandAdapt {
     if (delta == null) {
       return;
     }
-    final List<IElement> elementList = _castElementList(draw.getElementList());
-    delta.afterSnapshot = element_utils.cloneElementList(
-      delta.indexes.map((int index) => elementList[index]).toList(),
+    delta.mutation.captureAfter();
+    delta.afterViewState = draw.captureHistoryViewState();
+    draw.didChangeElementStyles(delta.elementList);
+    historyManager.executeDelta(
+      revert: () {
+        _restoreElementDeltaHistory(delta, isAfter: false);
+      },
+      apply: () {
+        _restoreElementDeltaHistory(delta, isAfter: true);
+      },
     );
-    delta.afterRange = _cloneRange(range.getRange() as IRange);
-    historyManager.execute(() {
-      _restoreElementDeltaHistory(delta, isAfter: true);
-    });
   }
 
   void _restoreElementDeltaHistory(
     _ElementDeltaHistory delta, {
     required bool isAfter,
   }) {
-    final List<IElement>? snapshot =
-        isAfter ? delta.afterSnapshot : delta.beforeSnapshot;
-    if (snapshot == null || snapshot.length != delta.indexes.length) {
-      return;
+    if (isAfter) {
+      delta.transaction.apply();
+    } else {
+      delta.transaction.revert();
     }
-    final List<IElement> elementList = _castElementList(draw.getElementList());
-    for (int i = 0; i < delta.indexes.length; i++) {
-      final int index = delta.indexes[i];
-      if (index < 0 || index >= elementList.length) {
-        continue;
-      }
-      elementList[index] = element_utils.cloneElement(snapshot[i]);
+    final HistoryViewState? nextViewState =
+        isAfter ? delta.afterViewState : delta.beforeViewState;
+    if (nextViewState != null) {
+      draw.restoreHistoryViewState(nextViewState);
     }
-    final IRange? nextRange = isAfter ? delta.afterRange : delta.beforeRange;
-    if (nextRange != null) {
-      range.replaceRange(_cloneRange(nextRange));
-    }
+    draw.didChangeElementStyles(delta.elementList);
     _renderElementDelta(delta);
   }
 
   void _renderElementDelta(_ElementDeltaHistory delta) {
     final int anchorIndex = delta.indexes.isNotEmpty ? delta.indexes.first : 0;
-    final List<IElement> elementList = _castElementList(draw.getElementList());
-    // O fast layout recompõe somente o parágrafo do índice âncora. Usá-lo
-    // para uma seleção multiparágrafo deixaria as rows cacheadas dos demais
-    // parágrafos com a formatação anterior até o próximo redraw.
-    final bool canUseFastParagraphLayout = delta.metricsMayChange &&
-        _indexesBelongToSingleParagraph(delta.indexes, elementList);
-    draw.render(
-      IDrawOption(
+    final LayoutInvalidation derived =
+        LayoutInvalidation.fromTransaction(delta.transaction);
+    final bool isMain =
+        identical(delta.elementList, draw.getOriginalMainElementList());
+    final LayoutInvalidation invalidation;
+    if (!isMain && delta.metricsMayChange) {
+      invalidation = const LayoutInvalidation(
+        kind: LayoutInvalidationKind.full,
+      );
+    } else if (!isMain) {
+      // Header/footer indices are local and cannot be mapped through the main
+      // position list. Null range repaints every visible page without layout.
+      invalidation = const LayoutInvalidation(
+        kind: LayoutInvalidationKind.repaintOnly,
+      );
+    } else {
+      // Draw recebe a faixa inteira e recompõe todos os parágrafos tocados,
+      // incluindo a fronteira estável seguinte. Suas guardas estruturais
+      // decidem o fallback; limitar aqui a um único parágrafo fazia blocos de
+      // texto comuns dispararem o relayout global de 3–4 s.
+      invalidation = derived;
+    }
+    draw.renderUpdate(
+      LayoutRequest(
+        invalidation: invalidation,
         curIndex: anchorIndex,
-        isSetCursor: delta.isSetCursor,
-        isSubmitHistory: false,
-        isCompute: delta.metricsMayChange,
-        fastLayoutIndex: canUseFastParagraphLayout ? anchorIndex : null,
+        setCursor: delta.isSetCursor,
+        notifyContentChange: true,
       ),
     );
-  }
-
-  bool _indexesBelongToSingleParagraph(
-    List<int> indexes,
-    List<IElement> elementList,
-  ) {
-    if (indexes.isEmpty || elementList.isEmpty) return false;
-
-    int paragraphStart(int index) {
-      int cursor = index.clamp(0, elementList.length - 1);
-      while (cursor > 0 && elementList[cursor].value != ZERO) {
-        cursor -= 1;
-      }
-      return cursor;
-    }
-
-    return paragraphStart(indexes.first) == paragraphStart(indexes.last);
   }
 
   void _renderSelectionMutation(
@@ -2508,13 +2530,13 @@ class CommandAdapt {
       final int end = keywordRange.endIndex;
       List<dynamic> keywordPositionList = positionList;
       if (keywordRange.tableId != null) {
-        IElement? tableElement;
-        for (final IElement el in elementList) {
-          if (el.id == keywordRange.tableId) {
-            tableElement = el;
-            break;
-          }
-        }
+        final int? tableIndex =
+            draw.getDocumentModel().mainIndex.lookupById(keywordRange.tableId!);
+        final IElement? tableElement = tableIndex != null &&
+                tableIndex >= 0 &&
+                tableIndex < elementList.length
+            ? elementList[tableIndex]
+            : null;
         final List<dynamic>? trList = tableElement?.trList;
         final int? trIndex = keywordRange.startTrIndex;
         final int? tdIndex = keywordRange.startTdIndex;
@@ -2724,6 +2746,7 @@ class CommandAdapt {
         );
       }
       elementList[index] = newElement;
+      draw.didChangeElementStructure(elementList);
     }
     draw.render(IDrawOption(isSetCursor: false));
   }
@@ -2762,7 +2785,13 @@ class CommandAdapt {
         final bool matchConcept =
             conceptId != null && element.conceptId == conceptId;
         if (matchId || matchConcept) {
-          elementList.removeAt(i);
+          draw.spliceElementList(
+            elementList,
+            i,
+            1,
+            null,
+            ISpliceElementListOption(isIgnoreDeletedRule: true),
+          );
           isExistDelete = true;
           continue;
         }
@@ -2849,7 +2878,8 @@ class CommandAdapt {
       final String? id = payload?.id;
       final String? conceptId = payload?.conceptId;
       bool isExistRemove = false;
-      void remove(List<IElement> elementList) {
+      bool remove(List<IElement> elementList) {
+        bool removed = false;
         var i = elementList.length - 1;
         while (i >= 0) {
           final IElement element = elementList[i];
@@ -2865,7 +2895,7 @@ class CommandAdapt {
                   final List<IElement>? valueList =
                       td?.value as List<IElement>?;
                   if (valueList != null) {
-                    remove(valueList);
+                    removed = remove(valueList) || removed;
                   }
                 }
               }
@@ -2879,12 +2909,13 @@ class CommandAdapt {
           if (!hasControl || (!matchId && !matchConcept)) {
             continue;
           }
-          isExistRemove = true;
           final int removeIndex = i + 1;
           if (removeIndex >= 0 && removeIndex < elementList.length) {
             elementList.removeAt(removeIndex);
+            removed = true;
           }
         }
+        return removed;
       }
 
       final List<List<IElement>> data = <List<IElement>>[
@@ -2893,7 +2924,14 @@ class CommandAdapt {
         _castElementList(draw.getFooterElementList()),
       ];
       for (final List<IElement> elementList in data) {
-        remove(elementList);
+        final bool removed = remove(elementList);
+        if (removed) {
+          isExistRemove = true;
+          // Uma remoção pode estar dentro de uma célula. Nesse caso não há um
+          // splice plano no root para o índice observar; invalide a região
+          // canônica em O(1) e reconstrua o índice apenas no próximo lookup.
+          draw.didChangeElementStructure(elementList);
+        }
       }
       if (isExistRemove) {
         draw.render(IDrawOption(isSetCursor: false));
@@ -3248,6 +3286,7 @@ class CommandAdapt {
       final bool isCollapsed = range.getIsCollapsed() == true;
       draw.getCursor().drawCursor(isShow: isCollapsed);
     } else {
+      draw.didChangeElementStructure(draw.getOriginalMainElementList());
       draw.render(IDrawOption(isSetCursor: false));
     }
   }
@@ -4517,20 +4556,23 @@ class CommandAdapt {
 
 class _ElementDeltaHistory {
   _ElementDeltaHistory({
-    required this.indexes,
-    required this.beforeSnapshot,
-    required this.beforeRange,
+    required this.transaction,
+    required this.mutation,
+    required this.elementList,
+    required this.beforeViewState,
     required this.metricsMayChange,
     required this.isSetCursor,
   });
 
-  final List<int> indexes;
-  final List<IElement> beforeSnapshot;
-  final IRange beforeRange;
+  final DocumentTransaction transaction;
+  final ElementSnapshotMutation mutation;
+  final List<IElement> elementList;
+  final HistoryViewState beforeViewState;
   final bool metricsMayChange;
   final bool isSetCursor;
-  List<IElement>? afterSnapshot;
-  IRange? afterRange;
+  HistoryViewState? afterViewState;
+
+  List<int> get indexes => mutation.indexes;
 }
 
 /// Entrada do Sumário (insertToc): título coletado + âncora + página.

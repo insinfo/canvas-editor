@@ -48,6 +48,49 @@ void _registerTableE2ETests() {
     expect(elements.any((element) => element['type'] == 'table'), isTrue);
   });
 
+  test('replays compact cell typing across a snapshot transition', () async {
+    if (skipReason != null) {
+      print('Skipping test: $skipReason');
+      return;
+    }
+
+    Future<List<dynamic>> tableTexts() async {
+      final table = _firstTable(await _readMainElements(page!));
+      return List<dynamic>.from(
+          table?['tableTexts'] as List<dynamic>? ?? const <dynamic>[]);
+    }
+
+    await _resetMockContent(page!);
+    final String before = jsonEncode(await tableTexts());
+    expect(await _focusFirstTableCell(page!), isTrue);
+
+    await page!.keyboard.type('X');
+    await Future<void>.delayed(const Duration(milliseconds: 80));
+    final String afterTyping = jsonEncode(await tableTexts());
+    expect(afterTyping, isNot(before));
+
+    final Map<String, dynamic> diagnostics =
+        await page!.evaluate<Map<String, dynamic>>(
+      '() => window.__editorTest.historyDiagnostics()',
+    );
+    expect(diagnostics['compactTransitions'], 1);
+
+    // RowFlex usa a transição snapshot legada. O locator da mutação compacta
+    // da célula precisa sobreviver ao restore absoluto feito por esse snapshot.
+    await page!.evaluate<void>(
+      "() => window.__editorTest.setRowFlex('center')",
+    );
+    await Future<void>.delayed(const Duration(milliseconds: 80));
+    expect(jsonEncode(await tableTexts()), afterTyping);
+
+    await _undo(page!); // snapshot de RowFlex
+    expect(jsonEncode(await tableTexts()), afterTyping);
+    await _undo(page!); // digitação compacta dentro da célula
+    expect(jsonEncode(await tableTexts()), before);
+    await _redo(page!);
+    expect(jsonEncode(await tableTexts()), afterTyping);
+  });
+
   test('ships the demo mock with a preloaded table sample', () async {
     if (skipReason != null) {
       print('Skipping test: $skipReason');
@@ -161,8 +204,10 @@ void _registerTableE2ETests() {
     expect(await _focusFirstTableCell(page!), isTrue);
 
     expect(await _openContextMenuOnEditor(page!), isTrue);
-    expect(await _hoverContextMenuItem(page!, 'Inserir linha ou coluna'), isTrue);
-    expect(await _clickContextMenuItem(page!, 'Inserir 1 linha abaixo'), isTrue);
+    expect(
+        await _hoverContextMenuItem(page!, 'Inserir linha ou coluna'), isTrue);
+    expect(
+        await _clickContextMenuItem(page!, 'Inserir 1 linha abaixo'), isTrue);
 
     var elements = await _readMainElements(page!);
     var tableElement = _firstTable(elements);
@@ -182,7 +227,9 @@ void _registerTableE2ETests() {
     expect(tableElement, isNotNull);
     expect(tableElement!['tableVerticalAligns'], isA<List<dynamic>>());
     expect(
-      ((tableElement['tableVerticalAligns'] as List<dynamic>).first as List<dynamic>).first,
+      ((tableElement['tableVerticalAligns'] as List<dynamic>).first
+              as List<dynamic>)
+          .first,
       'middle',
     );
 
@@ -197,7 +244,8 @@ void _registerTableE2ETests() {
     expect(tableElement!['tableBorderType'], 'empty');
   });
 
-  test('supports table merge cancel merge and cell border submenus through DOM', () async {
+  test('supports table merge cancel merge and cell border submenus through DOM',
+      () async {
     if (skipReason != null) {
       print('Skipping test: $skipReason');
       return;
@@ -214,8 +262,8 @@ void _registerTableE2ETests() {
     var elements = await _readMainElements(page!);
     var tableElement = _firstTable(elements);
     expect(tableElement, isNotNull);
-    final mergedFirstRow =
-        (tableElement!['tableCellSpans'] as List<dynamic>).first as List<dynamic>;
+    final mergedFirstRow = (tableElement!['tableCellSpans'] as List<dynamic>)
+        .first as List<dynamic>;
     expect(
       mergedFirstRow.any(
         (cell) => (cell as Map<String, dynamic>)['colspan'] == 2,
@@ -230,8 +278,8 @@ void _registerTableE2ETests() {
     elements = await _readMainElements(page!);
     tableElement = _firstTable(elements);
     expect(tableElement, isNotNull);
-    final unmergedFirstRow =
-        (tableElement!['tableCellSpans'] as List<dynamic>).first as List<dynamic>;
+    final unmergedFirstRow = (tableElement!['tableCellSpans'] as List<dynamic>)
+        .first as List<dynamic>;
     expect(unmergedFirstRow.length, 2);
     expect(
       unmergedFirstRow.every(
@@ -256,13 +304,17 @@ void _registerTableE2ETests() {
 
     elements = await _readMainElements(page!);
     tableElement = _firstTable(elements);
-    final firstCellBorders = (((tableElement!['tableCellBorders'] as List<dynamic>)
-        .first as List<dynamic>).first as Map<String, dynamic>);
+    final firstCellBorders =
+        (((tableElement!['tableCellBorders'] as List<dynamic>).first
+                as List<dynamic>)
+            .first as Map<String, dynamic>);
     expect(firstCellBorders['borderTypes'], contains('top'));
     expect(firstCellBorders['slashTypes'], contains('forward'));
   });
 
-  test('supports table split vertical horizontal and delete table through DOM context menu', () async {
+  test(
+      'supports table split vertical horizontal and delete table through DOM context menu',
+      () async {
     if (skipReason != null) {
       print('Skipping test: $skipReason');
       return;
@@ -307,8 +359,8 @@ void _registerTableE2ETests() {
     var elements = await _readMainElements(page!);
     var tableElement = _firstTable(elements);
     expect(tableElement, isNotNull);
-    var firstRow =
-        (tableElement!['tableCellSpans'] as List<dynamic>).first as List<dynamic>;
+    var firstRow = (tableElement!['tableCellSpans'] as List<dynamic>).first
+        as List<dynamic>;
     expect(firstRow.length, 2);
     expect(
       firstRow.every(
@@ -359,12 +411,12 @@ void _registerTableE2ETests() {
     tableElement = _firstTable(elements);
     final firstCol = <Map<String, dynamic>>[
       Map<String, dynamic>.from(
-        ((tableElement!['tableCellSpans'] as List<dynamic>)[0] as List<dynamic>)[0]
-            as Map<dynamic, dynamic>,
+        ((tableElement!['tableCellSpans'] as List<dynamic>)[0]
+            as List<dynamic>)[0] as Map<dynamic, dynamic>,
       ),
       Map<String, dynamic>.from(
-        ((tableElement['tableCellSpans'] as List<dynamic>)[1] as List<dynamic>)[0]
-            as Map<dynamic, dynamic>,
+        ((tableElement['tableCellSpans'] as List<dynamic>)[1]
+            as List<dynamic>)[0] as Map<dynamic, dynamic>,
       ),
     ];
     expect(
@@ -400,7 +452,9 @@ void _registerTableE2ETests() {
     expect(tableElement, isNull);
   });
 
-  test('inserts a new table into a filled document without removing the existing one', () async {
+  test(
+      'inserts a new table into a filled document without removing the existing one',
+      () async {
     if (skipReason != null) {
       print('Skipping test: $skipReason');
       return;
@@ -413,24 +467,20 @@ void _registerTableE2ETests() {
     );
 
     final beforeElements = await _readMainElements(page!);
-    final beforeTableCount = beforeElements
-        .where((element) => element['type'] == 'table')
-        .length;
-    final beforeControlCount = beforeElements
-        .where((element) => element['type'] == 'control')
-        .length;
+    final beforeTableCount =
+        beforeElements.where((element) => element['type'] == 'table').length;
+    final beforeControlCount =
+        beforeElements.where((element) => element['type'] == 'control').length;
 
     expect(beforeTableCount, 1);
 
     await _insertTable(page!, 2, 2);
 
     final afterElements = await _readMainElements(page!);
-    final afterTableCount = afterElements
-        .where((element) => element['type'] == 'table')
-        .length;
-    final afterControlCount = afterElements
-        .where((element) => element['type'] == 'control')
-        .length;
+    final afterTableCount =
+        afterElements.where((element) => element['type'] == 'table').length;
+    final afterControlCount =
+        afterElements.where((element) => element['type'] == 'control').length;
     final firstTable = _firstTable(afterElements);
 
     expect(afterTableCount, 2);

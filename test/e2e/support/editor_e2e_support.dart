@@ -27,6 +27,10 @@ import 'package:canvas_text_editor/src/editor/interface/editor.dart'
   as editor_model;
 import 'package:canvas_text_editor/src/editor/interface/range.dart'
   as range_model;
+import 'package:canvas_text_editor/src/editor/interface/position.dart'
+  as position_model;
+import 'package:canvas_text_editor/src/editor/interface/title.dart'
+  as title_model;
 import 'package:canvas_text_editor/src/mock.dart' as mock_data;
 import 'package:canvas_text_editor/src/editor/utils/clipboard.dart'
   as clipboard_utils;
@@ -41,6 +45,7 @@ void main() {
     final app = EditorApp(isApple: isApple);
     await app.initialize();
     int labelMousedownCount = 0;
+    int contentChangeCount = 0;
     String? lastLabelValue;
 
     app.editor.eventBus.on('labelMousedown', (dynamic payload) {
@@ -49,6 +54,9 @@ void main() {
       if (element is editor_core.IElement) {
         lastLabelValue = element.value;
       }
+    });
+    app.editor.eventBus.on('contentChange', (dynamic _) {
+      contentChangeCount += 1;
     });
 
     void focusInput() {
@@ -226,6 +234,82 @@ void main() {
           app.editor.command.executeSetRange(0, 0);
           focusInput();
         }),
+        'resetFirstHeaderVariant': js_util.allowInterop(() {
+          final draw = app.editor.getDraw();
+          draw.getHeader().setVariants(
+            first: editor_core.splitText('FIRST')
+                .map((value) => editor_core.IElement(value: value))
+                .toList(growable: false),
+            even: editor_core.splitText('EVEN')
+                .map((value) => editor_core.IElement(value: value))
+                .toList(growable: false),
+            titlePage: true,
+            evenAndOdd: true,
+          );
+          draw.invalidateDocumentLocators();
+          draw.setPageNo(0);
+          draw.getZone().setZone(editor_core.EditorZone.header);
+          draw.getHeader().setActiveVariantForPage(0);
+          draw.getPosition().setPositionContext(
+                position_model.IPositionContext(isTable: false),
+              );
+          draw.getRange().setRange(0, 0);
+          draw.getHistoryManager().recovery();
+          draw.render(
+            draw_model.IDrawOption(
+              curIndex: 0,
+              isSubmitHistory: false,
+            ),
+          );
+          focusInput();
+        }),
+        'firstHeaderVariantText': js_util.allowInterop(() {
+          return flattenElementText(
+            app.editor.getDraw().getHeader().getFirstElementList(),
+          );
+        }),
+        'submitHistoryCheckpoint': js_util.allowInterop(() {
+          final draw = app.editor.getDraw();
+          draw.submitHistory(draw.getRange().getRange().endIndex);
+        }),
+        'resetProtectedDeleteContent': js_util.allowInterop(() {
+          final elements = <editor_core.IElement>[
+            editor_core.IElement(value: '\u200B'),
+            editor_core.IElement(value: 'a'),
+            editor_core.IElement(
+              value: 'P',
+              title: title_model.ITitle(deletable: false),
+            ),
+            editor_core.IElement(value: 'b'),
+            editor_core.IElement(
+              value: 'Q',
+              title: title_model.ITitle(deletable: false),
+            ),
+            editor_core.IElement(value: 'c'),
+            // Hidden prevalece sobre deletable=false e continua removível.
+            editor_core.IElement(
+              value: 'H',
+              hide: true,
+              title: title_model.ITitle(deletable: false),
+            ),
+            editor_core.IElement(value: 'd'),
+          ];
+          app.editor.command.executeSetValue(
+            editor_core.IEditorData(main: elements),
+          );
+          app.editor.command.executeSetRange(0, 0);
+          focusInput();
+        }),
+        'resetLayoutDiagnostics': js_util.allowInterop(() {
+          app.editor.getDraw().resetLayoutDiagnostics();
+        }),
+        'layoutDiagnostics': js_util.allowInterop(() {
+          final draw = app.editor.getDraw();
+          return js_util.jsify(<String, Object?>{
+            'mode': draw.getLastLayoutMode(),
+            ...draw.getLayoutDiagnostics(),
+          });
+        }),
         'setRangeBeforeTextValue': js_util.allowInterop((String text) {
           final elements = app.editor.getDraw().getOriginalMainElementList();
           final buffer = StringBuffer();
@@ -301,12 +385,40 @@ void main() {
           app.editor.command.executeRedo();
           focusInput();
         }),
+        'historyDiagnostics': js_util.allowInterop(() {
+          return js_util.jsify(
+            app.editor.getDraw().getHistoryDiagnostics(),
+          );
+        }),
+        'resetContentChangeCount': js_util.allowInterop(() {
+          contentChangeCount = 0;
+        }),
+        'contentChangeCount': js_util.allowInterop(() {
+          return contentChangeCount;
+        }),
+        'insertListText': js_util.allowInterop((String value) {
+          final elements = editor_core.splitText(value).map((unit) {
+            return editor_core.IElement(value: unit)..listId = 'e2e-list';
+          }).toList(growable: false);
+          app.editor.command.executeInsertElementList(
+            elements,
+            editor_core.IInsertElementListOption(isDeltaHistory: true),
+          );
+          focusInput();
+        }),
         'setFont': js_util.allowInterop((String value) {
           app.editor.command.executeFont(value);
           focusInput();
         }),
         'setColor': js_util.allowInterop((String value) {
           app.editor.command.executeColor(value);
+          focusInput();
+        }),
+        'setRowFlex': js_util.allowInterop((String value) {
+          final rowFlex = editor_core.RowFlex.values.firstWhere(
+            (candidate) => candidate.name == value,
+          );
+          app.editor.command.executeRowFlex(rowFlex);
           focusInput();
         }),
         'setMode': js_util.allowInterop((String value) {
@@ -492,6 +604,7 @@ void main() {
                           },
                     'font': element.font,
                     'color': element.color,
+                    'rowFlex': element.rowFlex?.name,
                     'areaId': element.areaId,
                     'controlId': element.controlId,
                     'controlComponent': element.controlComponent?.name,

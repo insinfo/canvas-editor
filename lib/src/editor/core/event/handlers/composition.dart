@@ -15,7 +15,7 @@ void compositionend(dynamic host, dynamic evt) {
   final String data = evt?.data as String? ?? '';
 
   if (data.isEmpty) {
-    removeComposingInput(host);
+    removeComposingInput(host, restoreOriginalSelection: true);
     final dynamic rangeManager = draw.getRange();
     final IRange range = rangeManager.getRange() as IRange;
     final int curIndex = range.endIndex;

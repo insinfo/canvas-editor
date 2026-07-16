@@ -29,6 +29,8 @@ class CompositionInfo {
     required this.endIndex,
     required this.value,
     required this.defaultStyle,
+    required this.originalStartIndex,
+    required this.originalRemovedElements,
   });
 
   final List<IElement> elementList;
@@ -36,6 +38,8 @@ class CompositionInfo {
   final int endIndex;
   final String value;
   final IRangeElementStyle? defaultStyle;
+  final int originalStartIndex;
+  final List<IElement> originalRemovedElements;
 }
 
 class CanvasEvent {

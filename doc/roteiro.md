@@ -6,6 +6,32 @@ port from C:\MyDartProjects\canvas-editor-port\typescript\src to C:\MyDartProjec
 > [roteiro_editor_profissional.md](roteiro_editor_profissional.md). Este arquivo continua como
 > tracker da paridade TS→Dart.
 
+## Marco de performance — estado em 2026-07-15
+
+> O núcleo incremental da edição textual está concluído neste marco; o alvo de
+> 16 ms ainda não é uma garantia para operações estruturais ou para documentos
+> que exigem reflow físico de tabelas.
+
+- [x] Hot path textual com splice em lote e relayout somente dos parágrafos
+  afetados por digitação, Enter, Backspace e Delete de seleção.
+- [x] Histórico textual por transações/deltas compactos, rajadas coalescidas,
+  replay iterativo e retenção limitada por checkpoints.
+- [x] Paginação regional com reuso de páginas antes/depois da row suja e
+  publicação progressiva sem reagregação global quadrática.
+- [x] Posições por página com cache e âncoras estáveis para rebase incremental
+  de índices, rows e páginas.
+- [x] Repaint dirigido por faixa de páginas e, quando a geometria é comprovada
+  estável, clip das rows sujas; qualquer recurso visual ambíguo mantém o repaint
+  completo seguro.
+- [x] Ribbon e mini-toolbar contextual atualizam apenas os controles afetados;
+  alternar negrito/itálico não reconstrói as barras nem troca o tamanho/família
+  da fonte selecionada.
+- [ ] Reflow regional físico dos fragmentos de tabelas paginadas após mudanças
+  de fluxo; até sua convergência incremental, permanece o fallback full layout.
+- [ ] Invalidações próprias para operações estruturais (tabelas, floats, áreas,
+  controles e aninhamentos) e extrações arquiteturais futuras do núcleo
+  `Draw`/layout, sem regredir o caminho textual estabilizado.
+
 continuar portando o que falta de C:\MyDartProjects\canvas-editor-port\typescript para dart C:\MyDartProjects\canvas-editor-port\lib\src e testando e atualizando o roteiro
 
 ## Estado Atual

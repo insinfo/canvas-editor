@@ -12,6 +12,8 @@ import 'package:shelf/shelf_io.dart' as shelf_io;
 import 'package:shelf_static/shelf_static.dart';
 import 'package:test/test.dart';
 
+const String _zeroWidthSpace = '\u200B';
+
 const String _fixtureMain = r'''
 import 'dart:convert';
 import 'dart:html';
@@ -22,6 +24,7 @@ import 'package:canvas_text_editor/canvas_text_editor.dart';
 void main() {
   String? loadedName;
   Object? lastError;
+  final List<Map<String, Object?>> rangeStyleEvents = <Map<String, Object?>>[];
   final host = document.querySelector('#host') as DivElement;
   final widget = CanvasEditorWidget(
     host,
@@ -38,6 +41,16 @@ void main() {
       ),
     ),
   );
+  widget.editor.eventBus.on('rangeStyleChange', (dynamic payload) {
+    if (payload is! IRangeStyle) return;
+    rangeStyleEvents.add(<String, Object?>{
+      'type': payload.type?.name,
+      'size': payload.size,
+      'bold': payload.bold,
+      'italic': payload.italic,
+      'level': payload.level?.name,
+    });
+  });
 
   js_util.setProperty(window, '__embedTest', js_util.jsify({
     'reset': js_util.allowInterop(() {
@@ -75,6 +88,7 @@ void main() {
         {
           'value': element.value,
           'bold': element.bold,
+          'italic': element.italic,
           'color': element.color,
           'highlight': element.highlight,
           'font': element.font,
@@ -92,6 +106,9 @@ void main() {
           'value': element.value,
           'font': element.font,
           'color': element.color,
+          'size': element.size,
+          'bold': element.bold,
+          'italic': element.italic,
           'level': element.level?.name,
         },
     ])),
@@ -126,6 +143,42 @@ void main() {
       );
       widget.command.executeSetRange(start - 1, start + 3);
     }),
+    'selectSizedTitle': js_util.allowInterop(() {
+      widget.command.executeSetValue(IEditorData(main: <IElement>[
+        IElement(
+          value: '',
+          type: ElementType.title,
+          level: TitleLevel.first,
+          valueList: <IElement>[
+            IElement(
+              value: 'Título 24',
+              size: 24,
+              bold: false,
+              italic: false,
+            ),
+          ],
+        ),
+        IElement(value: '\nTexto normal'),
+      ]));
+      final elements = widget.editor.getDraw().getElementList();
+      final int start = elements.indexWhere(
+        (element) => element.level == TitleLevel.first,
+      );
+      final int end = elements.lastIndexWhere(
+        (element) => element.level == TitleLevel.first,
+      );
+      widget.command.executeSetRange(start - 1, end);
+      widget.refreshFloatingToolbar();
+    }),
+    'clearRangeStyleEvents': js_util.allowInterop(rangeStyleEvents.clear),
+    'rangeStyleEventsJson':
+        js_util.allowInterop(() => jsonEncode(rangeStyleEvents)),
+    'resetLayoutDiagnostics': js_util.allowInterop(
+      () => widget.editor.getDraw().resetLayoutDiagnostics(),
+    ),
+    'layoutDiagnosticsJson': js_util.allowInterop(
+      () => jsonEncode(widget.editor.getDraw().getLayoutDiagnostics()),
+    ),
     'togglePageBreakMarkers': js_util.allowInterop(() {
       widget.togglePageBreakMarkers();
       return widget.editor.getDraw().getOptions().pageBreak?.showMarker;
@@ -269,7 +322,8 @@ void main() {
   tearDown(() async => page?.close());
 
   test('renderiza a aparência Word completa com ribbon dinâmica', () async {
-    expect(await page!.$$('.ce-word-tabs [data-ce-tab]'), hasLength(6));
+    // Seis abas fixas + Tabela/Imagem contextuais (ocultas até a seleção).
+    expect(await page!.$$('.ce-word-tabs [data-ce-tab]'), hasLength(8));
     expect(await page!.$$('[data-ce-tab="review"]'), hasLength(1));
     await page!.click('[data-ce-tab="review"]');
     expect(await page!.$$('[data-ce-command="comments"]'), hasLength(1));
@@ -331,7 +385,8 @@ void main() {
     expect(ruler['horizontalTicks'], inInclusiveRange(60, 100));
     expect(ruler['majorGap'], closeTo(96 / 2.54, 1));
     expect(ruler['margins'], 2);
-    expect(ruler['indents'], 3);
+    // Primeira linha, deslocado, caixa esquerda e recuo direito.
+    expect(ruler['indents'], 4);
     expect(ruler['corner'], 1);
     await page!.click('[data-ce-tab="view"]');
     await page!.click('[data-ce-command="view-draft"]');
@@ -422,6 +477,124 @@ void main() {
     expect(await _canvasData(page!), boldCanvas);
   });
 
+  test(
+      'ribbon e mini-toolbar preservam tamanho e estilo sem estado transitório',
+      () async {
+    await page!.evaluate<void>('() => window.__embedTest.selectSizedTitle()');
+    await Future<void>.delayed(const Duration(milliseconds: 180));
+
+    expect(
+      await page!.$eval<String>(
+        '.ce-embed',
+        '(element) => element.getAttribute("editor-component")',
+      ),
+      'component',
+    );
+
+    Future<void> expectSelectionStyle({
+      required bool bold,
+      required bool italic,
+    }) async {
+      final List<dynamic> flat = jsonDecode(
+        await page!.evaluate<String>('() => window.__embedTest.flatJson()'),
+      ) as List<dynamic>;
+      final List<Map<String, dynamic>> titleElements = flat
+          .cast<Map<String, dynamic>>()
+          .where((Map<String, dynamic> element) =>
+              element['level'] == 'first' &&
+              element['value'] != _zeroWidthSpace)
+          .toList(growable: false);
+      expect(titleElements, isNotEmpty);
+      expect(titleElements.every((element) => element['size'] == 24), isTrue);
+      expect(
+        titleElements.every((element) => (element['bold'] == true) == bold),
+        isTrue,
+      );
+      expect(
+        titleElements.every((element) => (element['italic'] == true) == italic),
+        isTrue,
+      );
+
+      final Map<dynamic, dynamic> toolbar =
+          await page!.evaluate<Map<dynamic, dynamic>>('''() => ({
+        size: document.querySelector(
+          '[data-ce-panel="home"] select[title="Tamanho"]').value,
+        ribbonBold: document.querySelector(
+          '[data-ce-panel="home"] [data-ce-command="bold"]')
+          .classList.contains('active'),
+        ribbonItalic: document.querySelector(
+          '[data-ce-panel="home"] [data-ce-command="italic"]')
+          .classList.contains('active'),
+        miniBold: document.querySelector(
+          '.ce-floating-toolbar [aria-label="Negrito"]')
+          .classList.contains('active'),
+        titleOne: document.querySelector(
+          '.ce-word-style[data-style-level="first"]')
+          .classList.contains('active')
+      })''');
+      expect(toolbar['size'], '24');
+      expect(toolbar['ribbonBold'], bold);
+      expect(toolbar['ribbonItalic'], italic);
+      expect(toolbar['miniBold'], bold);
+      expect(toolbar['titleOne'], isTrue);
+    }
+
+    Future<void> expectNoRecoveryPayload() async {
+      final List<dynamic> events = jsonDecode(
+        await page!.evaluate<String>(
+          '() => window.__embedTest.rangeStyleEventsJson()',
+        ),
+      ) as List<dynamic>;
+      expect(events, isNotEmpty);
+      expect(
+        events.any(
+            (dynamic event) => (event as Map<String, dynamic>)['type'] == null),
+        isFalse,
+        reason: jsonEncode(events),
+      );
+      expect(
+        events.every(
+            (dynamic event) => (event as Map<String, dynamic>)['size'] == 24),
+        isTrue,
+        reason: jsonEncode(events),
+      );
+    }
+
+    await expectSelectionStyle(bold: false, italic: false);
+
+    await page!
+        .evaluate<void>('() => window.__embedTest.clearRangeStyleEvents()');
+    await page!
+        .evaluate<void>('() => window.__embedTest.resetLayoutDiagnostics()');
+    await page!.click(
+      '[data-ce-panel="home"] [data-ce-command="italic"]',
+    );
+    await Future<void>.delayed(const Duration(milliseconds: 150));
+    await expectSelectionStyle(bold: false, italic: true);
+    await expectNoRecoveryPayload();
+    final Map<String, dynamic> titleLayout = jsonDecode(
+      await page!.evaluate<String>(
+        '() => window.__embedTest.layoutDiagnosticsJson()',
+      ),
+    ) as Map<String, dynamic>;
+    expect(titleLayout['fastTextLayouts'], 1);
+    expect(titleLayout['fullLayouts'], 0);
+
+    await page!
+        .evaluate<void>('() => window.__embedTest.clearRangeStyleEvents()');
+    await page!.click('.ce-floating-toolbar [aria-label="Negrito"]');
+    await Future<void>.delayed(const Duration(milliseconds: 150));
+    await expectSelectionStyle(bold: true, italic: true);
+    await expectNoRecoveryPayload();
+
+    await page!
+        .evaluate<void>('() => window.__embedTest.clearRangeStyleEvents()');
+    await page!.click('.ce-floating-toolbar [aria-label="Negrito"]');
+    await Future<void>.delayed(const Duration(milliseconds: 150));
+    await expectSelectionStyle(bold: false, italic: true);
+    await expectNoRecoveryPayload();
+  });
+
   test('mini-toolbar aparece na seleção e aplica formatação rápida', () async {
     await page!.evaluate<void>('() => window.__embedTest.reset()');
     await Future<void>.delayed(const Duration(milliseconds: 180));
@@ -443,6 +616,8 @@ void main() {
     await page!
         .evaluate<void>('() => window.__embedTest.resetMultipleParagraphs()');
     await Future<void>.delayed(const Duration(milliseconds: 150));
+    await page!
+        .evaluate<void>('() => window.__embedTest.resetLayoutDiagnostics()');
     await page!.click('[data-ce-command="bold"]');
     await Future<void>.delayed(const Duration(milliseconds: 150));
 
@@ -462,6 +637,13 @@ void main() {
       isTrue,
       reason: jsonEncode(cachedRows),
     );
+    final Map<String, dynamic> layout = jsonDecode(
+      await page!.evaluate<String>(
+        '() => window.__embedTest.layoutDiagnosticsJson()',
+      ),
+    ) as Map<String, dynamic>;
+    expect(layout['fastTextLayouts'], 1);
+    expect(layout['fullLayouts'], 0);
   });
 
   test('clique com caret colapsado não quebra a atualização contextual',
@@ -683,7 +865,7 @@ void main() {
         await page!
             .$eval('.ce-statusbar', '(e) => getComputedStyle(e).display'),
         'none');
-    expect(await page!.$$('.ce-viewer-toolbar button'), hasLength(5));
+    expect(await page!.$$('.ce-viewer-toolbar button'), hasLength(6));
     expect(
         await page!.$eval(
             '.ce-floating-toolbar', '(e) => getComputedStyle(e).display'),

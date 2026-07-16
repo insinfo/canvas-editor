@@ -28,17 +28,28 @@ import '../../utils/index.dart' as utils;
 import '../../utils/option.dart' as option_utils;
 import '../actuator/actuator.dart';
 import '../cursor/cursor.dart';
+import '../document/document_locator.dart';
+import '../document/document_model.dart';
+import '../document/document_mutation.dart';
+import '../document/document_range.dart';
+import '../document/document_transaction.dart';
 import '../event/canvas_event.dart';
 import '../event/eventbus/event_bus.dart';
 import '../event/global_event.dart';
 import '../history/history_manager.dart';
+import '../history/history_view_state.dart';
 import '../i18n/i18n.dart';
+import '../layout/layout_invalidation.dart';
+import '../layout/page_row_index.dart';
+import '../layout/layout_request.dart';
+import '../layout/layout_scheduler.dart';
 import '../observer/mouse_observer.dart';
 import '../observer/scroll_observer.dart';
 import '../observer/selection_observer.dart';
 import '../position/position.dart';
 import '../range/range_manager.dart';
 import '../rendering/dirty_page_queue.dart';
+import '../rendering/page_canvas_manager.dart';
 import '../worker/worker_manager.dart';
 import '../zone/zone.dart';
 import 'control/control.dart';
@@ -115,11 +126,8 @@ class Draw {
             List<IElement>.from(data.footer ?? const <IElement>[]),
         _container = DivElement(),
         _pageContainer = DivElement(),
-        _pageList = <CanvasElement>[],
-        _ctxList = <CanvasRenderingContext2D>[],
         _pageNo = 0,
         _renderCount = 0,
-        _pagePixelRatio = null,
         _visiblePageNoList = <int>[],
         _intersectionPageNo = 0,
         _i18n = I18n(options.locale ?? 'en'),
@@ -132,6 +140,17 @@ class Draw {
         _area = null,
         _graffiti = null,
         _workerManager = null {
+    _documentModel = DocumentModel(
+      main: _elementList,
+      header: _headerElementList,
+      footer: _footerElementList,
+    );
+    _pageCanvasManager = PageCanvasManager(
+      pageContainer: _pageContainer,
+      width: getWidth,
+      height: getHeight,
+      pageGap: getPageGap,
+    );
     _initializeContainers();
     _position = Position(this);
     _rangeManager = RangeManager(this);
@@ -178,6 +197,9 @@ class Draw {
       paint: _drawQueuedScrollPage,
       shouldPaint: _shouldDrawQueuedScrollPage,
     );
+    _layoutScheduler = LayoutScheduler<_ProgressiveLayoutContinuation, int>(
+      frameBudget: const Duration(milliseconds: 10),
+    );
     final CanvasEvent canvasEvent = CanvasEvent(this);
     _canvasEvent = canvasEvent;
     _cursor = Cursor(this, canvasEvent);
@@ -211,6 +233,7 @@ class Draw {
     _header = Header(this, _headerElementList);
     _footer = Footer(this, _footerElementList);
     _zone = Zone(this);
+    _documentLocatorIndex = DocumentLocatorIndex(_documentRegionRoots());
 
     render(
       IDrawOption(
@@ -230,8 +253,9 @@ class Draw {
   late final Footer _footer;
   final DivElement _container;
   final DivElement _pageContainer;
-  final List<CanvasElement> _pageList;
-  final List<CanvasRenderingContext2D> _ctxList;
+  late final PageCanvasManager _pageCanvasManager;
+  List<CanvasElement> get _pageList => _pageCanvasManager.pageList;
+  List<CanvasRenderingContext2D> get _ctxList => _pageCanvasManager.contextList;
   final List<int> _visiblePageNoList;
   int _intersectionPageNo;
   final IEditorOption _options;
@@ -239,8 +263,16 @@ class Draw {
   final List<IElement> _elementList;
   final List<IElement> _headerElementList;
   final List<IElement> _footerElementList;
+  late final DocumentModel _documentModel;
+  late final DocumentLocatorIndex _documentLocatorIndex;
   int _pageNo;
   int _renderCount;
+  int _deepHistorySnapshotCount = 0;
+  int _compactHistoryTransitionCount = 0;
+  int _compactHistoryMutationCount = 0;
+  int _historyReplayDepth = 0;
+  int _historyReplayRenderCount = 0;
+  IDrawOption? _historyReplayRenderOption;
 
   // Instrumentação de fases do render (diagnóstico de performance F5).
   static bool debugRenderTiming = false;
@@ -256,23 +288,28 @@ class Draw {
   int? _fastLayoutDirtyRowIndexStart;
   int? _fastLayoutDirtyRowIndexEnd;
   bool _fastLayoutHeightUnchanged = false;
+  int? _fastLayoutOldDirtyPage;
+  double? _fastLayoutOldDirtyTop;
+  double? _fastLayoutOldDirtyBottom;
+  String _lastLayoutMode = 'none';
+  int _fastTextLayoutCount = 0;
+  int _fullLayoutCount = 0;
+  int _partialPageRepaintCount = 0;
+  int _lastPartialPageRepaintRowCount = 0;
+  int _lastPaginationInspectedRowCount = 0;
+  int _lastPaginationReusedPageCount = 0;
   int? _fastRepaintFromPage;
   int? _fastRepaintToPage;
+  LayoutInvalidation? _pendingInvalidation;
 
-  Timer? _progressiveTimer;
-  int _progressiveLayoutVersion = 0;
-  _RowLayoutState? _progressiveResume;
-  IComputeRowListPayload? _progressiveRowPayload;
-  int? _progressiveTargetPage;
+  late final LayoutScheduler<_ProgressiveLayoutContinuation, int>
+      _layoutScheduler;
   // Rows da 1ª fatia síncrona (~viewport + folga p/ E2E) e de cada tick.
   static const int _progressiveFirstChunkRows = 120;
-  static const int _progressiveTickRows = 80;
-  static const Duration _progressiveTickDelay = Duration(milliseconds: 10);
   static const int _progressiveAheadPages = 8;
   static const int _progressiveNearEndPages = 3;
   // Só ativa em docs grandes o bastante para valer o custo do fatiamento.
   static const int _progressiveMinElements = 3000;
-  double? _pagePixelRatio;
   final I18n _i18n;
   final RegExp? _letterReg;
   IElementStyle? _painterStyle;
@@ -359,9 +396,7 @@ class Draw {
     _mouseObserver?.dispose();
     (_tableTool as TableTool?)?.dispose();
     (_graffiti as Graffiti?)?.dispose();
-    _pageContainer.children.clear();
-    _pageList.clear();
-    _ctxList.clear();
+    _pageCanvasManager.dispose();
     _container.remove();
   }
 
@@ -439,42 +474,138 @@ class Draw {
       return;
     }
     _pageNo = value;
+    // Header/footer first/even são escolhidos pela página atual. Atualizar a
+    // página sem reativar a variante deixava edição e history replay presos à
+    // lista da página anterior.
+    final Zone? zone = _zone;
+    if (zone?.isHeaderActive() == true) {
+      _header.setActiveVariantForPage(value);
+    } else if (zone?.isFooterActive() == true) {
+      _footer.setActiveVariantForPage(value);
+    }
   }
 
   int getRenderCount() => _renderCount;
 
+  String getLastLayoutMode() => _lastLayoutMode;
+
+  Map<String, int> getLayoutDiagnostics() {
+    final Position? position = _position as Position?;
+    return <String, int>{
+      'fastTextLayouts': _fastTextLayoutCount,
+      'fullLayouts': _fullLayoutCount,
+      'paginationInspectedRows': _lastPaginationInspectedRowCount,
+      'paginationReusedPages': _lastPaginationReusedPageCount,
+      'positionRecomputedPages': position?.lastRecomputedPageCount ?? 0,
+      'positionRebasedPages': position?.lastRebasedPageCount ?? 0,
+      'positionFlattenedItems': position?.lastFlattenedPositionCount ?? 0,
+      'partialPageRepaints': _partialPageRepaintCount,
+      'partialPageRepaintRows': _lastPartialPageRepaintRowCount,
+    };
+  }
+
+  void resetLayoutDiagnostics() {
+    _lastLayoutMode = 'none';
+    _fastTextLayoutCount = 0;
+    _fullLayoutCount = 0;
+    _lastPaginationInspectedRowCount = 0;
+    _lastPaginationReusedPageCount = 0;
+    _partialPageRepaintCount = 0;
+    _lastPartialPageRepaintRowCount = 0;
+  }
+
+  Map<String, int> getHistoryDiagnostics() {
+    final HistoryManager? history = _historyManager as HistoryManager?;
+    return <String, int>{
+      'deepSnapshots': _deepHistorySnapshotCount,
+      'compactTransitions': _compactHistoryTransitionCount,
+      'compactMutations': _compactHistoryMutationCount,
+      'pendingBurstMutations':
+          _textHistoryBurst?.transaction.mutations.length ?? 0,
+      'transitions': history?.transitionCount ?? 0,
+      'cursor': history?.cursor ?? 0,
+      'restorerDeltaCount': history?.currentRestorerDeltaCount ?? 0,
+      'retainedDeltaCallbacks':
+          history?.currentRestorerRetainedCallbackCount ?? 0,
+      'checkpointReplayOperations':
+          history?.currentCheckpointReplayOperationCount ?? 0,
+      'checkpointPayloadUnits': history?.currentCheckpointPayloadUnits ?? 0,
+      'retainedWindowPayloadUnits':
+          history?.currentRetainedWindowPayloadUnits ?? 0,
+      'checkpointBarriers': history?.currentCheckpointBarrierCount ?? 0,
+    };
+  }
+
+  void resetHistoryDiagnostics() {
+    _deepHistorySnapshotCount = 0;
+    _compactHistoryTransitionCount = 0;
+    _compactHistoryMutationCount = 0;
+  }
+
+  /// Coalesces model-restoration renders into one final layout/paint.
+  ///
+  /// An absolute history endpoint may restore a baseline and replay compact
+  /// deltas. Those steps must not each run layout. Adjacent delta undo/redo
+  /// still ends with its original fast render because it queues only once.
+  void runHistoryReplay(void Function() action) {
+    _historyReplayDepth += 1;
+    try {
+      action();
+    } finally {
+      _historyReplayDepth -= 1;
+      if (_historyReplayDepth == 0) {
+        final IDrawOption? queued = _historyReplayRenderOption;
+        final int queuedCount = _historyReplayRenderCount;
+        _historyReplayRenderOption = null;
+        _historyReplayRenderCount = 0;
+        if (queued != null) {
+          if (queuedCount == 1) {
+            render(queued);
+          } else {
+            _pendingInvalidation = null;
+            render(
+              IDrawOption(
+                curIndex: queued.curIndex,
+                isSetCursor: queued.isSetCursor,
+                isSubmitHistory: false,
+                isSourceHistory: true,
+                notifyContentChange: true,
+                isCompute: true,
+              ),
+            );
+          }
+        }
+      }
+    }
+  }
+
   /// True apenas enquanto um tick progressivo está rodando/agendado. Quando há
   /// mais documento pendente, mas a paginação está pausada esperando rolagem,
   /// consumidores async podem redesenhar as páginas conhecidas normalmente.
-  bool isProgressiveLayoutActive() => _progressiveTimer != null;
+  bool isProgressiveLayoutActive() => _layoutScheduler.isActive;
 
   /// True enquanto ainda existem linhas do documento a paginar, inclusive
   /// quando o processamento está pausado aguardando uma nova demanda.
-  bool isProgressiveLayoutPending() =>
-      _progressiveResume != null && _progressiveRowPayload != null;
+  bool isProgressiveLayoutPending() => _layoutScheduler.hasJob;
 
   /// Garante que a paginação progressiva descubra páginas até [pageNo] +
   /// uma folga. Chamado pelo ScrollObserver quando o usuário se aproxima do
   /// fim conhecido, no mesmo espírito do Google Docs: o total cresce conforme
   /// a rolagem, em vez de ser calculado inteiro na abertura.
   void ensureProgressiveLayoutForPage(int pageNo) {
-    if (_progressiveResume == null || _progressiveRowPayload == null) {
+    if (!_layoutScheduler.hasJob) {
       return;
     }
     if (pageNo < _pageRowList.length - _progressiveNearEndPages) {
       return;
     }
     final int targetPage = pageNo + _progressiveAheadPages;
-    final int? currentTarget = _progressiveTargetPage;
+    final int? currentTarget = _layoutScheduler.target;
     if (currentTarget == null || targetPage > currentTarget) {
-      _progressiveTargetPage = targetPage;
+      _layoutScheduler.requestTarget(targetPage);
+    } else if (_layoutScheduler.isPaused) {
+      _layoutScheduler.resume();
     }
-    if (_progressiveTimer != null) {
-      return;
-    }
-    final int version = _progressiveLayoutVersion;
-    _progressiveTimer =
-        Timer(_progressiveTickDelay, () => _progressiveTick(version));
   }
 
   /// Conclui SINCRONAMENTE a paginação progressiva pendente (F5.5). Usado
@@ -482,16 +613,17 @@ class Draw {
   /// navegação para bookmark/título, Ctrl+End, benchmarks. No fluxo normal a
   /// paginação continua crescendo sob demanda pela rolagem.
   void finishProgressiveLayout() {
-    final _RowLayoutState? state = _progressiveResume;
-    final IComputeRowListPayload? payload = _progressiveRowPayload;
-    if (state == null || payload == null) {
+    final _ProgressiveLayoutContinuation? continuation =
+        _layoutScheduler.continuation;
+    if (continuation == null) {
       return;
     }
-    _progressiveTimer?.cancel();
-    _progressiveTimer = null;
-    _progressiveLayoutVersion += 1;
+    _layoutScheduler.cancel();
+    final _RowLayoutState state = continuation.state;
+    final IComputeRowListPayload payload = continuation.payload;
     while (!state.done) {
       state.budgetRows = 1 << 20;
+      state.shouldYield = null;
       final List<IRow> rows = computeRowList(payload, resume: state);
       _rowList
         ..clear()
@@ -513,9 +645,6 @@ class Draw {
     if (_eventBus?.isSubscribe?.call('pageSizeChange') == true) {
       _eventBus.emit('pageSizeChange', _pageRowList.length);
     }
-    _progressiveResume = null;
-    _progressiveRowPayload = null;
-    _progressiveTargetPage = null;
     (_area as Area?)?.compute();
     if (_mode != EditorMode.print) {
       final Search? search = _search as Search?;
@@ -658,14 +787,12 @@ class Draw {
     if (payload == PageMode.paging) {
       final double height =
           (_options.height ?? _defaultOriginalHeight).toDouble();
-      final double dpr = getPagePixelRatio();
       if (_pageList.isNotEmpty) {
-        final CanvasElement canvas = _pageList.first;
-        canvas.style.height = '${height}px';
-        canvas.height = (height * dpr).toInt();
-      }
-      if (_ctxList.isNotEmpty) {
-        _initPageContext(_ctxList.first);
+        _pageCanvasManager.setPageHeight(
+          0,
+          height,
+          truncateBackingStore: true,
+        );
       }
     } else {
       _disconnectLazyRender();
@@ -831,6 +958,153 @@ class Draw {
   }
 
   List<IElement> getOriginalMainElementList() => _elementList;
+
+  /// Canonical, UI-independent document owner used by commands and indexes.
+  DocumentModel getDocumentModel() => _documentModel;
+
+  Map<DocumentRegion, List<IElement>> _documentRegionRoots() =>
+      <DocumentRegion, List<IElement>>{
+        DocumentRegion.main: _elementList,
+        DocumentRegion.headerDefault: _header.getDefaultElementList(),
+        DocumentRegion.headerFirst: _header.getFirstElementList(),
+        DocumentRegion.headerEven: _header.getEvenElementList(),
+        DocumentRegion.footerDefault: _footer.getDefaultElementList(),
+        DocumentRegion.footerFirst: _footer.getFirstElementList(),
+        DocumentRegion.footerEven: _footer.getEvenElementList(),
+      };
+
+  DocumentRegion _activeDocumentRegion() {
+    if (getZone().isHeaderActive()) {
+      return switch (_header.getActiveVariant()) {
+        'first' => DocumentRegion.headerFirst,
+        'even' => DocumentRegion.headerEven,
+        _ => DocumentRegion.headerDefault,
+      };
+    }
+    if (getZone().isFooterActive()) {
+      return switch (_footer.getActiveVariant()) {
+        'first' => DocumentRegion.footerFirst,
+        'even' => DocumentRegion.footerEven,
+        _ => DocumentRegion.footerDefault,
+      };
+    }
+    return DocumentRegion.main;
+  }
+
+  DocumentRegion? _rootDocumentRegion(List<IElement> elements) {
+    if (identical(elements, _elementList)) return DocumentRegion.main;
+    if (identical(elements, _header.getDefaultElementList())) {
+      return DocumentRegion.headerDefault;
+    }
+    if (identical(elements, _header.getFirstElementList())) {
+      return DocumentRegion.headerFirst;
+    }
+    if (identical(elements, _header.getEvenElementList())) {
+      return DocumentRegion.headerEven;
+    }
+    if (identical(elements, _footer.getDefaultElementList())) {
+      return DocumentRegion.footerDefault;
+    }
+    if (identical(elements, _footer.getFirstElementList())) {
+      return DocumentRegion.footerFirst;
+    }
+    if (identical(elements, _footer.getEvenElementList())) {
+      return DocumentRegion.footerEven;
+    }
+    return null;
+  }
+
+  DocumentLocatorIndex getDocumentLocatorIndex() {
+    _documentLocatorIndex.rebindRoots(_documentRegionRoots());
+    return _documentLocatorIndex;
+  }
+
+  /// Captures the real active list (root or nested cell) in O(1) after the
+  /// active region's lazy locator index has been built once.
+  DocumentListLocator? captureElementListLocator(List<IElement> elements) {
+    final DocumentLocatorIndex index = getDocumentLocatorIndex();
+    return index.captureList(elements, regionHint: _activeDocumentRegion()) ??
+        index.captureList(elements);
+  }
+
+  List<IElement>? resolveElementListLocator(DocumentListLocator locator) {
+    return getDocumentLocatorIndex().resolveList(locator);
+  }
+
+  DocumentElementLocator? captureElementLocator(
+    List<IElement> elements,
+    int elementIndex,
+  ) {
+    final DocumentLocatorIndex index = getDocumentLocatorIndex();
+    return index.captureElement(
+          elements,
+          elementIndex,
+          regionHint: _activeDocumentRegion(),
+        ) ??
+        index.captureElement(elements, elementIndex);
+  }
+
+  ResolvedDocumentElement? resolveElementLocator(
+    DocumentElementLocator locator,
+  ) {
+    return getDocumentLocatorIndex().resolveElement(locator);
+  }
+
+  void invalidateDocumentLocatorRegion(DocumentRegion region) {
+    _documentLocatorIndex.invalidateRegion(region);
+  }
+
+  void invalidateDocumentLocators() {
+    _documentLocatorIndex.invalidateAll();
+  }
+
+  bool _isCanonicalDocumentList(List<IElement> elementList) =>
+      identical(elementList, _elementList) ||
+      identical(elementList, _headerElementList) ||
+      identical(elementList, _footerElementList);
+
+  void didChangeElementStyles(List<IElement> elementList) {
+    if (identical(elementList, _elementList)) {
+      _documentModel.onStyleChange();
+    } else if (identical(elementList, _headerElementList)) {
+      _documentModel.onStyleChange(section: DocumentSection.header);
+    } else if (identical(elementList, _footerElementList)) {
+      _documentModel.onStyleChange(section: DocumentSection.footer);
+    }
+  }
+
+  void didChangeElementStructure(List<IElement> elementList) {
+    // Capture the real owner instead of assuming the currently active zone.
+    // Commands may mutate an inactive header/footer variant or a nested cell.
+    // If the mutation already detached that cell, invalidate all lazy indexes:
+    // this path is structural and rare, while choosing the wrong region would
+    // let history replay write into an orphan list.
+    final DocumentRegion? rootRegion = _rootDocumentRegion(elementList);
+    final DocumentRegion? ownerRegion =
+        rootRegion ?? captureElementListLocator(elementList)?.region;
+    _recordComplexStructureChange(ownerRegion);
+  }
+
+  void _recordComplexStructureChange(DocumentRegion? ownerRegion) {
+    if (ownerRegion == null) {
+      _documentLocatorIndex.invalidateAll();
+      _documentModel.didComplexStructureChangeAll();
+      return;
+    }
+    _documentLocatorIndex.invalidateRegion(ownerRegion);
+    final DocumentSection section = switch (ownerRegion) {
+      DocumentRegion.main => DocumentSection.main,
+      DocumentRegion.headerDefault ||
+      DocumentRegion.headerFirst ||
+      DocumentRegion.headerEven =>
+        DocumentSection.header,
+      DocumentRegion.footerDefault ||
+      DocumentRegion.footerFirst ||
+      DocumentRegion.footerEven =>
+        DocumentSection.footer,
+    };
+    _documentModel.didComplexStructureChange(section: section);
+  }
 
   ITd? getTd() {
     final Position? position = _position as Position?;
@@ -1046,22 +1320,21 @@ class Draw {
       );
     }
 
-    if (header != null) {
-      _headerElementList
-        ..clear()
-        ..addAll(header);
-      _header.setElementList(List<IElement>.from(_headerElementList));
-    }
+    _documentModel.replace(header: header, main: main, footer: footer);
     if (main != null) {
-      _elementList
-        ..clear()
-        ..addAll(main);
+      _documentLocatorIndex.invalidateRegion(DocumentRegion.main);
+    }
+    if (header != null) {
+      _documentLocatorIndex.invalidateRegion(DocumentRegion.headerDefault);
     }
     if (footer != null) {
-      _footerElementList
-        ..clear()
-        ..addAll(footer);
-      _footer.setElementList(List<IElement>.from(_footerElementList));
+      _documentLocatorIndex.invalidateRegion(DocumentRegion.footerDefault);
+    }
+    if (header != null) {
+      _header.setElementList(_headerElementList);
+    }
+    if (footer != null) {
+      _footer.setElementList(_footerElementList);
     }
     if (payload is IEditorData) {
       getGraffiti()?.setValue(payload.graffiti);
@@ -1089,20 +1362,20 @@ class Draw {
   }
 
   void setEditorData(IEditorData payload) {
-    _elementList
-      ..clear()
-      ..addAll(payload.main);
-    _headerElementList
-      ..clear()
-      ..addAll(payload.header ?? const <IElement>[]);
-    _footerElementList
-      ..clear()
-      ..addAll(payload.footer ?? const <IElement>[]);
+    _documentModel.replace(
+      main: payload.main,
+      header: payload.header ?? const <IElement>[],
+      footer: payload.footer ?? const <IElement>[],
+    );
+    _documentLocatorIndex
+      ..invalidateRegion(DocumentRegion.main)
+      ..invalidateRegion(DocumentRegion.headerDefault)
+      ..invalidateRegion(DocumentRegion.footerDefault);
     if (payload.graffiti != null) {
       getGraffiti()?.setValue(payload.graffiti);
     }
-    _header.setElementList(List<IElement>.from(_headerElementList));
-    _footer.setElementList(List<IElement>.from(_footerElementList));
+    _header.setElementList(_headerElementList);
+    _footer.setElementList(_footerElementList);
   }
 
   void insertElementList(
@@ -1186,7 +1459,13 @@ class Draw {
           preElement.value == ZERO &&
           (preElement.type == null || preElement.type == ElementType.text)) {
         if (startIndex >= 0 && startIndex < elementList.length) {
-          elementList.removeAt(startIndex);
+          spliceElementList(
+            elementList,
+            startIndex,
+            1,
+            null,
+            ISpliceElementListOption(isIgnoreDeletedRule: true),
+          );
           curIndex -= 1;
         }
       }
@@ -1202,6 +1481,7 @@ class Draw {
           curIndex: curIndex,
           isSubmitHistory: isSubmitHistory && deltaHistory == null,
           isSubmitHistoryDeferred: isSubmitHistoryDeferred,
+          notifyContentChange: deltaHistory != null,
           fastLayoutIndex: isFastLayout ? curIndex : null,
         ),
       );
@@ -1226,10 +1506,10 @@ class Draw {
     final bool isSubmitHistory = options?.isSubmitHistory ?? true;
     int curIndex;
     if (isPrepend) {
-      _elementList.insertAll(1, elementList);
+      spliceElementList(_elementList, 1, 0, elementList);
       curIndex = elementList.length;
     } else {
-      _elementList.addAll(elementList);
+      spliceElementList(_elementList, _elementList.length, 0, elementList);
       curIndex = _elementList.length - 1;
     }
     (_rangeManager as RangeManager?)?.setRange(curIndex, curIndex);
@@ -1252,7 +1532,22 @@ class Draw {
     List<IElement>? insertList,
     ISpliceElementListOption? options,
   ]) {
+    if (_compactMutationDepth == 0) {
+      _closeTextHistoryBurst();
+      if (_deferredHistoryTimer != null) {
+        flushDeferredHistory();
+      }
+    }
     final bool isIgnoreDeletedRule = options?.isIgnoreDeletedRule ?? false;
+    final DocumentRegion? locatorRootRegion = _rootDocumentRegion(elementList);
+    final DocumentSection? documentSection =
+        identical(elementList, _elementList)
+            ? DocumentSection.main
+            : identical(elementList, _headerElementList)
+                ? DocumentSection.header
+                : identical(elementList, _footerElementList)
+                    ? DocumentSection.footer
+                    : null;
     if (elementList.isEmpty) {
       start = 0;
     }
@@ -1274,6 +1569,23 @@ class Draw {
     if (normalizedDeleteCount > maxRemovable) {
       normalizedDeleteCount = maxRemovable;
     }
+    final bool changesNestedTableTopology =
+        (insertList?.any((IElement item) => item.type == ElementType.table) ??
+                false) ||
+            (normalizedDeleteCount > 0 &&
+                elementList
+                    .getRange(
+                      normalizedStart,
+                      normalizedStart + normalizedDeleteCount,
+                    )
+                    .any((IElement item) => item.type == ElementType.table));
+    // Capture before the splice: removing the table may detach [elementList]
+    // from the document and make its owner impossible to discover afterwards.
+    final DocumentRegion? nestedTopologyRegion =
+        locatorRootRegion == null && changesNestedTableTopology
+            ? captureElementListLocator(elementList)?.region
+            : null;
+    bool usedSelectiveDelete = false;
     if (normalizedDeleteCount > 0) {
       final int endIndex = normalizedStart + normalizedDeleteCount;
       final IElement? endElement =
@@ -1302,16 +1614,15 @@ class Draw {
       final bool isRangeWithinControl =
           (_control as Control?)?.getIsRangeWithinControl() == true;
       if (!isIgnoreDeletedRule && !isDesignMode() && !isRangeWithinControl) {
+        usedSelectiveDelete = true;
         final bool? tdDeletable = getTd()?.deletable;
         final bool controlDeletableDisabled =
             _options.modeRule?.form?.controlDeletableDisabled == true;
         final bool groupDeletable = _options.group?.deletable != false;
-        int deleteIndex = endIndex - 1;
-        while (deleteIndex >= normalizedStart) {
-          if (deleteIndex < 0 || deleteIndex >= elementList.length) {
-            deleteIndex -= 1;
-            continue;
-          }
+        final List<IElement> preserved = <IElement>[];
+        for (int deleteIndex = normalizedStart;
+            deleteIndex < endIndex;
+            deleteIndex++) {
           final IElement deleteElement = elementList[deleteIndex];
           final bool canDeleteByRule = tdDeletable != false &&
               deleteElement.control?.deletable != false &&
@@ -1327,19 +1638,46 @@ class Draw {
               deleteElement.control?.hide == true ||
               deleteElement.area?.hide == true ||
               canDeleteByRule) {
-            elementList.removeAt(deleteIndex);
+            continue;
           }
-          deleteIndex -= 1;
+          preserved.add(deleteElement);
         }
+        // Uma única movimentação da cauda. O removeAt descendente anterior
+        // deslocava ~N elementos para cada item selecionado (O(faixa×cauda)),
+        // chegando a segundos em seleções perto do início de DOCX grandes.
+        elementList.replaceRange(normalizedStart, endIndex, preserved);
       } else {
         elementList.removeRange(normalizedStart, endIndex);
       }
     }
 
     if (insertList != null && insertList.isNotEmpty) {
-      for (int i = 0; i < insertList.length; i++) {
-        elementList.insert(normalizedStart + i, insertList[i]);
+      // `insert` por item também deslocava a cauda repetidamente em paste ou
+      // substituição grande. insertAll preserva a ordem com um único splice.
+      elementList.insertAll(normalizedStart, insertList);
+    }
+    if (documentSection != null) {
+      final int insertCount = insertList?.length ?? 0;
+      final int actualDeleteCount = length + insertCount - elementList.length;
+      if (actualDeleteCount > 0 || insertCount > 0) {
+        if (usedSelectiveDelete && actualDeleteCount != normalizedDeleteCount) {
+          _documentModel.didComplexStructureChange(section: documentSection);
+        } else {
+          _documentModel.didSplice(
+            section: documentSection,
+            start: normalizedStart,
+            deleteCount: actualDeleteCount,
+            insertCount: insertCount,
+          );
+        }
       }
+    }
+    if (locatorRootRegion != null) {
+      // Mesmo preservando a identidade da lista raiz, índices/path fallbacks
+      // de tabelas podem mudar com qualquer splice anterior à tabela.
+      _documentLocatorIndex.invalidateRegion(locatorRootRegion);
+    } else if (changesNestedTableTopology) {
+      _recordComplexStructureChange(nestedTopologyRegion);
     }
   }
 
@@ -1380,6 +1718,7 @@ class Draw {
         IDrawOption(
           curIndex: curIndex,
           isSubmitHistory: false,
+          notifyContentChange: true,
           isRowListPrecomputed: true,
         ),
       );
@@ -1427,23 +1766,29 @@ class Draw {
         curIndex: curIndex,
         isSubmitHistory: delta == null,
         isSubmitHistoryDeferred: delta == null,
+        notifyContentChange: true,
         fastLayoutIndex: isFastLayout ? curIndex : null,
       ),
     );
   }
 
-  // Snapshot de histórico adiado por rajada de digitação (P1 do plano de
-  // otimização): clonar main+header+footer a cada tecla era O(documento) por
-  // keystroke. Com o adiamento, o clone acontece uma vez por rajada (debounce)
-  // e o undo agrupa a palavra digitada, como no Word/OnlyOffice.
+  // Compatibilidade do histórico legado + agrupamento da digitação tipada.
+  // O timer de texto apenas fecha a transação reversível da rajada; não clona
+  // o documento. `_deferredHistoryTimer` permanece somente para rotas legadas
+  // que ainda pedem snapshot adiado explicitamente.
   int? _deferredHistoryIndex;
   Timer? _deferredHistoryTimer;
+  _TextHistoryBurst? _textHistoryBurst;
+  Timer? _textHistoryTimer;
+  bool _renewTextHistoryTimerAfterRender = false;
+  int _compactMutationDepth = 0;
   static const Duration _deferredHistoryDelay = Duration(milliseconds: 300);
 
   /// Materializa o snapshot pendente da rajada de digitação (se houver).
   /// Chamado antes de undo/redo e em pontos de entrada de eventos que mudam
   /// o documento fora da rajada.
   void flushDeferredHistory() {
+    _closeTextHistoryBurst();
     if (_deferredHistoryTimer == null) {
       return;
     }
@@ -1455,9 +1800,260 @@ class Draw {
   /// Descarta o snapshot pendente (o estado da rajada foi englobado por um
   /// submit imediato posterior ou o documento foi substituído).
   void cancelDeferredHistory() {
+    _closeTextHistoryBurst();
     _deferredHistoryTimer?.cancel();
     _deferredHistoryTimer = null;
     _deferredHistoryIndex = null;
+  }
+
+  void _closeTextHistoryBurst() {
+    _textHistoryTimer?.cancel();
+    _textHistoryTimer = null;
+    _renewTextHistoryTimerAfterRender = false;
+    _textHistoryBurst = null;
+  }
+
+  /// Aplica uma edicao textual e registra imediatamente um delta reversivel.
+  ///
+  /// Mutations adjacentes com o mesmo [mergeKey] compartilham uma unica
+  /// transicao de undo durante 300 ms. Os callbacks da transicao capturam a
+  /// transaction mutavel, portanto acrescentar a proxima tecla nao clona o
+  /// documento e nao cria outro registro.
+  LayoutInvalidation? applyTextMutation({
+    required List<IElement> elementList,
+    required int start,
+    required int deleteCount,
+    required List<IElement> replacement,
+    required int curIndex,
+    required String mergeKey,
+    bool recordHistory = true,
+    bool forceSnapshotHistory = false,
+    DocumentMutationImpact impact = DocumentMutationImpact.paragraphLayout,
+  }) {
+    final double mutationStartedAt =
+        debugRenderTiming ? window.performance.now() : 0;
+    if (start < 0 ||
+        start > elementList.length ||
+        deleteCount < 0 ||
+        start + deleteCount > elementList.length) {
+      throw RangeError('invalid text mutation range');
+    }
+    final RangeManager? rangeManager = _rangeManager as RangeManager?;
+    if (rangeManager == null) {
+      return null;
+    }
+    final HistoryViewState beforeViewState = captureHistoryViewState();
+    final IRange beforeRange = beforeViewState.range;
+    final HistoryManager? historyManager = _historyManager as HistoryManager?;
+    final bool listMetadataSideEffect = deleteCount > 0 &&
+        _spliceClearsFollowingListMetadata(
+          elementList,
+          start,
+          deleteCount,
+        );
+    final DocumentListLocator? listLocator =
+        !forceSnapshotHistory && !listMetadataSideEffect
+            ? captureElementListLocator(elementList)
+            : null;
+    final bool supportsStableReplay =
+        !forceSnapshotHistory && !listMetadataSideEffect && listLocator != null;
+    final bool shouldRecord = recordHistory &&
+        supportsStableReplay &&
+        _options.historyDisabled != true &&
+        historyManager != null;
+
+    // Only genuinely unaddressable lists fall back to a deep snapshot. Main,
+    // header/footer variants and arbitrarily nested table cells replay through
+    // a stable locator, even after an absolute endpoint replaced their roots.
+    final bool useSnapshotHistory = recordHistory &&
+        !supportsStableReplay &&
+        _options.historyDisabled != true &&
+        historyManager != null;
+    final double mutationPreparedAt =
+        debugRenderTiming ? window.performance.now() : 0;
+    if (useSnapshotHistory) {
+      flushDeferredHistory();
+      if (historyManager.isStackEmpty()) {
+        submitHistory(beforeRange.endIndex);
+      }
+    }
+
+    // Um snapshot legado pendente representa outra unidade logica e precisa
+    // ser fechado antes de capturarmos o before deste delta.
+    if (shouldRecord && _deferredHistoryTimer != null) {
+      flushDeferredHistory();
+    }
+    if (shouldRecord && historyManager.isStackEmpty()) {
+      submitHistory(beforeRange.endIndex);
+    }
+
+    final List<IElement> removed = deleteCount == 0
+        ? const <IElement>[]
+        : elementList.sublist(start, start + deleteCount);
+    final int beforeLength = elementList.length;
+    _compactMutationDepth += 1;
+    try {
+      spliceElementList(
+        elementList,
+        start,
+        deleteCount,
+        replacement,
+      );
+    } finally {
+      _compactMutationDepth -= 1;
+    }
+    final double mutationSplicedAt =
+        debugRenderTiming ? window.performance.now() : 0;
+    // Regras de modo/formulario podem preservar itens protegidos dentro da
+    // faixa solicitada. Capturamos o segmento REAL resultante, mantendo o
+    // replay exato sem mudar as regras do splice original.
+    final int afterSegmentLength =
+        elementList.length - (beforeLength - deleteCount);
+    final int safeAfterSegmentLength = afterSegmentLength < 0
+        ? 0
+        : afterSegmentLength.clamp(0, elementList.length - start);
+    final List<IElement> actualReplacement = safeAfterSegmentLength == 0
+        ? const <IElement>[]
+        : elementList.sublist(start, start + safeAfterSegmentLength);
+    final ElementSpliceMutation mutation = ElementSpliceMutation(
+      start: start,
+      removed: removed,
+      inserted: actualReplacement,
+      impact: impact,
+      replayDomain: listLocator,
+      cloneElements: (Iterable<IElement> source) =>
+          element_utils.cloneElementList(source.toList()),
+      splice: (
+        int mutationStart,
+        int mutationDeleteCount,
+        List<IElement> mutationReplacement,
+      ) {
+        final List<IElement> replayElementList;
+        if (listLocator == null) {
+          // This mutation is used only to derive layout invalidation; its
+          // history endpoint follows the snapshot path above.
+          replayElementList = elementList;
+        } else {
+          replayElementList = resolveElementListLocator(listLocator) ??
+              (throw StateError(
+                'document list locator could not be resolved during history replay',
+              ));
+        }
+        spliceElementList(
+          replayElementList,
+          mutationStart,
+          mutationDeleteCount,
+          mutationReplacement,
+          ISpliceElementListOption(isIgnoreDeletedRule: true),
+        );
+      },
+    );
+    final double mutationDeltaBuiltAt =
+        debugRenderTiming ? window.performance.now() : 0;
+
+    rangeManager.setRange(curIndex, curIndex);
+
+    final DocumentTransaction candidate = DocumentTransaction(
+      mergeKey: mergeKey,
+    )..add(mutation);
+    final LayoutInvalidation mutationInvalidation =
+        LayoutInvalidation.fromTransaction(candidate);
+
+    if (!shouldRecord) {
+      if (useSnapshotHistory) {
+        return null;
+      }
+      return mutationInvalidation;
+    }
+
+    _compactHistoryMutationCount += 1;
+
+    _TextHistoryBurst? burst = _textHistoryBurst;
+    final bool merge = burst != null &&
+        identical(burst.elementList, elementList) &&
+        burst.transaction.canMergeWith(candidate);
+    if (!merge) {
+      _closeTextHistoryBurst();
+      burst = _TextHistoryBurst(
+        elementList: elementList,
+        transaction: candidate,
+        beforeViewState: beforeViewState,
+        afterViewState: captureHistoryViewState(),
+        curIndex: curIndex,
+      );
+      _textHistoryBurst = burst;
+      _compactHistoryTransitionCount += 1;
+      final _TextHistoryBurst recordedBurst = burst;
+      historyManager.executeDelta(
+        revert: () {
+          _restoreTextHistoryBurst(recordedBurst, isAfter: false);
+        },
+        apply: () {
+          _restoreTextHistoryBurst(recordedBurst, isAfter: true);
+        },
+        checkpointDelta: mutation,
+      );
+    } else {
+      burst.transaction.merge(candidate);
+      burst
+        ..afterViewState = captureHistoryViewState()
+        ..curIndex = curIndex;
+    }
+    _textHistoryTimer?.cancel();
+    _textHistoryTimer = Timer(_deferredHistoryDelay, _closeTextHistoryBurst);
+    // Timers cannot run during the synchronous canvas render. Mark this one
+    // for renewal at the end of render so a slow frame does not consume the
+    // entire coalescing window before the next keyboard event is dispatched.
+    _renewTextHistoryTimerAfterRender = true;
+    if (debugRenderTiming) {
+      window.console.log(
+        '[mutation] prepare='
+        '${(mutationPreparedAt - mutationStartedAt).toStringAsFixed(0)}ms '
+        'splice=${(mutationSplicedAt - mutationPreparedAt).toStringAsFixed(0)}ms '
+        'delta=${(mutationDeltaBuiltAt - mutationSplicedAt).toStringAsFixed(0)}ms '
+        'history=${(window.performance.now() - mutationDeltaBuiltAt).toStringAsFixed(0)}ms',
+      );
+    }
+    return mutationInvalidation;
+  }
+
+  bool _spliceClearsFollowingListMetadata(
+    List<IElement> elementList,
+    int start,
+    int deleteCount,
+  ) {
+    final int end = start + deleteCount;
+    if (end < 0 || end >= elementList.length) {
+      return false;
+    }
+    final String? followingListId = elementList[end].listId;
+    return followingListId != null &&
+        (start == 0 || elementList[start - 1].listId != followingListId);
+  }
+
+  void _restoreTextHistoryBurst(
+    _TextHistoryBurst burst, {
+    required bool isAfter,
+  }) {
+    _closeTextHistoryBurst();
+    if (isAfter) {
+      burst.transaction.apply();
+    } else {
+      burst.transaction.revert();
+    }
+    restoreHistoryViewState(
+      isAfter ? burst.afterViewState : burst.beforeViewState,
+    );
+    final LayoutInvalidation invalidation =
+        LayoutInvalidation.fromTransaction(burst.transaction);
+    renderUpdate(
+      LayoutRequest(
+        invalidation: invalidation,
+        curIndex:
+            isAfter ? burst.curIndex : burst.beforeViewState.range.endIndex,
+        notifyContentChange: true,
+      ),
+    );
   }
 
   void _prepareHistoryForMutation({
@@ -1493,13 +2089,28 @@ class Draw {
     }
     cancelDeferredHistory();
     final List<IElement> elementList = getElementList();
-    final int insertStart = startIndex + 1;
+    if (!_isCanonicalDocumentList(elementList)) {
+      if (historyManager.isStackEmpty()) {
+        submitHistory(rangeManager.getRange().endIndex);
+      }
+      return null;
+    }
+    final bool removesLeadingListZero = payload.first.listId != null &&
+        startIndex >= 0 &&
+        startIndex < elementList.length &&
+        elementList[startIndex].listId == null &&
+        elementList[startIndex].value == ZERO &&
+        (elementList[startIndex].type == null ||
+            elementList[startIndex].type == ElementType.text);
+    final int insertStart =
+        removesLeadingListZero ? startIndex : startIndex + 1;
     if (insertStart < 0 || insertStart > elementList.length) {
       return null;
     }
-    final int deleteCount = startIndex == endIndex
-        ? 0
-        : (endIndex - startIndex).clamp(0, elementList.length - insertStart);
+    final int selectedCount =
+        startIndex == endIndex ? 0 : endIndex - startIndex;
+    final int deleteCount = (selectedCount + (removesLeadingListZero ? 1 : 0))
+        .clamp(0, elementList.length - insertStart);
     final List<IElement> removedSnapshot = deleteCount > 0
         ? element_utils.cloneElementList(
             elementList.sublist(insertStart, insertStart + deleteCount),
@@ -1507,17 +2118,19 @@ class Draw {
         : <IElement>[];
     final List<IElement> insertedSnapshot =
         element_utils.cloneElementList(payload);
-    final IRange beforeRange = _cloneRange(rangeManager.getRange());
+    final HistoryViewState beforeViewState = captureHistoryViewState();
+    final IRange beforeRange = beforeViewState.range;
+    if (historyManager.isStackEmpty()) {
+      submitHistory(beforeRange.endIndex);
+    }
     final _InsertDeltaHistory delta = _InsertDeltaHistory(
       insertStart: insertStart,
+      elementList: elementList,
       removedSnapshot: removedSnapshot,
       insertedSnapshot: insertedSnapshot,
-      beforeRange: beforeRange,
+      beforeViewState: beforeViewState,
       isFastLayout: isFastLayout,
     );
-    historyManager.replaceCurrent(() {
-      _restoreInsertDeltaHistory(delta, isAfter: false);
-    });
     return delta;
   }
 
@@ -1533,21 +2146,30 @@ class Draw {
     }
     cancelDeferredHistory();
     final List<IElement> elementList = getElementList();
+    if (!_isCanonicalDocumentList(elementList)) {
+      if (historyManager.isStackEmpty()) {
+        submitHistory(rangeManager.getRange().endIndex);
+      }
+      return null;
+    }
     if (start < 0 || start + deleteCount > elementList.length) {
       return null;
     }
+    final HistoryViewState beforeViewState = captureHistoryViewState();
+    final IRange beforeRange = beforeViewState.range;
+    if (historyManager.isStackEmpty()) {
+      submitHistory(beforeRange.endIndex);
+    }
     final _InsertDeltaHistory delta = _InsertDeltaHistory(
       insertStart: start,
+      elementList: elementList,
       removedSnapshot: element_utils.cloneElementList(
         elementList.sublist(start, start + deleteCount),
       ),
       insertedSnapshot: const <IElement>[],
-      beforeRange: _cloneRange(rangeManager.getRange()),
+      beforeViewState: beforeViewState,
       isFastLayout: isFastLayout,
     );
-    historyManager.replaceCurrent(() {
-      _restoreInsertDeltaHistory(delta, isAfter: false);
-    });
     return delta;
   }
 
@@ -1560,22 +2182,23 @@ class Draw {
     if (historyManager == null || rangeManager == null) {
       return;
     }
-    delta.afterRange = _cloneRange(rangeManager.getRange());
+    delta.afterViewState = captureHistoryViewState();
     delta.afterCurIndex = curIndex;
-    historyManager.execute(() {
-      _restoreInsertDeltaHistory(delta, isAfter: true);
-    });
+    historyManager.executeDelta(
+      revert: () {
+        _restoreInsertDeltaHistory(delta, isAfter: false);
+      },
+      apply: () {
+        _restoreInsertDeltaHistory(delta, isAfter: true);
+      },
+    );
   }
 
   void _restoreInsertDeltaHistory(
     _InsertDeltaHistory delta, {
     required bool isAfter,
   }) {
-    final RangeManager? rangeManager = _rangeManager as RangeManager?;
-    if (rangeManager == null) {
-      return;
-    }
-    final List<IElement> elementList = getElementList();
+    final List<IElement> elementList = delta.elementList;
     final int replaceCount =
         isAfter ? delta.removedSnapshot.length : delta.insertedSnapshot.length;
     final List<IElement> replacement = element_utils.cloneElementList(
@@ -1588,17 +2211,19 @@ class Draw {
       replacement,
       ISpliceElementListOption(isIgnoreDeletedRule: true),
     );
-    final IRange? nextRange = isAfter ? delta.afterRange : delta.beforeRange;
-    if (nextRange != null) {
-      rangeManager.replaceRange(_cloneRange(nextRange));
+    final HistoryViewState? nextViewState =
+        isAfter ? delta.afterViewState : delta.beforeViewState;
+    if (nextViewState != null) {
+      restoreHistoryViewState(nextViewState);
     }
     final int curIndex = isAfter
         ? (delta.afterCurIndex ?? delta.insertStart + replacement.length - 1)
-        : delta.beforeRange.endIndex;
+        : delta.beforeViewState.range.endIndex;
     render(
       IDrawOption(
         curIndex: curIndex,
         isSubmitHistory: false,
+        notifyContentChange: true,
         fastLayoutIndex: delta.isFastLayout ? curIndex : null,
       ),
     );
@@ -1616,6 +2241,12 @@ class Draw {
     }
     cancelDeferredHistory();
     final List<IElement> elementList = getElementList();
+    if (!identical(elementList, _elementList)) {
+      if (historyManager.isStackEmpty()) {
+        submitHistory(rangeManager.getRange().endIndex);
+      }
+      return null;
+    }
     if (start < 0 || start + deleteCount > elementList.length) {
       return null;
     }
@@ -1627,21 +2258,24 @@ class Draw {
         elementList.length != _computedElementCount) {
       return null;
     }
+    final HistoryViewState beforeViewState = captureHistoryViewState();
+    final IRange beforeRange = beforeViewState.range;
+    if (historyManager.isStackEmpty()) {
+      submitHistory(beforeRange.endIndex);
+    }
     final _ElementRangeDeltaHistory delta = _ElementRangeDeltaHistory(
       start: start,
       deleteCount: deleteCount,
+      elementList: elementList,
       removedSnapshot: element_utils.cloneElementList(
         elementList.sublist(start, start + deleteCount),
       ),
       removedRows: _cloneRows(_rowList.sublist(rowStart, rowEnd)),
       rowStart: rowStart,
-      beforeRange: _cloneRange(rangeManager.getRange()),
+      beforeViewState: beforeViewState,
       beforeCurIndex: rangeManager.getRange().endIndex,
       afterCurIndex: curIndex,
     );
-    historyManager.replaceCurrent(() {
-      _restoreElementRangeDeleteDelta(delta, isAfter: false);
-    });
     return delta;
   }
 
@@ -1651,21 +2285,22 @@ class Draw {
     if (historyManager == null || rangeManager == null) {
       return;
     }
-    delta.afterRange = _cloneRange(rangeManager.getRange());
-    historyManager.execute(() {
-      _restoreElementRangeDeleteDelta(delta, isAfter: true);
-    });
+    delta.afterViewState = captureHistoryViewState();
+    historyManager.executeDelta(
+      revert: () {
+        _restoreElementRangeDeleteDelta(delta, isAfter: false);
+      },
+      apply: () {
+        _restoreElementRangeDeleteDelta(delta, isAfter: true);
+      },
+    );
   }
 
   void _restoreElementRangeDeleteDelta(
     _ElementRangeDeltaHistory delta, {
     required bool isAfter,
   }) {
-    final RangeManager? rangeManager = _rangeManager as RangeManager?;
-    if (rangeManager == null) {
-      return;
-    }
-    final List<IElement> elementList = getElementList();
+    final List<IElement> elementList = delta.elementList;
     if (isAfter) {
       spliceElementList(
         elementList,
@@ -1684,14 +2319,16 @@ class Draw {
       );
     }
     _applyElementRangeRowDelta(delta, isAfter: isAfter);
-    final IRange? nextRange = isAfter ? delta.afterRange : delta.beforeRange;
-    if (nextRange != null) {
-      rangeManager.replaceRange(_cloneRange(nextRange));
+    final HistoryViewState? nextViewState =
+        isAfter ? delta.afterViewState : delta.beforeViewState;
+    if (nextViewState != null) {
+      restoreHistoryViewState(nextViewState);
     }
     render(
       IDrawOption(
         curIndex: isAfter ? delta.afterCurIndex : delta.beforeCurIndex,
         isSubmitHistory: false,
+        notifyContentChange: true,
         isRowListPrecomputed: true,
       ),
     );
@@ -1756,6 +2393,7 @@ class Draw {
       return;
     }
     if (defer) {
+      _closeTextHistoryBurst();
       _deferredHistoryIndex = curIndex;
       _deferredHistoryTimer?.cancel();
       _deferredHistoryTimer =
@@ -1778,40 +2416,46 @@ class Draw {
         element_utils.cloneElementList(_headerElementList);
     final List<IElement> footerSnapshot =
         element_utils.cloneElementList(_footerElementList);
-    final IRange rangeSnapshot = _cloneRange(rangeManager.getRange());
-    final IPositionContext positionContextSnapshot =
-        _clonePositionContext(position.getPositionContext());
-    final EditorZone zoneSnapshot = getZone().getZone();
-    final int pageNoSnapshot = _pageNo;
+    final List<IElement> headerFirstSnapshot =
+        element_utils.cloneElementList(_header.getFirstElementList());
+    final List<IElement> headerEvenSnapshot =
+        element_utils.cloneElementList(_header.getEvenElementList());
+    final bool headerTitlePageSnapshot = _header.getIsTitlePage();
+    final bool headerEvenAndOddSnapshot = _header.getIsEvenAndOdd();
+    final List<IElement> footerFirstSnapshot =
+        element_utils.cloneElementList(_footer.getFirstElementList());
+    final List<IElement> footerEvenSnapshot =
+        element_utils.cloneElementList(_footer.getEvenElementList());
+    final bool footerTitlePageSnapshot = _footer.getIsTitlePage();
+    final bool footerEvenAndOddSnapshot = _footer.getIsEvenAndOdd();
+    _deepHistorySnapshotCount += 1;
+    final HistoryViewState viewStateSnapshot = captureHistoryViewState();
 
     historyManager.execute(() {
-      getZone().setZone(zoneSnapshot);
-      setPageNo(pageNoSnapshot);
-      position.setPositionContext(
-        _clonePositionContext(positionContextSnapshot),
+      _documentModel.replace(
+        header: element_utils.cloneElementList(headerSnapshot),
+        main: element_utils.cloneElementList(elementSnapshot),
+        footer: element_utils.cloneElementList(footerSnapshot),
       );
-      final List<IElement> restoredHeader =
-          element_utils.cloneElementList(headerSnapshot);
-      _headerElementList
-        ..clear()
-        ..addAll(restoredHeader);
-      _header.setElementList(
-        element_utils.cloneElementList(restoredHeader),
+      _header.setElementList(_headerElementList);
+      _footer.setElementList(_footerElementList);
+      _header.setVariants(
+        first: element_utils.cloneElementList(headerFirstSnapshot),
+        even: element_utils.cloneElementList(headerEvenSnapshot),
+        titlePage: headerTitlePageSnapshot,
+        evenAndOdd: headerEvenAndOddSnapshot,
       );
-      final List<IElement> restoredFooter =
-          element_utils.cloneElementList(footerSnapshot);
-      _footerElementList
-        ..clear()
-        ..addAll(restoredFooter);
-      _footer.setElementList(
-        element_utils.cloneElementList(restoredFooter),
+      _footer.setVariants(
+        first: element_utils.cloneElementList(footerFirstSnapshot),
+        even: element_utils.cloneElementList(footerEvenSnapshot),
+        titlePage: footerTitlePageSnapshot,
+        evenAndOdd: footerEvenAndOddSnapshot,
       );
-      final List<IElement> restoredMain =
-          element_utils.cloneElementList(elementSnapshot);
-      _elementList
-        ..clear()
-        ..addAll(restoredMain);
-      rangeManager.replaceRange(_cloneRange(rangeSnapshot));
+      // DocumentModel preserves canonical default-list identities, while
+      // nested table lists and first/even roots are cloned above. Rebuild each
+      // region lazily before the flat restorer replays its next delta.
+      _documentLocatorIndex.invalidateAll();
+      restoreHistoryViewState(viewStateSnapshot);
       render(
         IDrawOption(
           curIndex: curIndex,
@@ -1855,42 +2499,12 @@ class Draw {
 
   double getCanvasWidth(int pageNo) {
     ensureContainerMounted();
-    if (_pageList.isEmpty) {
-      return getWidth();
-    }
-    int index = pageNo;
-    if (index < 0) {
-      index = 0;
-    } else if (index >= _pageList.length) {
-      index = _pageList.length - 1;
-    }
-    final CanvasElement page = _pageList[index];
-    final double ratio = getPagePixelRatio();
-    final int rawWidth = page.width ?? 0;
-    if (ratio <= 0) {
-      return rawWidth.toDouble();
-    }
-    return rawWidth.toDouble() / ratio;
+    return _pageCanvasManager.getCanvasWidth(pageNo, fallback: getWidth());
   }
 
   double getCanvasHeight(int pageNo) {
     ensureContainerMounted();
-    if (_pageList.isEmpty) {
-      return getHeight();
-    }
-    int index = pageNo;
-    if (index < 0) {
-      index = 0;
-    } else if (index >= _pageList.length) {
-      index = _pageList.length - 1;
-    }
-    final CanvasElement page = _pageList[index];
-    final double ratio = getPagePixelRatio();
-    final int rawHeight = page.height ?? 0;
-    if (ratio <= 0) {
-      return rawHeight.toDouble();
-    }
-    return rawHeight.toDouble() / ratio;
+    return _pageCanvasManager.getCanvasHeight(pageNo, fallback: getHeight());
   }
 
   double getOriginalPageGap() =>
@@ -2044,22 +2658,12 @@ class Draw {
   }
 
   double getPagePixelRatio() {
-    return (_pagePixelRatio ?? window.devicePixelRatio).toDouble();
+    return _pageCanvasManager.pagePixelRatio;
   }
 
   void setPagePixelRatio(double? value) {
-    final double? normalized = value;
-    if (normalized == null) {
-      if (_pagePixelRatio == null) {
-        return;
-      }
-      _pagePixelRatio = null;
-    } else {
-      if (_pagePixelRatio != null &&
-          (_pagePixelRatio! - normalized).abs() < 1e-6) {
-        return;
-      }
-      _pagePixelRatio = normalized;
+    if (!_pageCanvasManager.setPagePixelRatio(value)) {
+      return;
     }
     setPageDevicePixel();
     render(
@@ -2291,6 +2895,7 @@ class Draw {
         if (element.pagingId != null) {
           int tableIndex = i + 1;
           int combineCount = 0;
+          bool restoredPagingTopology = false;
           while (tableIndex < elementList.length) {
             final IElement nextElement = elementList[tableIndex];
             if (nextElement.pagingId == element.pagingId) {
@@ -2311,6 +2916,7 @@ class Draw {
           }
           if (combineCount > 0) {
             elementList.removeRange(i + 1, i + 1 + combineCount);
+            restoredPagingTopology = true;
           }
           // Reconstitui a tabela original: remove as células-continuação
           // sintéticas e restaura os rowspans truncados pela divisão anterior
@@ -2318,14 +2924,25 @@ class Draw {
           final List<ITr>? merged = element.trList;
           if (merged != null) {
             for (final ITr tr in merged) {
+              final int originalCellCount = tr.tdList.length;
               tr.tdList.removeWhere((ITd td) => td.pagingContinuation == true);
+              if (tr.tdList.length != originalCellCount) {
+                restoredPagingTopology = true;
+              }
               for (final ITd td in tr.tdList) {
                 if (td.originalRowspan != null) {
                   td.rowspan = td.originalRowspan!;
                   td.originalRowspan = null;
+                  restoredPagingTopology = true;
                 }
               }
             }
+          }
+          if (restoredPagingTopology) {
+            // Merge-back mutates both the root and nested cell ownership
+            // without going through spliceElementList. Keep revisioned indexes
+            // and stable history locators aligned with the canonical tree.
+            didChangeElementStructure(elementList);
           }
         }
         element.pagingIndex = element.pagingIndex ?? 0;
@@ -2910,7 +3527,8 @@ class Draw {
       // de parágrafo (próximo elemento inicia parágrafo) → salva o cursor de
       // continuação e devolve as rows acumuladas até aqui.
       if (resume != null &&
-          (rowList.length - chunkStartRowCount) >= budgetRows &&
+          ((rowList.length - chunkStartRowCount) >= budgetRows ||
+              (resume.shouldYield?.call() ?? false)) &&
           i + 1 < elementList.length &&
           elementList[i + 1].value == ZERO) {
         resume
@@ -3038,13 +3656,8 @@ class Draw {
       }
       final CanvasElement? pageDom = _pageList.isNotEmpty ? _pageList[0] : null;
       if (pageDom != null) {
-        final double dpr = getPagePixelRatio();
         final double targetHeight = pageHeight > height ? pageHeight : height;
-        pageDom.style.height = '${targetHeight}px';
-        pageDom.height = (targetHeight * dpr).round();
-        if (_ctxList.isNotEmpty) {
-          _initPageContext(_ctxList[0]);
-        }
+        _pageCanvasManager.setPageHeight(0, targetHeight);
       }
       return pageRowList;
     }
@@ -3059,7 +3672,9 @@ class Draw {
       if (shouldBreak) {
         if (maxPageNo != null && pageNo >= maxPageNo) {
           if (row.startIndex >= 0 && row.startIndex <= _elementList.length) {
-            _elementList.removeRange(row.startIndex, _elementList.length);
+            _documentModel.replace(
+              main: _elementList.take(row.startIndex),
+            );
           }
           break;
         }
@@ -3337,16 +3952,27 @@ class Draw {
     }
   }
 
-  /// Fast path de layout para digitação (P2 do plano de otimização; análogo
-  /// ao `Recalculate_FastWholeParagraph` do OnlyOffice): recomputa apenas as
-  /// rows do parágrafo que contém [anchorIndex] e reusa todas as demais
-  /// (renumerando índices). As páginas e posições são reparticionadas pelo
-  /// chamador como de costume. Retorna `false` (cai no relayout completo)
-  /// em qualquer situação fora do caso trivial:
+  /// Fast path de layout para edição textual (P2 do plano de otimização;
+  /// análogo ao `Recalculate_FastWholeParagraph` do OnlyOffice).
+  ///
+  /// Para uma tecla comum, recomputa o parágrafo do cursor. Quando [range]
+  /// descreve um splice (Enter ou exclusão/substituição de uma seleção), o
+  /// recorte cresce até fronteiras de parágrafo estáveis nos dois lados. Isso
+  /// é importante porque o ZERO inserido por Enter não existia no layout
+  /// anterior e uma exclusão pode fundir vários parágrafos; procurar apenas a
+  /// row do novo cursor fazia ambos caírem no relayout global.
+  ///
+  /// As rows fora do recorte são reutilizadas e apenas seus índices são
+  /// deslocados. Páginas e posições ainda são agregadas pelo chamador. Retorna
+  /// `false` (cai no relayout completo) em qualquer situação fora do caso
+  /// textual seguro:
   /// zona ≠ main, cursor em tabela, floats/surround no documento, parágrafo
   /// com lista/área/controle/título de lista/elemento não-inline, rowFlex
-  /// misto no parágrafo, ou fronteiras de rows desalinhadas.
-  bool _tryFastParagraphLayout(int anchorIndex) {
+  /// não nulo conflitante no parágrafo, ou fronteiras de rows desalinhadas.
+  bool _tryFastParagraphLayout(
+    int anchorIndex, {
+    DocumentRange? range,
+  }) {
     final Position? position = _position as Position?;
     if (position == null || _rowList.isEmpty || _computedElementCount == 0) {
       return false;
@@ -3357,54 +3983,124 @@ class Draw {
     if (!getZone().isMainActive()) {
       return false;
     }
+    // O deslocamento vertical de um parágrafo pode alterar a ancoragem e o
+    // contorno de qualquer objeto flutuante nas páginas seguintes. Até haver
+    // uma invalidação incremental específica para floats, preserve a
+    // correção fazendo o layout completo nesse caso.
+    if (position.getFloatPositionList().isNotEmpty) {
+      return false;
+    }
     final List<IElement> elementList = _elementList;
     if (anchorIndex < 0 || anchorIndex >= elementList.length) {
       return false;
     }
     final int delta = elementList.length - _computedElementCount;
 
-    // Limites do parágrafo NOVO (rows quebram sempre em ZERO, então um
-    // parágrafo começa num ZERO — ou no índice 0 — e vai até o próximo ZERO).
-    int pStart = anchorIndex;
-    while (pStart > 0 && elementList[pStart].value != ZERO) {
-      pStart -= 1;
-    }
-    int pEnd = anchorIndex + 1;
-    while (pEnd < elementList.length && elementList[pEnd].value != ZERO) {
-      pEnd += 1;
+    // O intervalo da invalidation usa max(removidos, inseridos). Junto com o
+    // delta total ele permite recuperar os dois comprimentos sem carregar
+    // objetos de mutation para dentro do layout.
+    int mutationStart = anchorIndex;
+    int insertedCount = 0;
+    if (range != null) {
+      mutationStart = range.start;
+      final int span = range.length;
+      insertedCount = delta >= 0 ? span : span + delta;
+      final int removedCount = delta >= 0 ? span - delta : span;
+      if (insertedCount < 0 || removedCount < 0) {
+        return false;
+      }
+      if (mutationStart < 0 ||
+          mutationStart > elementList.length ||
+          mutationStart + insertedCount > elementList.length) {
+        return false;
+      }
     }
 
-    // Guardas por elemento do parágrafo (novo).
+    int pStart;
+    int pEnd;
+    if (range == null) {
+      // Chamadas legadas não informam o splice: mantém exatamente o recorte
+      // histórico de um parágrafo.
+      pStart = anchorIndex;
+      while (pStart > 0 && elementList[pStart].value != ZERO) {
+        pStart -= 1;
+      }
+      pEnd = anchorIndex + 1;
+      while (pEnd < elementList.length && elementList[pEnd].value != ZERO) {
+        pEnd += 1;
+      }
+    } else {
+      // Começa ANTES do splice para incluir o parágrafo que é dividido por
+      // Enter ou fundido por Backspace/Delete. Depois avança do fim real dos
+      // itens inseridos até o próximo ZERO, incluindo todos os novos
+      // parágrafos produzidos pelo splice.
+      pStart = mutationStart > 0 ? mutationStart - 1 : 0;
+      if (pStart >= elementList.length) {
+        pStart = elementList.length - 1;
+      }
+      while (pStart > 0 && elementList[pStart].value != ZERO) {
+        pStart -= 1;
+      }
+      pEnd = mutationStart + insertedCount;
+      if (pEnd <= pStart) {
+        pEnd = pStart + 1;
+      }
+      while (pEnd < elementList.length && elementList[pEnd].value != ZERO) {
+        pEnd += 1;
+      }
+      // Inclui também o parágrafo estável seguinte. O offsetY da primeira row
+      // dele depende de max(paraSpacingAfter anterior, paraSpacingBefore
+      // atual); reutilizá-lo depois de uma fusão de parágrafos preservaria um
+      // espaçamento calculado com a borda antiga.
+      if (pEnd < elementList.length) {
+        pEnd += 1;
+        while (pEnd < elementList.length && elementList[pEnd].value != ZERO) {
+          pEnd += 1;
+        }
+      }
+    }
+
+    bool isSafeTextElement(IElement el) {
+      final ElementType? type = el.type;
+      return (type == null ||
+              type == ElementType.text ||
+              type == ElementType.superscript ||
+              type == ElementType.subscript) &&
+          el.listId == null &&
+          el.areaId == null &&
+          el.controlId == null &&
+          el.imgDisplay == null &&
+          el.pagingId == null;
+    }
+
+    // Guardas por elemento do recorte novo.
     RowFlex? sliceRowFlex;
-    bool sliceRowFlexSeen = false;
     for (int i = pStart; i < pEnd; i++) {
       final IElement el = elementList[i];
-      final ElementType? type = el.type;
-      if (type != null &&
-          type != ElementType.text &&
-          type != ElementType.superscript &&
-          type != ElementType.subscript) {
+      if (!isSafeTextElement(el)) {
         return false;
       }
-      if (el.listId != null ||
-          el.areaId != null ||
-          el.controlId != null ||
-          el.imgDisplay != null ||
-          el.pagingId != null) {
-        return false;
+      // DOCX formatado pode carregar o alinhamento somente no ZERO ou somente
+      // nos runs do parágrafo; `null` significa herdar e não é conflito. O
+      // teste antigo comparava null literalmente e mandava títulos textuais
+      // comuns para um relayout global de 3–4 s ao alternar bold/italic.
+      // Preserve o fallback apenas para dois valores NÃO nulos realmente
+      // incompatíveis dentro do mesmo parágrafo.
+      if (i == pStart || (i > pStart && el.value == ZERO)) {
+        sliceRowFlex = null;
       }
-      // O ajuste de justify no fim do parágrafo lê o rowFlex do elemento
-      // anterior; com rowFlex misto o recorte divergiria do cálculo global.
-      if (!sliceRowFlexSeen) {
-        sliceRowFlex = el.rowFlex;
-        sliceRowFlexSeen = true;
-      } else if (el.rowFlex != sliceRowFlex) {
-        return false;
+      final RowFlex? elementRowFlex = el.rowFlex;
+      if (elementRowFlex != null) {
+        if (sliceRowFlex == null) {
+          sliceRowFlex = elementRowFlex;
+        } else if (elementRowFlex != sliceRowFlex) {
+          return false;
+        }
       }
     }
 
-    // Fronteiras equivalentes na lista ANTIGA (edições confinadas ao
-    // parágrafo: antes dele nada muda; depois, tudo desloca por delta).
+    // Fronteira equivalente na lista ANTIGA. Tudo após o splice desloca por
+    // [delta], logo o ZERO estável à direita tinha índice pEnd-delta.
     final int pEndOld = pEnd - delta;
     if (pEndOld < pStart || pEndOld > _computedElementCount) {
       return false;
@@ -3425,6 +4121,45 @@ class Draw {
     }
     if (rowEnd < rowStart) {
       return false;
+    }
+
+    // O recorte antigo pode conter estruturas que acabaram de ser removidas
+    // e, portanto, não aparecem mais em elementList. Não reutilize layout ao
+    // excluir tabela/lista/controle/float: esses casos mantêm o caminho global
+    // até possuírem invalidation estrutural própria.
+    for (int r = rowStart; r < rowEnd; r++) {
+      for (final IElement oldElement in _rowList[r].elementList) {
+        if (!isSafeTextElement(oldElement)) {
+          return false;
+        }
+      }
+    }
+
+    // Conserva a caixa que estava efetivamente pintada antes de substituir as
+    // rows. O repaint parcial só será aceito depois que Position produzir a
+    // nova caixa e ambas forem comprovadas na mesma página. Sem essa evidência
+    // (por exemplo, durante uma paginação ainda incompleta), o chamador faz o
+    // repaint integral da página.
+    if (rowStart < rowEnd) {
+      final List<IElementPosition> oldPositions =
+          position.getOriginalMainPositionList();
+      final IRow firstOldRow = _rowList[rowStart];
+      final IRow lastOldRow = _rowList[rowEnd - 1];
+      final int firstOldIndex = firstOldRow.startIndex;
+      final int lastOldIndex =
+          lastOldRow.startIndex + lastOldRow.elementList.length - 1;
+      if (firstOldIndex >= 0 &&
+          lastOldIndex >= firstOldIndex &&
+          lastOldIndex < oldPositions.length) {
+        final IElementPosition firstOldPosition = oldPositions[firstOldIndex];
+        final IElementPosition lastOldPosition = oldPositions[lastOldIndex];
+        if (firstOldPosition.pageNo == lastOldPosition.pageNo) {
+          _fastLayoutOldDirtyPage = firstOldPosition.pageNo;
+          _fastLayoutOldDirtyTop = firstOldPosition.coordY;
+          _fastLayoutOldDirtyBottom =
+              lastOldPosition.coordY + lastOldPosition.lineHeight;
+        }
+      }
     }
 
     // Recomputa as rows apenas do recorte do parágrafo.
@@ -4032,7 +4767,131 @@ class Draw {
     }
   }
 
-  void _clearPage(int pageNo) {
+  _PartialPageRepaint? _buildFastPartialPageRepaint(
+    int pageNo,
+    List<IElementPosition> positionList,
+  ) {
+    final int? dirtyStart = _fastLayoutDirtyRowIndexStart;
+    final int? dirtyEnd = _fastLayoutDirtyRowIndexEnd;
+    final int? oldPage = _fastLayoutOldDirtyPage;
+    final double? oldTop = _fastLayoutOldDirtyTop;
+    final double? oldBottom = _fastLayoutOldDirtyBottom;
+    if (!_fastLayoutHeightUnchanged ||
+        dirtyStart == null ||
+        dirtyEnd == null ||
+        dirtyEnd <= dirtyStart ||
+        oldPage != pageNo ||
+        oldTop == null ||
+        oldBottom == null ||
+        !oldTop.isFinite ||
+        !oldBottom.isFinite ||
+        oldBottom <= oldTop ||
+        pageNo < 0 ||
+        pageNo >= _pageRowList.length ||
+        !getZone().isMainActive() ||
+        !getIsPagingMode() ||
+        _elementList.length <= 1) {
+      return null;
+    }
+
+    // Elementos que desenham fora das rows (ou cujo visual cruza a página)
+    // tornam um clip local ambíguo. O fast path continua correto nesses casos,
+    // mas mantém o repaint integral.
+    final Position? position = _position as Position?;
+    final Area? area = _area as Area?;
+    final Search? search = _search as Search?;
+    final Control? control = _control as Control?;
+    final Graffiti? graffiti = getGraffiti();
+    final ImageObserver? imageObserver = _imageObserver as ImageObserver?;
+    final String? backgroundImage = _options.background?.image;
+    final bool hasWatermark = _options.watermark?.data.isNotEmpty == true &&
+        _options.watermark?.opacity != 0;
+    if (position == null ||
+        position.getFloatPositionList().isNotEmpty ||
+        area?.getAreaInfo().isNotEmpty == true ||
+        search?.getSearchKeyword()?.isNotEmpty == true ||
+        control?.getActiveControl() != null ||
+        imageObserver?.hasPending == true ||
+        isGraffitiMode() ||
+        graffiti?.getValue().isNotEmpty == true ||
+        hasWatermark ||
+        (backgroundImage != null && backgroundImage.isNotEmpty) ||
+        _options.lineNumber?.disabled == false ||
+        _options.pageBorder?.disabled == false) {
+      return null;
+    }
+
+    final List<IRow> pageRows = _pageRowList[pageNo];
+    final int firstOffset =
+        pageRows.indexWhere((IRow row) => row.rowIndex == dirtyStart);
+    if (firstOffset < 0) {
+      return null;
+    }
+    int lastOffset = firstOffset;
+    while (lastOffset + 1 < pageRows.length &&
+        pageRows[lastOffset + 1].rowIndex < dirtyEnd) {
+      lastOffset += 1;
+    }
+    if (pageRows[lastOffset].rowIndex != dirtyEnd - 1 ||
+        lastOffset - firstOffset + 1 != dirtyEnd - dirtyStart) {
+      return null;
+    }
+    final List<IRow> dirtyRows = pageRows.sublist(firstOffset, lastOffset + 1);
+    final IRow firstRow = dirtyRows.first;
+    final IRow lastRow = dirtyRows.last;
+    if (firstRow.elementList.isEmpty || lastRow.elementList.isEmpty) {
+      return null;
+    }
+    final int firstIndex = firstRow.startIndex;
+    final int lastIndex = lastRow.startIndex + lastRow.elementList.length - 1;
+    if (firstIndex < 0 ||
+        lastIndex < firstIndex ||
+        lastIndex >= positionList.length) {
+      return null;
+    }
+    final IElementPosition firstPosition = positionList[firstIndex];
+    final IElementPosition lastPosition = positionList[lastIndex];
+    if (firstPosition.pageNo != pageNo || lastPosition.pageNo != pageNo) {
+      return null;
+    }
+    final double newTop = firstPosition.coordY;
+    final double newBottom = lastPosition.coordY + lastPosition.lineHeight;
+    if (!newTop.isFinite || !newBottom.isFinite || newBottom <= newTop) {
+      return null;
+    }
+
+    // Limpa a união das caixas antiga/nova. Horizontalmente o clip cobre toda
+    // a largura útil do texto, portanto alinhamento/justificação e overhang de
+    // itálico não deixam pixels antigos para trás.
+    final double scale = (_options.scale ?? 1).toDouble();
+    final double padding = 3 * scale + 1;
+    final List<double> margins = getMargins();
+    final double canvasWidth = getCanvasWidth(pageNo);
+    final double canvasHeight = getCanvasHeight(pageNo);
+    final double left = (margins[3] - padding).clamp(0, canvasWidth).toDouble();
+    final double right = (margins[3] + getInnerWidth() + padding)
+        .clamp(0, canvasWidth)
+        .toDouble();
+    final double top = (oldTop < newTop ? oldTop : newTop) - padding;
+    final double bottom =
+        (oldBottom > newBottom ? oldBottom : newBottom) + padding;
+    final double clippedTop = top.clamp(0, canvasHeight).toDouble();
+    final double clippedBottom = bottom.clamp(0, canvasHeight).toDouble();
+    if (right <= left || clippedBottom <= clippedTop) {
+      return null;
+    }
+    return _PartialPageRepaint(
+      rowList: dirtyRows,
+      clipRect: Rectangle<double>(
+        left,
+        clippedTop,
+        right - left,
+        clippedBottom - clippedTop,
+      ),
+    );
+  }
+
+  void _clearPage(int pageNo, {bool clearBlockState = true}) {
     if (pageNo < 0 || pageNo >= _ctxList.length || pageNo >= _pageList.length) {
       return;
     }
@@ -4044,8 +4903,62 @@ class Draw {
     final double clearHeight =
         pageHeight > getHeight() ? pageHeight : getHeight();
     ctx.clearRect(0, 0, clearWidth, clearHeight);
-    final BlockParticle? blockParticle = _blockParticle as BlockParticle?;
-    blockParticle?.clear();
+    if (clearBlockState) {
+      final BlockParticle? blockParticle = _blockParticle as BlockParticle?;
+      blockParticle?.clear();
+    }
+  }
+
+  void _drawPartialPage(
+    IDrawPagePayload payload,
+    _PartialPageRepaint repaint,
+  ) {
+    final int pageNo = payload.pageNo;
+    if (pageNo < 0 || pageNo >= _ctxList.length) {
+      return;
+    }
+    final CanvasRenderingContext2D ctx = _ctxList[pageNo];
+    final Rectangle<double> clip = repaint.clipRect;
+    final Background? background = _background as Background?;
+    final Margin? margin = _margin as Margin?;
+    final Badge? badge = _badge as Badge?;
+    final Zone zone = getZone();
+    final double inactiveAlpha = (_options.inactiveAlpha ?? 1).toDouble();
+
+    ctx.save();
+    try {
+      ctx
+        ..beginPath()
+        ..rect(clip.left, clip.top, clip.width, clip.height)
+        ..clip()
+        ..globalAlpha = zone.isMainActive() ? 1 : inactiveAlpha;
+      // clearRect respeita o clip. Não limpe BlockParticle: os blocks ficam
+      // fora deste fast path textual e seu estado DOM é global ao documento.
+      _clearPage(pageNo, clearBlockState: false);
+      background?.render(ctx, pageNo);
+      // Recompõe uma eventual marca de margem tocada pelo pequeno padding do
+      // clip (normalmente as rows ficam inteiramente dentro dela).
+      margin?.render(ctx, pageNo);
+      drawRow(
+        ctx,
+        IDrawRowPayload(
+          elementList: payload.elementList,
+          positionList: payload.positionList,
+          rowList: repaint.rowList,
+          pageNo: pageNo,
+          startIndex: repaint.rowList.first.startIndex,
+          innerWidth: getInnerWidth(),
+          zone: EditorZone.main,
+        ),
+      );
+      // Main badge pode ser posicionado sobre o corpo; renderizá-lo sob o clip
+      // preserva esse caso sem percorrer header/footer e o restante da página.
+      badge?.render(ctx, pageNo);
+    } finally {
+      ctx.restore();
+    }
+    _partialPageRepaintCount += 1;
+    _lastPartialPageRepaintRowCount = repaint.rowList.length;
   }
 
   void _drawPage(IDrawPagePayload payload) {
@@ -4199,27 +5112,7 @@ class Draw {
   /// backing store e reaplica a transformação de DPR (o resize limpa o canvas,
   /// então quem chama precisa redesenhar).
   void _setPageCanvasLive(int i, bool live) {
-    if (i < 0 || i >= _pageList.length) {
-      return;
-    }
-    final CanvasElement canvas = _pageList[i];
-    if (live) {
-      final double dpr = getPagePixelRatio();
-      final int fullW = (getWidth() * dpr).round();
-      final int fullH = (getHeight() * dpr).round();
-      if (canvas.width != fullW || canvas.height != fullH) {
-        canvas
-          ..width = fullW
-          ..height = fullH;
-        if (i < _ctxList.length) {
-          _initPageContext(_ctxList[i]);
-        }
-      }
-    } else if (canvas.width != 1) {
-      canvas
-        ..width = 1
-        ..height = 1;
-    }
+    _pageCanvasManager.setPageLive(i, live);
   }
 
   void _lazyRender() {
@@ -4250,14 +5143,21 @@ class Draw {
           if (repaintFrom != null && i < repaintFrom) continue;
           if (repaintTo != null && i > repaintTo) continue;
           _setPageCanvasLive(i, true);
-          _drawPage(
-            IDrawPagePayload(
-              elementList: elementList,
-              positionList: positionList,
-              rowList: _pageRowList[i],
-              pageNo: i,
-            ),
+          final IDrawPagePayload pagePayload = IDrawPagePayload(
+            elementList: elementList,
+            positionList: positionList,
+            rowList: _pageRowList[i],
+            pageNo: i,
           );
+          final _PartialPageRepaint? partialRepaint =
+              repaintFrom == i && repaintTo == i
+                  ? _buildFastPartialPageRepaint(i, positionList)
+                  : null;
+          if (partialRepaint != null) {
+            _drawPartialPage(pagePayload, partialRepaint);
+          } else {
+            _drawPage(pagePayload);
+          }
         }
       }
       return;
@@ -4366,26 +5266,56 @@ class Draw {
   // Rendering (incremental implementation)
   // ---------------------------------------------------------------------------
 
+  /// Entrada nova para comandos transacionais. O comando declara a mutacao;
+  /// Draw apenas traduz a invalidacao para o menor pipeline seguro.
+  void renderUpdate(LayoutRequest request) {
+    final LayoutInvalidation invalidation = request.invalidation;
+    _pendingInvalidation = invalidation;
+    render(
+      IDrawOption(
+        curIndex: request.curIndex,
+        isSetCursor: request.setCursor,
+        isSubmitHistory: request.submitHistory,
+        isSourceHistory: request.sourceHistory,
+        notifyContentChange: request.notifyContentChange,
+        isCompute: invalidation.needsLayout,
+        fastLayoutIndex: invalidation.kind == LayoutInvalidationKind.paragraph
+            ? (invalidation.range?.start ?? request.curIndex)
+            : null,
+      ),
+    );
+  }
+
   void render([IDrawOption? option]) {
+    if (_historyReplayDepth > 0) {
+      _historyReplayRenderOption = option ?? IDrawOption();
+      _historyReplayRenderCount += 1;
+      return;
+    }
     ensureContainerMounted();
     _renderCount += 1;
-    // Cancela qualquer paginação progressiva em voo (F5.5): este render é a
-    // nova verdade; um tick antigo que ainda dispare vai abortar pela versão.
-    _progressiveLayoutVersion += 1;
-    _progressiveTimer?.cancel();
-    _progressiveTimer = null;
-    _progressiveResume = null;
-    _progressiveRowPayload = null;
-    _progressiveTargetPage = null;
+    final IDrawOption renderOption = option ?? IDrawOption();
+    final bool isCompute = renderOption.isCompute ?? true;
+    final LayoutInvalidation? invalidation = _pendingInvalidation;
+    _pendingInvalidation = null;
+    // Um repaint/caret nao muda a verdade do layout e portanto NAO pode
+    // cancelar a paginacao pendente. Antes, qualquer clique durante a abertura
+    // descartava a continuacao e a edicao seguinte fazia relayout global.
+    if (isCompute) {
+      _layoutScheduler.cancel();
+    }
     // Faixa de repintura dirigida vale só para o render que a produziu.
     _fastRepaintFromPage = null;
     _fastRepaintToPage = null;
-    final IDrawOption renderOption = option ?? IDrawOption();
-    final bool isCompute = renderOption.isCompute ?? true;
+    if (invalidation?.isRepaintOnly == true) {
+      _setRepaintPagesForElementRange(invalidation?.range);
+    }
     final bool isLazy = renderOption.isLazy ?? true;
     final bool isInit = renderOption.isInit ?? false;
     final bool isSubmitHistory = renderOption.isSubmitHistory ?? true;
     final bool isSourceHistory = renderOption.isSourceHistory ?? false;
+    final bool notifyContentChange =
+        renderOption.notifyContentChange ?? isSubmitHistory || isSourceHistory;
     final bool isSetCursor = renderOption.isSetCursor ?? true;
     final bool isFirstRender = renderOption.isFirstRender ?? false;
     final bool isRowListPrecomputed = renderOption.isRowListPrecomputed == true;
@@ -4416,10 +5346,27 @@ class Draw {
       _fastLayoutDirtyRowIndexStart = null;
       _fastLayoutDirtyRowIndexEnd = null;
       _fastLayoutHeightUnchanged = false;
+      _fastLayoutOldDirtyPage = null;
+      _fastLayoutOldDirtyTop = null;
+      _fastLayoutOldDirtyBottom = null;
       if (!fastLayoutDone &&
           renderOption.fastLayoutIndex != null &&
           !isSourceHistory) {
-        fastLayoutDone = _tryFastParagraphLayout(renderOption.fastLayoutIndex!);
+        fastLayoutDone = _tryFastParagraphLayout(
+          renderOption.fastLayoutIndex!,
+          range: invalidation?.kind == LayoutInvalidationKind.paragraph
+              ? invalidation?.range
+              : null,
+        );
+      }
+      if (fastLayoutDone) {
+        _lastLayoutMode = isRowListPrecomputed ? 'precomputed' : 'text-range';
+        if (!isRowListPrecomputed) {
+          _fastTextLayoutCount += 1;
+        }
+      } else {
+        _lastLayoutMode = 'full';
+        _fullLayoutCount += 1;
       }
       position?.setFloatPositionList(<IFloatPosition>[]);
       if (!fastLayoutDone) {
@@ -4468,8 +5415,7 @@ class Draw {
             ..clear()
             ..addAll(firstChunk);
           if (!state.done) {
-            _progressiveResume = state;
-            _progressiveRowPayload = rowPayload;
+            _startProgressiveLayout(state, rowPayload);
           }
         } else {
           final List<IRow> computedRows = computeRowList(rowPayload);
@@ -4484,7 +5430,31 @@ class Draw {
             'rows=${_rowList.length}');
         _tPhase = window.performance.now();
       }
-      final List<List<IRow>> pageRows = _computePageList();
+      final int? paginationDirtyRowStart =
+          fastLayoutDone ? _fastLayoutDirtyRowIndexStart : null;
+      final bool canRepaginateLocally = paginationDirtyRowStart != null &&
+          isPagingMode &&
+          (_options.pageMode ?? PageMode.paging) == PageMode.paging &&
+          _options.pageNumber?.maxPageNo == null &&
+          _pageRowList.isNotEmpty;
+      final List<List<IRow>> pageRows;
+      if (canRepaginateLocally) {
+        final PageRowAggregation aggregation = PageRowIndex.repaginateFromRow(
+          rows: _rowList,
+          previousPages: _pageRowList,
+          dirtyRowIndex: paginationDirtyRowStart,
+          pageHeight: getHeight(),
+          marginHeight: getMainOuterHeight(),
+        );
+        pageRows = aggregation.pages;
+        _lastPaginationInspectedRowCount = aggregation.inspectedRowCount;
+        _lastPaginationReusedPageCount = aggregation.reusedPrefixPageCount +
+            aggregation.reusedSuffixPageCount;
+      } else {
+        pageRows = _computePageList();
+        _lastPaginationInspectedRowCount = _rowList.length;
+        _lastPaginationReusedPageCount = 0;
+      }
       _pageRowList
         ..clear()
         ..addAll(pageRows);
@@ -4493,7 +5463,7 @@ class Draw {
       // altura mudou → da 1ª página da faixa em diante (nada ACIMA muda).
       _fastRepaintFromPage = null;
       _fastRepaintToPage = null;
-      final int? dirtyRowStart = _fastLayoutDirtyRowIndexStart;
+      final int? dirtyRowStart = paginationDirtyRowStart;
       final int? dirtyRowEnd = _fastLayoutDirtyRowIndexEnd;
       // Busca ativa: highlights de outras páginas podem mudar com a edição —
       // sem repintura dirigida nesse caso.
@@ -4523,8 +5493,7 @@ class Draw {
       // Enquanto a paginação progressiva não termina, `_rowList` é parcial —
       // 0 desabilita o fast path de edição (que assume o layout completo);
       // uma edição durante a paginação cai no relayout completo (correto).
-      _computedElementCount =
-          _progressiveResume != null ? 0 : _elementList.length;
+      _computedElementCount = _layoutScheduler.hasJob ? 0 : _elementList.length;
       if (debugRenderTiming) {
         window.console.log('[render] computePageList: '
             '${(window.performance.now() - _tPhase).toStringAsFixed(0)}ms '
@@ -4537,7 +5506,13 @@ class Draw {
             '${(window.performance.now() - _tPhase).toStringAsFixed(0)}ms');
         _tPhase = window.performance.now();
       }
-      area?.compute();
+      // Se o mapa ficou vazio após o último layout completo, uma mutação que
+      // passou pelo fast path textual não pode ter criado uma Area (a guarda
+      // do slice rejeita areaId). Evita scan global de todos os elementos por
+      // tecla nos DOCX comuns sem áreas.
+      if (!fastLayoutDone || area?.getAreaInfo().isNotEmpty == true) {
+        area?.compute();
+      }
       if (isGraffitiMode()) {
         getGraffiti()?.compute();
       }
@@ -4589,7 +5564,18 @@ class Draw {
 
     final HistoryManager? historyManager = _historyManager as HistoryManager?;
     final bool isHistoryStackEmpty = historyManager?.isStackEmpty() ?? false;
-    if ((isSubmitHistory && !isFirstRender) ||
+    // O baseline absoluto precisa existir antes da primeira interação. Em docs
+    // grandes, adiá-lo até o primeiro clique fazia `submitHistory` clonar todo
+    // o documento dentro do caminho de foco/cursor (uma pausa visível de ~1 s).
+    // `isFirstRender` só é usado pelo construtor e por `setValue`; este último
+    // limpa a timeline antes de renderizar. O clone passa, portanto, a fazer
+    // parte deterministicamente da abertura/troca do documento. A condição de
+    // `curIndex` continua como fallback caso um primeiro render sem largura
+    // tenha retornado antes de chegar aqui.
+    final bool needsInitialHistoryBaseline =
+        isFirstRender && isHistoryStackEmpty;
+    if (needsInitialHistoryBaseline ||
+        (isSubmitHistory && !isFirstRender) ||
         (curIndex != null && isHistoryStackEmpty)) {
       final bool deferHistory =
           (renderOption.isSubmitHistoryDeferred ?? false) &&
@@ -4622,7 +5608,7 @@ class Draw {
           _eventBus.emit('pageSizeChange', _pageRowList.length);
         }
       }
-      if ((isSubmitHistory || isSourceHistory) && !isInit) {
+      if (notifyContentChange && !isInit) {
         _listener?.contentChange?.call();
         if (_eventBus?.isSubscribe?.call('contentChange') == true) {
           _eventBus.emit('contentChange');
@@ -4635,46 +5621,185 @@ class Draw {
           '${(window.performance.now() - _tPhase).toStringAsFixed(0)}ms');
     }
 
+    if (_renewTextHistoryTimerAfterRender && _textHistoryBurst != null) {
+      _renewTextHistoryTimerAfterRender = false;
+      _textHistoryTimer?.cancel();
+      _textHistoryTimer = Timer(_deferredHistoryDelay, _closeTextHistoryBurst);
+    }
+
     // F5.5/Kix: se a 1ª fatia não cobriu o documento inteiro, fica pendente.
     // O ScrollObserver chamará ensureProgressiveLayoutForPage ao se aproximar
     // do fim conhecido, fazendo o total de páginas crescer sob demanda.
-    if (_progressiveResume != null && _progressiveRowPayload != null) {
-      _progressiveTargetPage = null;
-    }
+    // O scheduler nasce pausado sem alvo; ScrollObserver o retoma quando a
+    // viewport chega perto do fim conhecido.
   }
 
-  /// Um tick do layout progressivo (F5.5/Kix): pagina mais algumas rows até
-  /// atingir o alvo pedido pela rolagem (ou terminar), re-pagina/reposiciona o
-  /// acumulado e redesenha. Se ainda há documento, mas o alvo foi atingido,
-  /// pausa em vez de continuar até o fim.
-  void _progressiveTick(int version) {
-    if (version != _progressiveLayoutVersion) {
-      return; // um novo render cancelou este job
-    }
-    _progressiveTimer = null;
-    final _RowLayoutState? state = _progressiveResume;
-    final IComputeRowListPayload? payload = _progressiveRowPayload;
-    if (state == null || payload == null) {
+  void _setRepaintPagesForElementRange(DocumentRange? range) {
+    if (range == null) {
       return;
     }
-    final Stopwatch sw = Stopwatch()..start();
-    // Processa fatias até estourar ~12ms (orçamento por tick, como o
-    // GetCalculateTimeLimit=10ms do OnlyOffice) ou terminar.
-    do {
-      state.budgetRows = _progressiveTickRows;
-      final List<IRow> rows = computeRowList(payload, resume: state);
+    final Position? position = _position as Position?;
+    final List<IElementPosition>? positions =
+        position?.getOriginalMainPositionList();
+    if (positions == null || positions.isEmpty) {
+      return;
+    }
+
+    IElementPosition? atOrAfter(int index) {
+      int low = 0;
+      int high = positions.length;
+      while (low < high) {
+        final int mid = low + ((high - low) >> 1);
+        if (positions[mid].index < index) {
+          low = mid + 1;
+        } else {
+          high = mid;
+        }
+      }
+      return low < positions.length ? positions[low] : null;
+    }
+
+    IElementPosition? atOrBefore(int index) {
+      int low = 0;
+      int high = positions.length;
+      while (low < high) {
+        final int mid = low + ((high - low) >> 1);
+        if (positions[mid].index <= index) {
+          low = mid + 1;
+        } else {
+          high = mid;
+        }
+      }
+      return low > 0 ? positions[low - 1] : null;
+    }
+
+    final IElementPosition? first = atOrAfter(range.start);
+    final IElementPosition? last = atOrBefore(range.end);
+    if (first == null || last == null || first.pageNo > last.pageNo) {
+      return;
+    }
+    _fastRepaintFromPage = first.pageNo;
+    _fastRepaintToPage = last.pageNo;
+  }
+
+  void _startProgressiveLayout(
+    _RowLayoutState state,
+    IComputeRowListPayload payload,
+  ) {
+    state.publishedRowCount = _rowList.length;
+    _layoutScheduler.start(
+      continuation: _ProgressiveLayoutContinuation(
+        state: state,
+        payload: payload,
+      ),
+      step: _runProgressiveLayoutSlice,
+      onComplete: _completeProgressiveLayout,
+      onError: (Object error, StackTrace stackTrace) {
+        window.console.error(
+          '[layout] progressive job failed: $error\n$stackTrace',
+        );
+      },
+    );
+  }
+
+  LayoutStepResult<_ProgressiveLayoutContinuation> _runProgressiveLayoutSlice(
+    LayoutSlice<_ProgressiveLayoutContinuation, int> slice,
+  ) {
+    final _ProgressiveLayoutContinuation? continuation = slice.continuation;
+    if (continuation == null) {
+      return const LayoutStepResult<_ProgressiveLayoutContinuation>.complete();
+    }
+    final int? targetPage = slice.target;
+    if (targetPage == null) {
+      return LayoutStepResult<_ProgressiveLayoutContinuation>(
+        continuation: continuation,
+        targetReached: true,
+      );
+    }
+    if (_pageRowList.length > targetPage) {
+      return LayoutStepResult<_ProgressiveLayoutContinuation>(
+        continuation: continuation,
+        targetReached: true,
+      );
+    }
+
+    final _RowLayoutState state = continuation.state;
+    state
+      ..budgetRows = 1 << 30
+      ..shouldYield = () => slice.shouldYield;
+    final List<IRow> rows = computeRowList(
+      continuation.payload,
+      resume: state,
+    );
+    state.shouldYield = null;
+    final bool complete = state.done;
+    final bool targetReached = !complete && state.pageNo >= targetPage;
+    final int fromRowIndex = state.publishedRowCount;
+    void commit() {
+      _publishProgressiveRows(
+        rows,
+        fromRowIndex: fromRowIndex,
+        complete: complete,
+      );
+      state.publishedRowCount = rows.length;
+    }
+
+    if (complete) {
+      return LayoutStepResult<_ProgressiveLayoutContinuation>.complete(
+        commit: commit,
+      );
+    }
+    return LayoutStepResult<_ProgressiveLayoutContinuation>(
+      continuation: continuation,
+      commit: commit,
+      targetReached: targetReached,
+    );
+  }
+
+  void _publishProgressiveRows(
+    List<IRow> rows, {
+    required int fromRowIndex,
+    required bool complete,
+  }) {
+    final int oldPageCount = _pageRowList.length;
+    if (fromRowIndex < 0 ||
+        fromRowIndex > rows.length ||
+        fromRowIndex > _rowList.length) {
       _rowList
         ..clear()
         ..addAll(rows);
-    } while (!state.done && sw.elapsedMilliseconds < 12);
+      fromRowIndex = 0;
+    } else {
+      if (_rowList.length > fromRowIndex) {
+        _rowList.removeRange(fromRowIndex, _rowList.length);
+      }
+      _rowList.addAll(rows.getRange(fromRowIndex, rows.length));
+    }
 
-    final List<List<IRow>> pageRows = _computePageList();
+    final bool canAppendPages = fromRowIndex > 0 &&
+        getIsPagingMode() &&
+        (_options.pageMode ?? PageMode.paging) == PageMode.paging &&
+        _options.pageNumber?.maxPageNo == null;
+    final List<List<IRow>> pageRows;
+    if (canAppendPages) {
+      final PageRowAggregation aggregation = PageRowIndex.append(
+        rows: _rowList,
+        previousPages: _pageRowList,
+        pageHeight: getHeight(),
+        marginHeight: getMainOuterHeight(),
+      );
+      pageRows = aggregation.pages;
+      _lastPaginationInspectedRowCount = aggregation.inspectedRowCount;
+      _lastPaginationReusedPageCount = aggregation.reusedPrefixPageCount;
+    } else {
+      pageRows = _computePageList();
+      _lastPaginationInspectedRowCount = _rowList.length;
+      _lastPaginationReusedPageCount = 0;
+    }
     _pageRowList
       ..clear()
       ..addAll(pageRows);
-    // Só marca o layout como completo (habilitando o fast path de edição)
-    // quando a paginação progressiva termina.
-    _computedElementCount = state.done ? _elementList.length : 0;
+    _computedElementCount = complete ? _elementList.length : 0;
     (_position as Position?)?.computePositionList();
     _syncPageCanvases();
     if (getIsPagingMode()) {
@@ -4682,27 +5807,15 @@ class Draw {
     } else {
       _immediateRender();
     }
-    _listener?.pageSizeChange?.call(_pageRowList.length);
-    if (_eventBus?.isSubscribe?.call('pageSizeChange') == true) {
-      _eventBus.emit('pageSizeChange', _pageRowList.length);
-    }
-
-    if (!state.done) {
-      final int? targetPage = _progressiveTargetPage;
-      final bool targetReached =
-          targetPage == null || _pageRowList.length > targetPage;
-      if (targetReached) {
-        return;
+    if (oldPageCount != _pageRowList.length) {
+      _listener?.pageSizeChange?.call(_pageRowList.length);
+      if (_eventBus?.isSubscribe?.call('pageSizeChange') == true) {
+        _eventBus.emit('pageSizeChange', _pageRowList.length);
       }
-      _progressiveTimer =
-          Timer(_progressiveTickDelay, () => _progressiveTick(version));
-      return;
     }
-    // Terminou: computa o que precisava do documento inteiro e avisa listeners.
-    _progressiveResume = null;
-    _progressiveRowPayload = null;
-    _progressiveTargetPage = null;
-    _progressiveTimer = null;
+  }
+
+  void _completeProgressiveLayout() {
     (_area as Area?)?.compute();
     if (_mode != EditorMode.print) {
       final Search? search = _search as Search?;
@@ -5137,46 +6250,8 @@ class Draw {
     }
   }
 
-  void _initPageContext(CanvasRenderingContext2D ctx) {
-    final double dpr = getPagePixelRatio();
-    ctx
-      ..setTransform(1, 0, 0, 1, 0, 0)
-      ..scale(dpr, dpr);
-  }
-
   void _applyPageMetrics({bool updateStyles = true}) {
-    if (_pageList.isEmpty) {
-      return;
-    }
-    final double width = getWidth();
-    final double height = getHeight();
-    final double gap = getPageGap();
-    final double ratio = getPagePixelRatio();
-    final int pixelWidth = (width * ratio).round();
-    final int pixelHeight = (height * ratio).round();
-    for (int i = 0; i < _pageList.length; i++) {
-      final CanvasElement page = _pageList[i];
-      // Páginas dormentes (F5.4a: backing store 1×1, fora do viewport) NÃO são
-      // reinfladas aqui — senão cada render realocaria o bitmap cheio de todas
-      // as páginas. O tamanho real é reaplicado por `_setPageCanvasLive` quando
-      // a página volta ao viewport. O tamanho CSS é sempre atualizado para a
-      // posição/altura da barra de rolagem permanecerem corretas.
-      final bool isDormant = (page.width ?? 0) <= 1 && (page.height ?? 0) <= 1;
-      final bool metricsChanged =
-          page.width != pixelWidth || page.height != pixelHeight;
-      if (!isDormant && metricsChanged) {
-        page
-          ..width = pixelWidth
-          ..height = pixelHeight;
-        _initPageContext(_ctxList[i]);
-      }
-      if (updateStyles) {
-        page
-          ..style.width = '${width}px'
-          ..style.height = '${height}px'
-          ..style.marginBottom = '${gap}px';
-      }
-    }
+    _pageCanvasManager.applyPageMetrics(updateStyles: updateStyles);
   }
 
   List<IElement> _cloneElementList(List<IElement> source) {
@@ -5260,51 +6335,32 @@ class Draw {
   }
 
   void _createPage(int index) {
-    final double width = getWidth();
-    final double height = getHeight();
-    final double marginGap = getPageGap();
+    _pageCanvasManager.createPage(index);
+  }
 
-    // Nasce DORMENTE (backing store 1×1) — F5.4a: só as páginas que entram no
-    // viewport ganham backing store cheio (via `_setPageCanvasLive`), evitando
-    // o pico de alocar N bitmaps de página na abertura (crítico p/ 200-400
-    // págs). O tamanho CSS fixa o tamanho renderizado/posição na barra.
-    final CanvasElement canvas = CanvasElement()
-      ..width = 1
-      ..height = 1
-      ..style.width = '${width}px'
-      ..style.height = '${height}px'
-      ..style.marginBottom = '${marginGap}px'
-      ..style.display = 'block'
-      ..style.backgroundColor = '#ffffff'
-      ..style.cursor = 'text'
-      ..dataset['index'] = '$index';
+  HistoryViewState captureHistoryViewState() {
+    final Position position = _position as Position;
+    final RangeManager rangeManager = _rangeManager as RangeManager;
+    return HistoryViewState(
+      zone: getZone().getZone(),
+      positionContext: _clonePositionContext(position.getPositionContext()),
+      range: _cloneRange(rangeManager.getRange()),
+      pageNo: _pageNo,
+    );
+  }
 
-    final CanvasRenderingContext2D ctx = canvas.context2D;
-
-    _pageContainer.append(canvas);
-    _pageList.add(canvas);
-    _ctxList.add(ctx);
+  void restoreHistoryViewState(HistoryViewState state) {
+    getZone().setZone(state.zone);
+    setPageNo(state.pageNo);
+    (_position as Position).setPositionContext(
+      _clonePositionContext(state.positionContext),
+    );
+    (_rangeManager as RangeManager).replaceRange(_cloneRange(state.range));
   }
 
   void _syncPageCanvases() {
     final int desiredPageCount = _pageRowList.isEmpty ? 1 : _pageRowList.length;
-    while (_pageList.length < desiredPageCount) {
-      _createPage(_pageList.length);
-    }
-    while (_pageList.length > desiredPageCount) {
-      final CanvasElement removedCanvas = _pageList.removeLast();
-      removedCanvas.remove();
-      if (_ctxList.isNotEmpty) {
-        _ctxList.removeLast();
-      }
-    }
-    if (_pageNo >= desiredPageCount) {
-      _pageNo = desiredPageCount - 1;
-    }
-    if (_pageNo < 0 && desiredPageCount > 0) {
-      _pageNo = 0;
-    }
-    _applyPageMetrics();
+    _pageNo = _pageCanvasManager.syncPageCount(desiredPageCount, _pageNo);
   }
 
   static RegExp? _buildLetterReg(List<String>? letterClass) {
@@ -5356,25 +6412,49 @@ class _RowLayoutState {
   String? listId;
   double controlRealWidth = 0;
   int budgetRows = 1 << 30;
+  int publishedRowCount = 0;
+  bool Function()? shouldYield;
   bool started = false;
   bool done = false;
+}
+
+class _ProgressiveLayoutContinuation {
+  const _ProgressiveLayoutContinuation({
+    required this.state,
+    required this.payload,
+  });
+
+  final _RowLayoutState state;
+  final IComputeRowListPayload payload;
+}
+
+class _PartialPageRepaint {
+  const _PartialPageRepaint({
+    required this.rowList,
+    required this.clipRect,
+  });
+
+  final List<IRow> rowList;
+  final Rectangle<double> clipRect;
 }
 
 class _InsertDeltaHistory {
   _InsertDeltaHistory({
     required this.insertStart,
+    required this.elementList,
     required this.removedSnapshot,
     required this.insertedSnapshot,
-    required this.beforeRange,
+    required this.beforeViewState,
     required this.isFastLayout,
   });
 
   final int insertStart;
+  final List<IElement> elementList;
   final List<IElement> removedSnapshot;
   final List<IElement> insertedSnapshot;
-  final IRange beforeRange;
+  final HistoryViewState beforeViewState;
   final bool isFastLayout;
-  IRange? afterRange;
+  HistoryViewState? afterViewState;
   int? afterCurIndex;
 }
 
@@ -5382,21 +6462,39 @@ class _ElementRangeDeltaHistory {
   _ElementRangeDeltaHistory({
     required this.start,
     required this.deleteCount,
+    required this.elementList,
     required this.removedSnapshot,
     required this.removedRows,
     required this.rowStart,
-    required this.beforeRange,
+    required this.beforeViewState,
     required this.beforeCurIndex,
     this.afterCurIndex,
   });
 
   final int start;
   final int deleteCount;
+  final List<IElement> elementList;
   final List<IElement> removedSnapshot;
   final List<IRow> removedRows;
   final int rowStart;
-  final IRange beforeRange;
+  final HistoryViewState beforeViewState;
   final int beforeCurIndex;
   int? afterCurIndex;
-  IRange? afterRange;
+  HistoryViewState? afterViewState;
+}
+
+class _TextHistoryBurst {
+  _TextHistoryBurst({
+    required this.elementList,
+    required this.transaction,
+    required this.beforeViewState,
+    required this.afterViewState,
+    required this.curIndex,
+  });
+
+  final List<IElement> elementList;
+  final DocumentTransaction transaction;
+  final HistoryViewState beforeViewState;
+  HistoryViewState afterViewState;
+  int curIndex;
 }

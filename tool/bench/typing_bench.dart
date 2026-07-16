@@ -106,6 +106,23 @@ void main() {
         'elementCount': js_util.allowInterop(() {
           return app.editor.getDraw().getOriginalMainElementList().length;
         }),
+        'resetHistoryDiagnostics': js_util.allowInterop(() {
+          app.editor.getDraw().resetHistoryDiagnostics();
+        }),
+        'historyDiagnostics': js_util.allowInterop(() {
+          final stats = app.editor.getDraw().getHistoryDiagnostics();
+          return stats.entries.map((entry) =>
+              '${entry.key}:${entry.value}').join(',');
+        }),
+        'resetLayoutDiagnostics': js_util.allowInterop(() {
+          app.editor.getDraw().resetLayoutDiagnostics();
+        }),
+        'layoutDiagnostics': js_util.allowInterop(() {
+          final stats = app.editor.getDraw().getLayoutDiagnostics();
+          return stats.entries
+              .map((entry) => '${entry.key}:${entry.value}')
+              .join(',');
+        }),
         // F5.5: conclui a paginação sob demanda (síncrono) e devolve o custo
         // em ms — é o pior caso realista para digitar no meio do documento.
         'finishLayout': js_util.allowInterop(() {
@@ -341,6 +358,20 @@ Future<double> _typeChars(
   return stopwatch.elapsedMilliseconds / typed;
 }
 
+/// Mede atraso do event loop logo depois da rajada. O historico antigo
+/// disparava aos 300 ms um deep-clone do documento e esse freeze nao aparecia
+/// na media por tecla; o timer abaixo transforma a pausa tardia em gate.
+Future<double> _measurePostBurstJank(Page page) async {
+  final num? drift = await page.evaluate<num?>(
+    '''() => new Promise((resolve) => {
+      const expected = 350;
+      const start = performance.now();
+      setTimeout(() => resolve(performance.now() - start - expected), expected);
+    })''',
+  );
+  return (drift ?? -1).toDouble();
+}
+
 Future<void> main(List<String> args) async {
   final chars = int.tryParse(
         args
@@ -448,7 +479,22 @@ Future<void> main(List<String> args) async {
         (await page.evaluate<num?>('() => window.__perf.pageCount()'))
             ?.toInt());
     stdout.writeln('[bench] digitando $chars teclas no ETP...');
+    await page.evaluate<void>('() => window.__perf.resetHistoryDiagnostics()');
+    await page.evaluate<void>('() => window.__perf.resetLayoutDiagnostics()');
     report('typing_etp_ms_per_key', await _typeChars(page, chars));
+    report('typing_etp_post_burst_jank_ms', await _measurePostBurstJank(page));
+    report(
+      'typing_etp_history',
+      await page.evaluate<String?>(
+        '() => window.__perf.historyDiagnostics()',
+      ),
+    );
+    report(
+      'typing_etp_layout',
+      await page.evaluate<String?>(
+        '() => window.__perf.layoutDiagnostics()',
+      ),
+    );
 
     if (!skipTr) {
       stdout.writeln('[bench] abrindo TR (140 págs)...');
@@ -466,8 +512,8 @@ Future<void> main(List<String> args) async {
           (await page.evaluate<num?>('() => window.__perf.pageCount()'))
               ?.toInt());
       if (args.contains('--marks')) {
-        final marks = await page
-            .evaluate<String?>('() => window.__perf.pageStarts()');
+        final marks =
+            await page.evaluate<String?>('() => window.__perf.pageStarts()');
         stdout.writeln('[marks-tr]');
         final parts = (marks ?? '').split('|');
         for (var i = 0; i < parts.length; i++) {
@@ -492,7 +538,23 @@ Future<void> main(List<String> args) async {
           '${await page.evaluate<String?>('() => window.__perf.canvasMemStats()')}');
       final trChars = chars < 10 ? chars : 10;
       stdout.writeln('[bench] digitando $trChars teclas no TR...');
+      await page
+          .evaluate<void>('() => window.__perf.resetHistoryDiagnostics()');
+      await page.evaluate<void>('() => window.__perf.resetLayoutDiagnostics()');
       report('typing_tr_ms_per_key', await _typeChars(page, trChars));
+      report('typing_tr_post_burst_jank_ms', await _measurePostBurstJank(page));
+      report(
+        'typing_tr_history',
+        await page.evaluate<String?>(
+          '() => window.__perf.historyDiagnostics()',
+        ),
+      );
+      report(
+        'typing_tr_layout',
+        await page.evaluate<String?>(
+          '() => window.__perf.layoutDiagnostics()',
+        ),
+      );
     }
 
     stdout

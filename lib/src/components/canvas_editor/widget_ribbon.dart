@@ -69,6 +69,16 @@ class WidgetRibbon extends UiComponent {
   /// Espelha o estilo do texto sob o cursor nos controles do ribbon.
   /// Chamado pelo widget no flush do [UiScheduler] — uma vez por frame.
   void syncRangeStyle(IRangeStyle style) {
+    _setDisabled('undo', !style.undo);
+    _setDisabled('redo', !style.redo);
+
+    // recoveryRangeStyle usa type=null durante transições de foco. Esse
+    // payload não representa uma nova seleção e não deve apagar/repintar os
+    // controles de formatação com os defaults antes do estado real chegar.
+    if (style.type == null) {
+      return;
+    }
+
     _setActive('bold', style.bold);
     _setActive('italic', style.italic);
     _setActive('underline', style.underline);
@@ -84,28 +94,21 @@ class WidgetRibbon extends UiComponent {
     _setActive('justify',
         style.rowFlex == RowFlex.alignment || style.rowFlex == RowFlex.justify);
 
-    _setDisabled('undo', !style.undo);
-    _setDisabled('redo', !style.redo);
-
     // O select SEMPRE acompanha o contexto (Word): valores fora da lista fixa
     // ganham uma opção dinâmica (marcada) em vez de manter o valor anterior.
     _selectValueEnsuring(_fontSelect, style.font);
     _selectValueEnsuring(_sizeSelect, '${style.size.round()}');
 
-    // `recoveryRangeStyle` emite type=null durante transições de foco. Não
-    // deixe esse payload transitório alternar Título/Normal na ribbon.
-    if (style.type != null) {
-      _styleButtons.forEach((TitleLevel? level, ButtonElement button) {
-        button.classes.toggle('active', style.level == level);
-      });
-      _setActive(
-        'styles-more',
-        style.level == TitleLevel.third ||
-            style.level == TitleLevel.fourth ||
-            style.level == TitleLevel.fifth ||
-            style.level == TitleLevel.sixth,
-      );
-    }
+    _styleButtons.forEach((TitleLevel? level, ButtonElement button) {
+      button.classes.toggle('active', style.level == level);
+    });
+    _setActive(
+      'styles-more',
+      style.level == TitleLevel.third ||
+          style.level == TitleLevel.fourth ||
+          style.level == TitleLevel.fifth ||
+          style.level == TitleLevel.sixth,
+    );
   }
 
   void syncPageMode(PageMode mode) {
@@ -1008,11 +1011,14 @@ class WidgetCompactToolbar extends UiComponent {
   Command get _command => _actions.command;
 
   void syncRangeStyle(IRangeStyle style) {
+    _commandButtons['undo']?.classes.toggle('disabled', !style.undo);
+    _commandButtons['redo']?.classes.toggle('disabled', !style.redo);
+    if (style.type == null) {
+      return;
+    }
     _commandButtons['bold']?.classes.toggle('active', style.bold);
     _commandButtons['italic']?.classes.toggle('active', style.italic);
     _commandButtons['underline']?.classes.toggle('active', style.underline);
-    _commandButtons['undo']?.classes.toggle('disabled', !style.undo);
-    _commandButtons['redo']?.classes.toggle('disabled', !style.redo);
   }
 
   DivElement _build() {

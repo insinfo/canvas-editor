@@ -143,7 +143,12 @@ class CanvasEditorWidget
 
     _scheduler = UiScheduler();
 
-    root = DivElement()..classes.add('ce-embed');
+    root = DivElement()
+      ..classes.add('ce-embed')
+      // GlobalEvent usa este marcador para distinguir o chrome interno de um
+      // clique realmente externo. Sem ele, mousedown na ribbon/mini-toolbar
+      // emitia recoveryRangeStyle (size padrão 16) antes do estilo real.
+      ..setAttribute(editorComponent, EditorComponent.component.name);
     if (config.mode == CanvasEditorWidgetMode.viewer) {
       root.classes.add('ce-embed--viewer');
     }

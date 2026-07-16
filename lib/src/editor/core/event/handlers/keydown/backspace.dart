@@ -4,6 +4,8 @@ import '../../../../dataset/constant/common.dart';
 import '../../../../interface/draw.dart';
 import '../../../../interface/element.dart';
 import '../../../../interface/range.dart';
+import '../../../layout/layout_invalidation.dart';
+import '../../../layout/layout_request.dart';
 
 bool _isHiddenElement(IElement? element) {
   if (element == null) {
@@ -14,31 +16,45 @@ bool _isHiddenElement(IElement? element) {
       element.area?.hide == true;
 }
 
-void _backspaceHideElement(dynamic host) {
+List<IElement> _elementListOf(dynamic draw) {
+  final dynamic value = draw.getElementList();
+  return value is List<IElement>
+      ? value
+      : (value as List?)?.whereType<IElement>().toList() ?? <IElement>[];
+}
+
+bool _backspaceHideElement(dynamic host) {
   final dynamic draw = host.getDraw();
   final dynamic rangeManager = draw.getRange();
   final IRange range = rangeManager.getRange() as IRange;
-  final List<IElement> elementList =
-      (draw.getElementList() as List?)?.cast<IElement>() ?? <IElement>[];
+  final List<IElement> elementList = _elementListOf(draw);
 
   if (range.startIndex < 0 || range.startIndex >= elementList.length) {
-    return;
+    return false;
   }
   if (!_isHiddenElement(elementList[range.startIndex])) {
-    return;
+    return false;
+  }
+
+  draw.flushDeferredHistory();
+  if (draw.getHistoryManager().isStackEmpty() == true) {
+    draw.submitHistory(range.endIndex);
   }
 
   var index = range.startIndex;
+  var changed = false;
   while (index > 0) {
     final IElement element = elementList[index];
     int? newIndex;
     if (element.controlId != null) {
       newIndex = (draw.getControl().removeControl(index) as num?)?.toInt();
+      changed = true;
       if (newIndex != null) {
         index = newIndex;
       }
     } else {
       draw.spliceElementList(elementList, index, 1);
+      changed = true;
       newIndex = index - 1;
       index -= 1;
     }
@@ -65,6 +81,7 @@ void _backspaceHideElement(dynamic host) {
       break;
     }
   }
+  return changed;
 }
 
 void backspace(KeyboardEvent evt, dynamic host) {
@@ -78,9 +95,9 @@ void backspace(KeyboardEvent evt, dynamic host) {
     return;
   }
 
-  if (rangeManager.getIsCollapsed() == true) {
-    _backspaceHideElement(host);
-  }
+  final bool hiddenMutation = rangeManager.getIsCollapsed() == true
+      ? _backspaceHideElement(host)
+      : false;
 
   final IRange range = rangeManager.getRange() as IRange;
   final dynamic control = draw.getControl();
@@ -89,6 +106,8 @@ void backspace(KeyboardEvent evt, dynamic host) {
   final int endIndex = range.endIndex;
   final bool isCrossRowCol = range.isCrossRowCol == true;
   int? curIndex;
+  LayoutInvalidation? mutationInvalidation;
+  var rowFlexMutation = false;
 
   if (isCrossRowCol) {
     final dynamic rowCol = draw.getTableParticle().getRangeRowCol();
@@ -127,8 +146,7 @@ void backspace(KeyboardEvent evt, dynamic host) {
     }
     final int index = cursorPosition.index;
     final bool isCollapsed = rangeManager.getIsCollapsed() == true;
-    final List<IElement> elementList =
-        (draw.getElementList() as List?)?.cast<IElement>() ?? <IElement>[];
+    final List<IElement> elementList = _elementListOf(draw);
 
     if (isCollapsed && index == 0 && elementList.isNotEmpty) {
       final IElement firstElement = elementList[index];
@@ -146,29 +164,36 @@ void backspace(KeyboardEvent evt, dynamic host) {
         final List<IElement>? rowFlexElementList =
             (rangeManager.getRangeRowElementList() as List?)?.cast<IElement>();
         if (rowFlexElementList != null) {
+          draw.flushDeferredHistory();
+          if (draw.getHistoryManager().isStackEmpty() == true) {
+            draw.submitHistory(range.endIndex);
+          }
           final IElement? preElement =
               startIndex - 1 >= 0 ? elementList[startIndex - 1] : null;
           for (final IElement element in rowFlexElementList) {
             element.rowFlex = preElement?.rowFlex;
           }
+          rowFlexMutation = true;
         }
       }
     }
 
-    if (!isCollapsed) {
-      final int deleteCount = endIndex - startIndex;
-      if (deleteCount > 0) {
-        draw.spliceElementList(
-          elementList,
-          startIndex + 1,
-          deleteCount,
-        );
-      }
-    } else if (index >= 0 && index < elementList.length) {
-      draw.spliceElementList(elementList, index, 1);
-    }
-
     curIndex = isCollapsed ? index - 1 : startIndex;
+    final int mutationStart = isCollapsed ? index : startIndex + 1;
+    final int mutationDeleteCount = isCollapsed ? 1 : endIndex - startIndex;
+    if (mutationDeleteCount > 0 &&
+        mutationStart >= 0 &&
+        mutationStart + mutationDeleteCount <= elementList.length) {
+      mutationInvalidation = draw.applyTextMutation(
+        elementList: elementList,
+        start: mutationStart,
+        deleteCount: mutationDeleteCount,
+        replacement: const <IElement>[],
+        curIndex: curIndex,
+        mergeKey: 'backspace',
+        forceSnapshotHistory: hiddenMutation || rowFlexMutation,
+      ) as LayoutInvalidation?;
+    }
   }
 
   final dynamic globalEvent = draw.getGlobalEvent();
@@ -184,12 +209,20 @@ void backspace(KeyboardEvent evt, dynamic host) {
     );
   } else {
     rangeManager.setRange(curIndex, curIndex);
-    draw.render(IDrawOption(
-      curIndex: curIndex,
-      // Rajadas de backspace: undo agrupado + relayout só do parágrafo
-      // (P1/P2 do plano de otimização; guardas caem p/ relayout completo).
-      isSubmitHistoryDeferred: true,
-      fastLayoutIndex: curIndex,
-    ));
+    if (mutationInvalidation != null) {
+      draw.renderUpdate(
+        LayoutRequest(
+          invalidation: mutationInvalidation,
+          curIndex: curIndex,
+          notifyContentChange: true,
+        ),
+      );
+    } else {
+      draw.render(IDrawOption(
+        curIndex: curIndex,
+        isSubmitHistoryDeferred: true,
+        fastLayoutIndex: curIndex,
+      ));
+    }
   }
 }

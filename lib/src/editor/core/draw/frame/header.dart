@@ -39,7 +39,7 @@ class Header {
         _position = draw.getPosition() as Position,
         _zone = draw.getZone(),
         _options = draw.getOptions(),
-        _elementList = List<IElement>.from(data ?? const <IElement>[]),
+        _elementList = data ?? <IElement>[],
         _rowList = <IRow>[],
         _positionList = <IElementPosition>[];
 
@@ -170,6 +170,18 @@ class Header {
         'even' => _evenElementList,
         _ => _elementList,
       };
+
+  String getActiveVariant() => _activeVariant;
+
+  List<IElement> getDefaultElementList() => _elementList;
+
+  List<IElement> getFirstElementList() => _firstElementList;
+
+  List<IElement> getEvenElementList() => _evenElementList;
+
+  bool getIsTitlePage() => _titlePage;
+
+  bool getIsEvenAndOdd() => _evenAndOdd;
 
   List<IElementPosition> getPositionList() => switch (_activeVariant) {
         'first' => _firstPositionList,

@@ -102,14 +102,18 @@ replay de deltas, sem clone do documento. Adaptações implementadas aqui:
 
 | # | Ação | Mecanismo |
 |---|------|-----------|
-| P1 | Snapshot de histórico **adiado por rajada** (`Draw.submitHistory(defer)`, debounce 300 ms; flush em `HistoryManager.undo/redo`, cancel em `recovery` e em submits imediatos) | elimina o clone O(documento) por tecla; undo passa a agrupar a rajada digitada, como no Word |
+| P1 | **Histórico por transações/deltas reversíveis** (`DocumentTransaction`, `HistoryTimeline` e captura de view state); os 300 ms apenas encerram o grupo de digitação | elimina o clone O(documento) por tecla e por fim de rajada; undo/redo de texto executa a mutação inversa/direta e restaura zona, posição, seleção e página. Operações estruturais ainda sem locator estável usam snapshot legado como fallback explícito |
 | P2 | **Fast path de parágrafo** (`Draw._tryFastParagraphLayout`, acionado por `IDrawOption.fastLayoutIndex` em input/backspace/delete) | recomputa só as rows do parágrafo do cursor (rows quebram em ZERO ⇒ fronteiras exatas), renumera `startIndex`/`rowIndex` das seguintes e reparticiona páginas; guardas (zona ≠ main, tabela, floats/surround, lista/área/controle/paging, rowFlex misto, fronteiras desalinhadas) caem para o relayout completo |
+| P3 | **Layout progressivo retomável** (`LayoutScheduler`, orçamento de 10 ms, versão/cancelamento e demanda por página) | libera a main thread entre fatias, descarta continuações obsoletas e entrega primeiro o viewport em vez de bloquear até o fim do documento |
+| P4 | **Modelo canônico + índice incremental** (`DocumentModel`/`DocumentIndex`) | centraliza main/header/footer e revisão monotônica; indexa ids/tabelas/paging e desloca fronteiras de parágrafo após splice sem varrer o documento inteiro |
+| P5 | **Posições e canvases por página** (`PagePositionIndex`/`PageCanvasManager`) | filtra hit-test antes do cálculo geométrico e mantém canvases vivos apenas no conjunto visível + overscan, preservando o restante como páginas dormentes |
 
-Não portados (próximos passos F5.3/F5.5): `EndInfo` por elemento com corte por
-convergência, fast path intra-linha (run-range), recálculo fatiado por orçamento
-de tempo, histórico por deltas reversíveis (base para colaboração).
+Ainda não portados: `EndInfo` por elemento com corte por convergência e fast
+path intra-linha (run-range). Os locators estáveis para tabelas aninhadas e
+variantes de header/footer, a paginação regional e as posições por página foram
+concluídos no fechamento descrito na seção 9.
 
-## 6. Resultados
+## 6. Resultados da etapa inicial
 
 Benchmark `dart run tool/bench/typing_bench.dart` (release dart2js -O2, Chrome
 headless, DOCX reais; baseline medido em worktree do HEAD `3fb7377`).
@@ -163,6 +167,171 @@ Esse plano registra os padrões de produção observados no OnlyOffice
 (`History` por deltas, `TextPr.Check_NeedRecalc`, fast run-range/paragraph,
 `FullRecalc` fatiado e repaint por página) e a ordem segura para migrar o editor
 para módulos de documento, layout, renderização, histórico e controllers de UI.
+
+## 8. Grande refatoração executada (2026-07-15)
+
+Esta etapa substitui o debounce de snapshot descrito nos resultados históricos
+acima pela nova base de transações reversíveis e implementa o
+recálculo fatiado inspirado no OnlyOffice. O canvas continua sendo a superfície
+principal e o layout editável permanece na main thread; workers ficam reservados
+a tarefas isoladas que aceitem bytes/dados compactos sem sincronizar o modelo a
+cada tecla.
+
+### Entregas
+
+- `DocumentModel` mantém as referências canônicas de main/header/footer, uma
+  revisão monotônica e notificações de splice/estrutura/estilo.
+- `DocumentIndex` mantém índices lazy por id, tableId e pagingId e desloca as
+  fronteiras de parágrafo de forma incremental.
+- `DocumentTransaction` descreve mutações reversíveis e o impacto de layout
+  (`repaint`, parágrafo, tabela ou documento completo).
+- `HistoryTimeline` combina deltas consecutivos de digitação e executa undo/redo
+  direto. Há um único snapshot-base para interoperar com operações legadas; não
+  existe mais clone profundo por tecla nem ao terminar a rajada.
+- `LayoutScheduler` pagina em fatias de 10 ms, com versão, cancelamento,
+  proteção contra resultado obsoleto e retomada sob demanda do viewport.
+- `PagePositionIndex` reduz o conjunto de candidatos de hit-test por página antes
+  de calcular coordenadas.
+- `PageCanvasManager` aplica janela visível + overscan e controla DPR/memória dos
+  backing stores sem manter um canvas pesado para cada página.
+- Input, backspace, delete, enter, composição IME e comandos ricos usam a rota de
+  mutação tipada; IME com seleção vira uma única transação reversível.
+
+### Medição release atual
+
+`dart run tool/bench/typing_bench.dart --chars=10`, Chrome headless, DOCX reais
+e `contentChange`/autosave habilitado:
+
+| Métrica | ETP | TR |
+|---------|-----|----|
+| Primeiro conjunto de páginas utilizável | 310,0 ms / 4 págs | 1.578,7 ms / 4 págs |
+| Conclusão do layout progressivo | +295,9 ms / 19 págs | +3.636,9 ms / 143 págs |
+| Digitação observada pelo Puppeteer | 60,0 ms/tecla | 55,8 ms/tecla |
+| Atraso do event loop após fechar a rajada | 15,3 ms | 5,0 ms |
+| Histórico após aquecimento + 10 caracteres | 1 snapshot-base, 1 transição compacta, 11 mutações | igual |
+| Canvases vivos | — | 3 de 143, ~10,2 MB de backing store |
+
+O congelamento de aproximadamente 570–637 ms que antes aparecia após a rajada
+foi removido: o temporizador agora só fecha o grupo e não clona o documento; nas
+duas amostras finais, o atraso pós-rajada ficou entre 5,0 e 15,3 ms. O tempo
+interno dos handlers ficou em 34–63 ms no ETP e 15–41 ms no TR; a média
+Puppeteer também inclui o custo de despacho CDP. O próximo gargalo mensurável
+está na agregação global final de páginas/posições e no snapshot-base necessário
+para atravessar a fronteira com operações legadas; nenhum dos dois volta a
+ocorrer por tecla.
+
+### Validação
+
+- `dart analyze --fatal-infos`: sem diagnósticos.
+- 29 testes VM do núcleo (documento, histórico, layout e posição): verdes.
+- 6 testes Chrome de índice de posição e gerência de canvas: verdes.
+- 136 testes de Word/documento: verdes.
+- 45 cenários E2E completos: verdes, incluindo DOCX ETP/TR, tabelas, controles,
+  clipboard, imagens, IME e combinações de histórico compacto + legado.
+
+## 9. Fechamento da refatoração do hot path (2026-07-15)
+
+Esta rodada eliminou os scans, clones e repaints globais que ainda apareciam
+nas operações relatadas com o TR real. As medições abaixo usam `dart2js -O2`,
+Chrome headless e
+`resources/PGCTIC1_-_TR_-_SISTEMA_GESTAO_PUBLICA__Recuperação_Automática_.docx`
+(122.603 elementos, 143 páginas depois da paginação completa).
+
+### Checklist de execução
+
+- [x] Mutação de listas em lote para Enter, Backspace, Delete e substituição.
+- [x] Fast layout de faixas textuais e formatação multiparágrafo.
+- [x] Repaginação local com reaproveitamento de prefixo e sufixo estáveis.
+- [x] Cache de posições por página e recomposição somente da página afetada.
+- [x] Locators estáveis para main, variantes de header/footer e tabelas aninhadas.
+- [x] Histórico limitado com baseline antecipado, checkpoints e descarte de payload.
+- [x] Repaint parcial conservador das rows alteradas.
+- [x] Sincronização incremental da ribbon e mini-toolbar sem mudar fonte/tamanho.
+- [x] Diagnósticos, benchmarks e cobertura de regressão do hot path.
+- [ ] Reflow regional dos fragmentos físicos de tabela após mudança de altura anterior.
+- [ ] Fast path para comandos estruturais de linha/coluna de tabela.
+
+### Entregas adicionais
+
+- `spliceElementList` remove e insere faixas em uma única movimentação da
+  cauda. A exclusão seletiva de conteúdo protegido deixou de executar um
+  `removeAt` por elemento.
+- Enter, Backspace, Delete, substituição de seleção e formatação de blocos
+  passam uma faixa explícita ao fast layout. O recorte recompõe todos os
+  parágrafos tocados e a fronteira estável seguinte; `rowFlex=null` é tratado
+  como herança, não como incompatibilidade que force layout global.
+- `PageRowIndex` repagina da primeira row suja até convergir com o sufixo
+  anterior. A publicação progressiva reinspeciona somente a antiga última
+  página em vez de reconstruir todas as páginas a cada fatia.
+- `Position` mantém posições segmentadas por página, ancora posições de
+  células/tabelas e recompõe apenas a página afetada; o índice global é
+  reconstruído a partir de comprimentos por página, em O(páginas).
+- `DocumentLocatorIndex` endereça main, header/footer default/first/even e
+  células de tabelas aninhadas. O replay usa id exato primeiro e só aceita
+  `pagingId` quando o resultado é inequívoco. Merge/split de tabelas invalida
+  a região proprietária para nunca escrever em uma célula destacada.
+- O histórico usa baseline absoluto + checkpoint forward-only + janela
+  limitada de callbacks. Ao sair da janela de undo, Delete descarta o payload
+  removido e inserções adjacentes se fundem em um único splice de checkpoint.
+  Em teste com 10.000 operações alternando Enter/texto e janela de quatro
+  endpoints: 1 splice consolidado + 4 callbacks, em vez de 10.000 callbacks;
+  somente 4 unidades de payload de undo permanecem.
+- O baseline profundo é criado durante `setValue`, ainda sob a abertura, e não
+  no primeiro clique. O primeiro foco deixou de congelar por ~0,65–1,1 s.
+- Digitação com altura invariável limpa e redesenha somente o retângulo das
+  rows sujas. O caminho parcial cai para página completa diante de floats,
+  busca, áreas, controles, graffiti, watermark, imagem ainda carregando ou
+  geometria ambígua.
+- Ribbon e mini-toolbar não são reconstruídas ao alternar bold/italic. Cliques
+  no chrome interno não disparam `recoveryRangeStyle`; payload transitório
+  `type=null` não substitui fonte/tamanho/estilo. O caso reproduzido mantém
+  tamanho 24 e o estilo de título ao alternar normal/negrito/itálico.
+
+### Resultado release atual
+
+| Cenário | Resultado |
+|---|---:|
+| Primeiras 4 páginas do TR + baseline de undo | 1.639 ms |
+| Concluir paginação do TR (143 páginas) | +2.235 ms |
+| Digitação TR observada pelo Puppeteer | **26,1 ms/tecla** |
+| Handler TR depois do aquecimento | **6–15 ms/tecla** |
+| Digitação ETP observada pelo Puppeteer | 34,2 ms/tecla |
+| Handler ETP em regime estável | 8–10 ms/tecla |
+| Enter + texto no TR | 61,2 ms/par (≈30,6 ms por evento CDP) |
+| Excluir seleção de 1.081 elementos no TR | **31–48 ms** (antes 433 ms no splice antigo e >3 s com layout global) |
+| Primeiro foco/seleção no TR | 16,5–37,4 ms; snapshots 2 → 2 |
+| Bold / italic em seleção textual fast | **3,5 ms** cada |
+| Repaint de tecla comum | **1–6 ms**, normalmente 1–2 ms |
+
+Na amostra final de 11 teclas no TR: 11 fast layouts, zero layouts completos,
+uma página de posições recomposta por tecla, 142 páginas de paginação
+reutilizadas e 9 repaints parciais. O custo interno já entra no orçamento de
+~16 ms após aquecimento; a média do Puppeteer inclui despacho CDP/browser.
+
+### Validação e limites conhecidos
+
+- `dart analyze --fatal-infos`: sem diagnósticos.
+- 61 testes do núcleo (documento, histórico, layout, posição, rendering e
+  observer) verdes, incluindo 10 mil deltas e locators aninhados.
+- 40 testes de importação, sincronização e round-trip Word verdes.
+- E2E focados verdes para Enter/texto, baseline no `setValue`, header first,
+  célula aninhada através de snapshot, exclusão protegida, ribbon e
+  mini-toolbar, título tamanho 24 e formatação multiparágrafo sem full layout.
+- O primeiro full layout após alterar a altura antes de uma tabela já
+  particionada ainda pode recalcular as fronteiras físicas dos fragmentos. No
+  TR auditado ele convergiu de 1.727/144 para 1.731 rows/143 páginas; um segundo
+  full foi idêntico, portanto não há acumulação. A correção definitiva é tornar
+  fragmentos estado derivado ou fazer reflow regional da tabela; forçar full a
+  cada Enter restauraria a pausa de ~3,3 s e foi deliberadamente rejeitado.
+- Comandos estruturais de linha/coluna de tabela ainda custam segundos porque
+  permanecem no layout completo. São o próximo hot path, separado da edição
+  textual agora otimizada.
+
+## Apêndice — notas históricas de investigação
+
+O conteúdo abaixo registra hipóteses e medições intermediárias anteriores à
+refatoração de 2026-07-15. Quando houver divergência, a seção 9 representa o
+estado implementado e medido atualmente.
 
 Confirmei o bug do espaçamento e ele muda meu conselho. Preciso te passar o que encontrei antes de gastar dias no Web Worker.
 

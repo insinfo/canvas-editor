@@ -1,5 +1,9 @@
 # Plano de expansão — aproximar o editor do Word/Google Docs
 
+Atualização de execução: **2026-07-15**. A grande refatoração de performance
+foi incorporada ao estado abaixo; itens históricos continuam no documento como
+contexto, mas as pendências válidas estão marcadas explicitamente.
+
 ## Estado de execução
 
 | Item | Estado | Evidência |
@@ -21,11 +25,46 @@
 | Rodada 4 (2026-07-13) | ✅ UX do carimbo: caret escondido na seleção da caixa, cor de fundo (color picker + "sem cor") na mini-toolbar, indicador de zona redesenhado em QUALQUER render (antes sumia nos renders isCompute:false). ✅ **Edição in-place das variantes first/even**: ao entrar na zona header/footer, a lista editável vira a variante da página corrente (`setActiveVariantForPage` no Zone.setZone; getElementList/getRowList/getPositionList retornam a variante ativa; render escolhe por página sempre). ✅ **Campo TOC OOXML no export**: as entradas do Sumário saem envolvidas em `fldChar begin + instrText "TOC \o 1-9 \h \z \u" + separate ... end` (título fora do campo — F9 do Word não o engole) | testes VM 40/40 |
 | **G3 fidelidade de paginação** | ✅ (2026-07-13) **espaçamento entre parágrafos = max(after, before)**, não soma — medido no PDF golden (linha 13,2pt; gap 6pt com before=120+after=120). **ETP 24→19 págs (= Word); TR 150→143 (Word 140)**. Metodologia: `--marks` (pageStarts) × pypdf + `paragraphProbe` × visitor de posições Y. Restante do TR (+3): tabelas dos anexos (trHeight/margens de célula) | draw.dart (caso ZERO + fast-path) |
 | Contagem de palavras opcional | ✅ `CanvasEditorConfig.showWordCount=false` desliga o O(doc) por mudança + esconde o contador | canvas_editor_widget/status bar |
-| PERF §6.2 modularização draw.dart / §6.3 workers | ⬜ próxima sessão | — |
+| PERF — modelo, changes e locators estáveis | ✅ (2026-07-15) `DocumentModel`/`DocumentIndex`/`DocumentTransaction`, invalidação tipada e `DocumentListLocator` por região + caminho de células aninhadas; main/header/footer first/even e tabelas aninhadas deixaram de depender da identidade transitória da lista | `core/document/`; testes de locator/model/transaction |
+| PERF — histórico compacto e limitado | ✅ (2026-07-15) deltas textuais coalescidos; checkpoint forward-only descarta payload removido fora da janela e limita replay a checkpoint + janela de undo; branch, snapshot misto e undo/redo cobertos | 10.000 Enter/letra → 1 splice de checkpoint + 4 callbacks com janela ≈4; `core/history/` |
+| PERF — layout/posição/render incremental | ✅ hot paths; 🔶 extração arquitetural | splice de seleção em uma movimentação de cauda, fast reflow estrutural para Enter/Delete, `PageRowIndex`/`PagePositionIndex`, `LayoutScheduler`, `DirtyPageQueue`, `PageCanvasManager` e repaint parcial por faixa de rows | TR: Enter+texto 61,2 ms/par (~30,6 ms/evento CDP), Delete de 1.081 elementos 48 ms |
+| PERF §6.2 modularização dos monólitos | 🔶 parcial | módulos de document/history/layout scheduling/index/rendering foram extraídos; **pendentes** `LayoutEngine`, cache/EndInfo genérico, `PagePainter`/`ViewportPager`, serviços de comando e controllers de `EditorApp` |
+| PERF §6.3 workers auxiliares | ⬜ pendente | `WorkerManager` continua na main thread; unzip/parse DOCX, word count, catálogo e spellcheck seguem candidatos, sem mover o layout editável para worker |
+| PERF — reflow regional de tabela paginada | ⬜ pendente | edição rápida ainda reutiliza fragmentos existentes; o primeiro full converge 144→143 páginas e o segundo full é idêntico. Falta reconstruir/reparticionar regionalmente a tabela canônica até a fronteira/altura convergir |
 | F4.4 tab stops reais (layout + régua) | ⬜ próxima sessão (pré-requisito p/ leader real no TOC) | — |
 | TR +3 págs restantes (tabelas dos anexos) | ⬜ próxima sessão — mesma metodologia (probe de tabela × golden) | — |
 
-Data: 2026-07-13. Baseado em: exploração completa do `lib/` atual, do OnlyOffice
+### Checklist da grande refatoração de performance
+
+- [x] Modelo canônico, revisão monotônica, índices incrementais e locators
+  estáveis para regiões e células/tabelas aninhadas.
+- [x] Histórico por deltas para os hot paths, coalescência de
+  digitação/Enter/Delete/Backspace e checkpoint com retenção limitada.
+- [x] Invalidação por `affectedRange`/impacto, fast paths de parágrafo e de
+  splice estrutural, posição reduzida à página afetada e repaint parcial.
+- [x] Scheduler cancelável/fatiado, canvases virtualizados e fila de páginas
+  sujas extraídos em módulos próprios.
+- [x] Guardrails: benchmark do TR real, convergência de dois full renders,
+  61 testes de núcleo e 40 testes Word verdes; analyzer sem diagnósticos.
+- [ ] **Reflow regional de fragmentos de tabela:** merge-back canônico,
+  repartição desde a página afetada e parada por convergência de fronteira,
+  altura e carry state, sem exigir full render posterior.
+- [ ] **Workers auxiliares reais:** unzip/parse, contagem, catálogo e futuro
+  spellcheck; o layout editável permanece na main thread.
+- [ ] **Extrações restantes:** `LayoutEngine`/caches, `PagePainter`/viewport,
+  serviços de domínio de `CommandAdapt` e controllers da shell `EditorApp`.
+
+Medição release final no TR real: abertura **2.338,1 ms**; primeiro foco
+**37,4 ms**, sem snapshot tardio (**2→2**); cinco pares Enter+texto
+**76/65/66/48/51 ms** (média **61,2 ms/par**), com **10 fast layouts, 0 full**,
+**5 repaints parciais**, **142 páginas reutilizadas** e posições recalculadas
+em **1 página**; Delete multiparágrafo removeu **1.081 elementos em 48 ms**
+(faixa observada **31–48 ms**). O full explícito continua caro
+(**3.351,3 ms**, segundo **3.454,7 ms**) e é justamente o fallback que o reflow
+regional de tabelas ainda precisa evitar.
+
+Data original: 2026-07-13; estado atualizado em 2026-07-15. Baseado em:
+exploração completa do `lib/` atual, do OnlyOffice
 DocumentServer (`D:\EuroOfficeNative\DocumentServer\sdkjs\word` — **apenas referência
 conceitual, AGPL, não copiar código**), do relatório Kix
 ([analise_google_docs_kix_resources01.md](analise_google_docs_kix_resources01.md)) e do
@@ -40,13 +79,13 @@ contextuais, sumário automático e títulos customizados.
 
 | Área | O que já existe | O que falta |
 |---|---|---|
-| Header/footer | zonas main/header/footer (`core/zone/zone.dart`), entrada por clique, indicador tracejado, PAGE/NUMPAGES no rodapé | first/even (o modelo `IHeader`/`IFooter` só tem 1 lista), text box do carimbo (`IHeaderTextBox`) renderiza mas **não é editável nem movível**, regressões de rodapé no CHANGELOG |
+| Header/footer | zonas main/header/footer, variantes default/first/even renderizáveis e editáveis por página, indicador tracejado, PAGE/NUMPAGES e carimbo editável/movível com sync DOCX | aba contextual específica e generalização do patch DOCX para mais de um carimbo por part; acabamento das regressões remanescentes |
 | Imagens | `ImageDisplay{inline,block,surround,floatTop,floatBottom}`, previewer com 8 alças, crop, rotação **só no modal** | rotação não persiste no elemento, sem tight/through/behind/inFront, `surround` é retangular, âncora só absoluta (x/y por página), imagem nova não é re-emitida no DOCX |
-| Tabelas | `TableOperate` completo (1265 linhas), `TableTool` com arrasto de bordas e alças de linha/coluna, mini-toolbar contextual, table paging com continuation | linha de cabeçalho **não repete visualmente** nas fatias paginadas, sem tabelas aninhadas no layout, sem estilos de tabela nomeados, sem "distribuir uniformemente" |
-| TOC/campos | `getCatalog()`/sidebar de navegação, `ITitleElement` (level/titleId), `fldChar`/`instrText` round-trip | **não existe bloco TOC no corpo**, sem bookmarks, sem hyperlink interno, campos DOCX não são "vivos" |
-| Estilos | cascata completa na importação (`FormatResolver`), preservação por diff no save | sem estilos nomeados em runtime (tudo achatado em formatação direta), título customizado não é reconhecido (só nível fixo→`Heading N`) |
-| Ribbon | abas fixas (Arquivo/Início/Inserir/Layout/Revisão/Exibir), sync coalescido por frame, mini-toolbar text/table/image | **sem abas contextuais** ("Ferramentas de Tabela/Imagem/Cabeçalho"), status bar/catálogo/page-mode com regressões |
-| Performance | fast path de parágrafo, layout progressivo por Timer, lazy canvas por IntersectionObserver, dirty page queue, histórico delta parcial | `draw.dart` monólito 5,1k linhas, `WorkerManager` é fake (main thread), invalidação ainda não é 100% guiada por changes, TTF no PDF pendente |
+| Tabelas | `TableOperate`/`TableTool`, mini-toolbar e aba contextual, paging com continuation + repeat header e locators estáveis inclusive para células aninhadas | reflow regional dos fragmentos paginados, layout completo de tabela aninhada, estilos nomeados e "distribuir uniformemente" |
+| TOC/campos | catálogo, títulos por outline, bookmarks/links internos, bloco TOC e campo OOXML exportado | tab stop direito com leader real e atualização de campos totalmente viva |
+| Estilos | cascata completa, preservação por diff e títulos customizados reconhecidos por `outlineLvl` efetivo | estilos nomeados vivos em runtime e criação/edição de estilos |
+| Ribbon | abas fixas + contextuais Tabela/Imagem, sync coalescido e mini-toolbars text/table/image | aba contextual de Cabeçalho/Rodapé e acabamentos pontuais de shell |
+| Performance | changes/invalidação tipada, locators, checkpoint de histórico limitado, fast reflow de splice, índices de página/posição, scheduler, canvas virtualizado, dirty queue e repaint parcial | reflow regional de tabela, workers auxiliares e extração dos motores/controllers ainda residentes nos monólitos |
 
 ---
 
@@ -196,31 +235,34 @@ Plano:
 
 ## 6. Performance — próximos incrementos (contínuo)
 
-O grosso do modelo Kix/OnlyOffice já foi adotado (fast path de parágrafo, layout
-progressivo fatiado, lazy canvas por IntersectionObserver, dirty queue de scroll).
-O que ainda rende:
+O grosso do modelo Kix/OnlyOffice já foi adotado (fast paths de parágrafo e
+splice estrutural, layout progressivo fatiado, canvas virtualizado, índices de
+página/posição, dirty queue e checkpoint de histórico). Estado dos incrementos:
 
-1. **Recálculo guiado por changes (OnlyOffice `Get_RecalcData`):** completar a migração
-   do histórico para deltas com `affectedRange`/`needsLayout`/`needsRepaintOnly` (plano
-   §3.2 do doc OnlyOffice) e fazer o `render()` decidir o escopo a partir das changes
-   (fast run-range → fast paragraph → regular a partir da 1ª página afetada), em vez de
-   flags ad-hoc por comando. Distinguir **relayout × repaint** (underline/cor = repaint
-   only, como `Check_NeedRecalc`).
-2. **Quebrar o monólito `draw.dart`** (5,1k linhas) nos módulos do plano OnlyOffice:
-   DocumentModel / LayoutEngine (com o cursor de continuação como serviço) /
-   PageRenderer (fila de páginas sujas) / Viewport. Nenhum dos dois motores de
-   referência usa worker de layout — main thread + fatiamento é o padrão; manter.
-3. **Workers de verdade só para tarefas auxiliares:** o `WorkerManager` atual é fake
+- [x] **Recálculo guiado por changes nos hot paths:** `DocumentMutation`/
+  `DocumentTransaction` carregam `affectedRange` e impacto; `LayoutInvalidation`
+  decide repaint, parágrafo, tabela ou full; formatação, digitação, Enter,
+  Backspace e Delete usam deltas/fast paths. **Pendente:** concluir a migração
+  dos comandos legados e o reflow regional de tabela paginada; eles continuam
+  sendo as barreiras/fallbacks explícitos, não o caminho comum.
+- [ ] **Quebrar o monólito `draw.dart` (parcial entregue):** concluídas as extrações de
+  DocumentModel/Index/Locator/Mutation/Transaction, History, LayoutScheduler,
+  LayoutInvalidation/Request, PageRowIndex/PagePositionIndex, DirtyPageQueue e
+  PageCanvasManager. **Pendentes:** `LayoutEngine` + caches/EndInfo,
+  `PagePainter`/`ViewportPager`, serviços de comando e controllers da shell.
+  Main thread + fatiamento continua sendo a decisão correta para layout.
+- [ ] **Workers de verdade só para tarefas auxiliares:** o `WorkerManager` atual é fake
    (`Future(cb)` na main thread). Mover para worker/isolate o que não toca o layout:
    contagem de palavras, catálogo, futuro spellcheck, unzip/parse do DOCX na abertura
    (o parse SAX de 4,45 MB ainda bloqueia ~1,6 s no TR).
-4. **Métricas de linha reais:** usar `measureText().actualBoundingBoxAscent/Descent`
+- [x] **Métricas de linha reais:** `measureText().actualBoundingBoxAscent/Descent`
    como fallback quando não houver métrica TTF (o Kix faz feature-detection disso) —
-   melhora a fidelidade de altura de linha nas fontes não embarcadas.
-5. **Overlay de cursor/seleção fora do tile** (Kix): garantir que caret piscando e
+   já está implementado; não é pendência desta refatoração.
+- [ ] **Overlay de cursor/seleção fora do tile** (Kix): garantir que caret piscando e
    seleção não repintam o canvas da página (camada DOM/canvas própria) — verificar o
    estado atual antes de mexer.
-6. Lembrete operacional: **medir só em release** (`dart run tool/serve_web.dart`), nunca
+- [x] Lembrete operacional incorporado aos benches: **medir só em release**
+   (`dart run tool/serve_web.dart`), nunca
    com DDC.
 
 ## 7. Régua em paridade com o Word/OnlyOffice (prioridade média-alta)
@@ -283,7 +325,7 @@ com F4.4; (d) alças verticais e colunas de tabela; (e) acabamento visual.
 | 5 | §2.1–2.3 rotação persistida + âncora relativa + wrap square real | mexe no computeRowList; fazer com a primitiva de ranges proibidos |
 | 6 | §5.2 estilos nomeados em runtime + galeria | melhora export de listas/estilos e a UI |
 | 7 | §1.4 carimbo/text box editável + §2.5 imagem nova no DOCX | reusa a infra de flutuantes do item 5 |
-| 8 | §6.1–6.2 recálculo por changes + modularização do draw.dart | contínuo, em paralelo aos itens acima |
+| 8 | §6.1–6.2 recálculo por changes + modularização do draw.dart | hot paths e módulos-base entregues; continuar com reflow regional de tabela e extrações de engine/painter/controllers |
 
 Riscos: (a) ranges proibidos no `computeRowList` é a mudança mais invasiva — proteger
 com E2E de regressão de paginação (ETP 24 págs, TR 184) antes de tocar; (b) toda
