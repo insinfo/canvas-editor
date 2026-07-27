@@ -355,7 +355,8 @@ void main() {
     expect(metrics['more'], 1);
 
     await page!.click('[data-ce-command="styles-more"]');
-    expect(await page!.$$('.ce-word-menu__item'), hasLength(4));
+    // Título 3..6 + "Modificar estilo…" (customização de títulos).
+    expect(await page!.$$('.ce-word-menu__item'), hasLength(5));
   });
 
   test('réguas e modos de visualização seguem a aba Exibir', () async {
@@ -475,7 +476,43 @@ void main() {
     await page!.click('[data-ce-command="redo"]');
     await Future<void>.delayed(const Duration(milliseconds: 120));
     expect(await _hasBold(page!), isTrue);
-    expect(await _canvasData(page!), boldCanvas);
+    final String redoCanvas = await _canvasData(page!);
+    if (redoCanvas != boldCanvas) {
+      final String diff = await page!.evaluate<String>('''async (a, b) => {
+        const load = (src) => new Promise((r) => {
+          const img = new Image();
+          img.onload = () => r(img);
+          img.src = src;
+        });
+        const [ia, ib] = await Promise.all([load(a), load(b)]);
+        const draw = (img) => {
+          const c = document.createElement('canvas');
+          c.width = img.width; c.height = img.height;
+          const ctx = c.getContext('2d');
+          ctx.drawImage(img, 0, 0);
+          return ctx.getImageData(0, 0, c.width, c.height).data;
+        };
+        const da = draw(ia), db = draw(ib);
+        let count = 0, minX = 1e9, minY = 1e9, maxX = -1, maxY = -1, maxDelta = 0;
+        const w = ia.width;
+        for (let i = 0; i < da.length; i += 4) {
+          const d = Math.abs(da[i]-db[i]) + Math.abs(da[i+1]-db[i+1]) +
+              Math.abs(da[i+2]-db[i+2]) + Math.abs(da[i+3]-db[i+3]);
+          if (d > 0) {
+            count++;
+            maxDelta = Math.max(maxDelta, d);
+            const px = (i / 4) % w, py = Math.floor((i / 4) / w);
+            minX = Math.min(minX, px); maxX = Math.max(maxX, px);
+            minY = Math.min(minY, py); maxY = Math.max(maxY, py);
+          }
+        }
+        return 'pixels=' + count + ' maxDelta=' + maxDelta +
+            ' box=' + minX + ',' + minY + '..' + maxX + ',' + maxY +
+            ' size=' + ia.width + 'x' + ia.height;
+      }''', args: <dynamic>[boldCanvas, redoCanvas]);
+      fail('canvas do redo difere do bold: $diff');
+    }
+    expect(redoCanvas, boldCanvas);
   });
 
   test(

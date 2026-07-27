@@ -5060,15 +5060,24 @@ class Draw {
     final List<double> margins = getMargins();
     final double canvasWidth = getCanvasWidth(pageNo);
     final double canvasHeight = getCanvasHeight(pageNo);
-    final double left = (margins[3] - padding).clamp(0, canvasWidth).toDouble();
-    final double right = (margins[3] + getInnerWidth() + padding)
+    // Bordas do clip alinhadas a pixel INTEIRO do device: clip fracionário é
+    // antialiasado, então o clearRect através dele deixa pixels mesclados na
+    // borda (costura de 1px que diverge do render completo da página).
+    final double dpr = getPagePixelRatio();
+    double alignFloor(double v) => (v * dpr).floorToDouble() / dpr;
+    double alignCeil(double v) => (v * dpr).ceilToDouble() / dpr;
+    final double left =
+        alignFloor((margins[3] - padding).clamp(0, canvasWidth).toDouble());
+    final double right = alignCeil((margins[3] + getInnerWidth() + padding)
         .clamp(0, canvasWidth)
-        .toDouble();
+        .toDouble());
     final double top = (oldTop < newTop ? oldTop : newTop) - padding;
     final double bottom =
         (oldBottom > newBottom ? oldBottom : newBottom) + padding;
-    final double clippedTop = top.clamp(0, canvasHeight).toDouble();
-    final double clippedBottom = bottom.clamp(0, canvasHeight).toDouble();
+    final double clippedTop =
+        alignFloor(top.clamp(0, canvasHeight).toDouble());
+    final double clippedBottom =
+        alignCeil(bottom.clamp(0, canvasHeight).toDouble());
     if (right <= left || clippedBottom <= clippedTop) {
       return null;
     }
