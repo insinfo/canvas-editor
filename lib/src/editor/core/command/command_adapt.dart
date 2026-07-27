@@ -1510,6 +1510,94 @@ class CommandAdapt {
     return true;
   }
 
+  /// Insere/substitui a numeração de página no RODAPÉ (Word: "Inserir >
+  /// Número de Página"). O número entra como conteúdo editável com campos
+  /// resolvidos por página (`extension['pageField']`).
+  ///
+  /// [format] usa os marcadores `{pageNo}` e `{pageCount}`
+  /// (ex.: `Página {pageNo} de {pageCount}`); [startAt] renumera a partir do
+  /// valor informado.
+  void insertPageNumber({
+    required String format,
+    RowFlex align = RowFlex.center,
+    int startAt = 1,
+    int? size,
+    String? font,
+  }) {
+    if (_isReadonly()) return;
+    final List<IElement> footer = draw.getFooterElementList();
+    // Remove uma numeração anterior (linha com campos) antes de inserir.
+    _removePageNumberLine(footer);
+    final List<IElement> inserted = <IElement>[];
+    if (footer.isNotEmpty) {
+      inserted.add(IElement(value: '\n', rowFlex: align));
+    }
+    final RegExp placeholder = RegExp(r'\{(pageNo|pageCount)\}');
+    int cursor = 0;
+    for (final RegExpMatch match in placeholder.allMatches(format)) {
+      if (match.start > cursor) {
+        inserted.add(IElement(
+          value: format.substring(cursor, match.start),
+          rowFlex: align,
+          size: size,
+          font: font,
+        ));
+      }
+      final String field =
+          match.group(1) == 'pageCount' ? 'pageCount' : 'pageNo';
+      inserted.add(IElement(
+        value: field == 'pageCount' ? '1' : '$startAt',
+        rowFlex: align,
+        size: size,
+        font: font,
+      )..extension = <String, dynamic>{'pageField': field});
+      cursor = match.end;
+    }
+    if (cursor < format.length) {
+      inserted.add(IElement(
+        value: format.substring(cursor),
+        rowFlex: align,
+        size: size,
+        font: font,
+      ));
+    }
+    if (inserted.isEmpty) return;
+    footer.addAll(inserted);
+    // Renumeração (startAt) e painter de canvas desligado — o número agora é
+    // conteúdo do rodapé.
+    final dynamic pageNumberOption = options.pageNumber;
+    if (pageNumberOption != null) {
+      pageNumberOption.startPageNo = startAt;
+      pageNumberOption.disabled = true;
+    }
+    draw.getFooter().setElementList(footer);
+    draw.render(IDrawOption(isSetCursor: false));
+  }
+
+  /// Remove a linha do rodapé que contém campos de página (usada ao trocar o
+  /// formato da numeração).
+  static void _removePageNumberLine(List<IElement> footer) {
+    int? fieldIndex;
+    for (int i = 0; i < footer.length; i++) {
+      final dynamic ext = footer[i].extension;
+      if (ext is Map && ext['pageField'] != null) {
+        fieldIndex = i;
+        break;
+      }
+    }
+    if (fieldIndex == null) return;
+    int start = fieldIndex;
+    while (start > 0 && footer[start - 1].value != '\n') {
+      start--;
+    }
+    if (start > 0) start--; // remove também a quebra que abre a linha
+    int end = fieldIndex;
+    while (end < footer.length && footer[end].value != '\n') {
+      end++;
+    }
+    footer.removeRange(start, end);
+  }
+
   /// Aplica um estilo da galeria à tabela sob o cursor (Word: "Estilos de
   /// Tabela"). Grava o resultado (bordas + preenchimentos + negrito do
   /// cabeçalho) no modelo — o editor não tem estilo nomeado de tabela.

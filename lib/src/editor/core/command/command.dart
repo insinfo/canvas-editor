@@ -221,6 +221,23 @@ class Command {
 
   void executeTableSelectAll() => _adapt.tableSelectAll();
 
+  /// Insere/substitui a numeração de página no rodapé (Word: "Inserir >
+  /// Número de Página"), com campos resolvidos por página.
+  void executeInsertPageNumber({
+    required String format,
+    RowFlex align = RowFlex.center,
+    int startAt = 1,
+    int? size,
+    String? font,
+  }) =>
+      _adapt.insertPageNumber(
+        format: format,
+        align: align,
+        startAt: startAt,
+        size: size,
+        font: font,
+      );
+
   /// Aplica um estilo da galeria à tabela sob o cursor (Word).
   void executeTableStyle(ITableStyle style) => _adapt.tableStyle(style);
 

@@ -3,6 +3,7 @@ import 'dart:html';
 
 import '../../editor/index.dart';
 import '../core/ui_component.dart';
+import '../dialog/dialog.dart';
 import 'widget_floating_toolbar.dart' show FloatingToolbarMode;
 
 /// Ações da shell que os toolbars invocam. Implementado pelo
@@ -248,6 +249,11 @@ class WidgetRibbon extends UiComponent {
             () => _command.executeInsertTable(3, 3),
             labeled: true),
       ]),
+      _group('Cabeçalho e Rodapé', <Element>[
+        _button('page-number', 'ti-number-123', 'Número de Página',
+            _openPageNumberDialog,
+            labeled: true),
+      ]),
       _group('Texto e símbolos', <Element>[
         _button('separator', 'ti-separator-horizontal', 'Separador',
             () => _command.executeSeparator(<num>[1, 1]),
@@ -438,6 +444,74 @@ class WidgetRibbon extends UiComponent {
         contextual: true);
     shell.children.addAll(<Element>[tabs, panels]);
     return shell;
+  }
+
+  /// "Número de Página" (Word): escolhe formato, alinhamento e a partir de
+  /// qual número contar; insere no rodapé como conteúdo editável.
+  void _openPageNumberDialog() {
+    Dialog(DialogOptions(
+      title: 'Número de página',
+      data: <DialogData>[
+        DialogData(
+          type: 'select',
+          name: 'format',
+          label: 'Formato',
+          value: 'Página {pageNo} | {pageCount}',
+          options: <DialogOptionItem>[
+            DialogOptionItem(
+                label: 'Página X | Y', value: 'Página {pageNo} | {pageCount}'),
+            DialogOptionItem(
+                label: 'Página X de Y', value: 'Página {pageNo} de {pageCount}'),
+            DialogOptionItem(label: 'X de Y', value: '{pageNo} de {pageCount}'),
+            DialogOptionItem(label: 'X', value: '{pageNo}'),
+            DialogOptionItem(label: '- X -', value: '- {pageNo} -'),
+            DialogOptionItem(label: 'Página X', value: 'Página {pageNo}'),
+          ],
+        ),
+        DialogData(
+          type: 'select',
+          name: 'align',
+          label: 'Alinhamento',
+          value: 'center',
+          options: <DialogOptionItem>[
+            DialogOptionItem(label: 'Esquerda', value: 'left'),
+            DialogOptionItem(label: 'Centro', value: 'center'),
+            DialogOptionItem(label: 'Direita', value: 'right'),
+          ],
+        ),
+        DialogData(
+          type: 'text',
+          name: 'startAt',
+          label: 'Iniciar em',
+          value: '1',
+          placeholder: '1',
+        ),
+      ],
+      onConfirm: (List<DialogConfirm> payload) {
+        String format = 'Página {pageNo} | {pageCount}';
+        RowFlex align = RowFlex.center;
+        int startAt = 1;
+        for (final DialogConfirm field in payload) {
+          switch (field.name) {
+            case 'format':
+              if (field.value.isNotEmpty) format = field.value;
+            case 'align':
+              align = switch (field.value) {
+                'left' => RowFlex.left,
+                'right' => RowFlex.right,
+                _ => RowFlex.center,
+              };
+            case 'startAt':
+              startAt = int.tryParse(field.value.trim()) ?? 1;
+          }
+        }
+        _command.executeInsertPageNumber(
+          format: format,
+          align: align,
+          startAt: startAt,
+        );
+      },
+    ));
   }
 
   /// Galeria de estilos de tabela (Word): miniaturas clicáveis que aplicam
