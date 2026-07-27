@@ -3128,10 +3128,55 @@ class Draw {
         metrics.boundingBoxAscent = metrics.height;
         metrics.boundingBoxDescent = 0;
       } else if (element.type == ElementType.tab) {
-        metrics.width = defaultTabWidth * scale;
         metrics.height = defaultSize * scale;
         metrics.boundingBoxAscent = metrics.height;
         metrics.boundingBoxDescent = 0;
+        // F4.4 (w:tabs): com paradas definidas no parágrafo, o TAB avança
+        // até a próxima parada (left) ou posiciona o trecho seguinte
+        // centralizado/à direita/no separador decimal (center/right/decimal),
+        // como o Word. Sem paradas, mantém a largura fixa padrão.
+        double tabWidth = defaultTabWidth * scale;
+        element.tabLeader = null;
+        final List<ITabStop>? tabStops = element.paraTabStops;
+        if (tabStops != null && tabStops.isNotEmpty) {
+          final double tabStartX = (curRow.offsetX ?? 0) + curRow.width;
+          final List<ITabStop> sortedStops = List<ITabStop>.from(tabStops)
+            ..sort((ITabStop a, ITabStop b) =>
+                a.position.compareTo(b.position));
+          ITabStop? hitStop;
+          for (final ITabStop stop in sortedStops) {
+            if (stop.position * scale > tabStartX + 1) {
+              hitStop = stop;
+              break;
+            }
+          }
+          if (hitStop != null) {
+            element.tabLeader = hitStop.leader;
+            double target = hitStop.position * scale;
+            if (hitStop.type == 'center' ||
+                hitStop.type == 'right' ||
+                hitStop.type == 'decimal') {
+              final double segment = _measureTabSegmentWidth(
+                ctx,
+                textParticle,
+                elementList,
+                i + 1,
+                scale,
+                decimal: hitStop.type == 'decimal',
+              );
+              target = hitStop.type == 'center'
+                  ? target - segment / 2
+                  : target - segment;
+            }
+            double advance = target - tabStartX;
+            // Parada além da largura útil: o tab preenche até o fim da linha.
+            if (tabStartX + advance > availableWidth) {
+              advance = availableWidth - tabStartX;
+            }
+            if (advance > 1) tabWidth = advance;
+          }
+        }
+        metrics.width = tabWidth;
       } else if (element.type == ElementType.block) {
         if (element.width == null) {
           metrics.width = availableWidth;
@@ -3169,8 +3214,24 @@ class Draw {
         double fontAscent;
         double fontDescent;
         if (ttf != null) {
+          // F4.7b: o PRIMEIRO caractere de um campo de página reserva 2
+          // dígitos — o valor resolvido por página pode crescer em relação ao
+          // cache do arquivo ("1" no arquivo, "10" na página 10). Dígitos são
+          // tabulares, então reservar por contagem basta. Os caracteres
+          // seguintes do MESMO campo não repetem a reserva (senão o rodapé
+          // ganharia um vão a cada dígito).
+          String measureValue = element.value;
+          final dynamic pageFieldExt = element.extension;
+          if (measureValue.length < 2 &&
+              pageFieldExt is Map &&
+              pageFieldExt['pageField'] != null) {
+            final dynamic prePageFieldExt = preElement?.extension;
+            final bool isFieldStart = !(prePageFieldExt is Map &&
+                prePageFieldExt['pageField'] == pageFieldExt['pageField']);
+            if (isFieldStart) measureValue = measureValue.padLeft(2, '0');
+          }
           metrics.width =
-              isZero ? 0 : ttf.measureWidth(element.value, scaledSize);
+              isZero ? 0 : ttf.measureWidth(measureValue, scaledSize);
           glyphAscent = isZero ? scaledSize : ttf.ascentPx(scaledSize);
           glyphDescent = ttf.descentPx(scaledSize);
           // lineGap todo acima (baseline ancorada pelo descent embaixo).
@@ -3633,7 +3694,7 @@ class Draw {
       areaId: source.areaId,
       areaIndex: source.areaIndex,
       area: source.area,
-    );
+    )..tabLeader = source.tabLeader;
   }
 
   List<List<IRow>> _computePageList() {
@@ -4301,6 +4362,78 @@ class Draw {
     }
   }
 
+  /// Largura de desenho do valor resolvido de um campo de página.
+  double _measureFieldWidth(IRowElement element, String text, double scale) {
+    final double size =
+        (element.actualSize ?? element.size ?? (_options.defaultSize ?? 16))
+                .toDouble() *
+            scale;
+    final ce_fonts.FontMetrics? ttf = ce_fonts.FontRegistry.instance
+        .lookup(element.font ?? _options.defaultFont);
+    if (ttf != null) {
+      return ttf.measureWidth(text, size);
+    }
+    // Sem métrica TTF: aproxima pelo número de caracteres (dígitos tabulares).
+    return element.metrics.width * text.length;
+  }
+
+  /// Valor de um campo de página para a página [pageNo] (0-based):
+  /// 'pageNo' → número da página; 'pageCount' → total de páginas. Respeita
+  /// `pageNumber.startPageNo/fromPageNo` quando configurados.
+  String _resolvePageFieldValue(String field, int pageNo) {
+    final dynamic option = _options.pageNumber;
+    final int fromPageNo = (option?.fromPageNo as int?) ?? 0;
+    final int startPageNo = (option?.startPageNo as int?) ?? 1;
+    if (field == 'pageCount') {
+      return '${getPageCount() - fromPageNo}';
+    }
+    if (field == 'pageNo') {
+      return '${pageNo + startPageNo - fromPageNo}';
+    }
+    return '';
+  }
+
+  /// Largura do trecho de texto após um TAB até a próxima tabulação/fim de
+  /// parágrafo — usada para posicionar paradas center/right/decimal (F4.4).
+  /// Com [decimal], mede só até o separador decimal ('.' ou ',').
+  double _measureTabSegmentWidth(
+    CanvasRenderingContext2D ctx,
+    TextParticle? textParticle,
+    List<IElement> elementList,
+    int startIndex,
+    double scale, {
+    bool decimal = false,
+  }) {
+    final double defaultSize = (_options.defaultSize ?? 16).toDouble();
+    double width = 0;
+    for (int j = startIndex; j < elementList.length; j++) {
+      final IElement el = elementList[j];
+      if (el.value == ZERO || el.value == '\n') break;
+      if (el.type == ElementType.tab) break;
+      if (el.type != null &&
+          el.type != ElementType.text &&
+          el.type != ElementType.superscript &&
+          el.type != ElementType.subscript) {
+        break;
+      }
+      if (decimal && (el.value == '.' || el.value == ',')) break;
+      final double resolvedSize =
+          (el.actualSize ?? el.size ?? defaultSize).toDouble() * scale;
+      final ce_fonts.FontMetrics? ttf =
+          ce_fonts.FontRegistry.instance.lookup(el.font ?? _options.defaultFont);
+      if (ttf != null) {
+        width += ttf.measureWidth(el.value, resolvedSize);
+      } else {
+        final String fontStyle = getElementFont(el, scale);
+        final ITextMetrics? m =
+            textParticle?.measureTextWithFont(ctx, el, fontStyle);
+        width += (m?.width ?? 0) * scale;
+      }
+      if (el.letterSpacing != null) width += el.letterSpacing! * scale;
+    }
+    return width;
+  }
+
   void _drawHighlight(CanvasRenderingContext2D ctx, IDrawRowPayload payload) {
     final Highlight? highlight = _highlight as Highlight?;
     if (highlight == null) {
@@ -4417,6 +4550,41 @@ class Draw {
           index += 1;
           continue;
         }
+        // Campos PAGE/NUMPAGES (F4.7b): o texto do campo é conteúdo EDITÁVEL
+        // do rodapé/cabeçalho, mas o valor mostrado é resolvido por PÁGINA na
+        // hora de pintar — como o Word faz com o resultado do campo.
+        //
+        // O modelo guarda 1 CARACTERE por elemento, então o resultado do campo
+        // ocupa vários "slots" ("1","5"): o primeiro recebe o valor inteiro e
+        // os demais ficam vazios com largura 0 (senão cada slot desenharia o
+        // número todo — "1010" — e o batch de texto sairia esticado, porque a
+        // pintura escala o batch pela soma das larguras do layout).
+        final dynamic elementExtension = element.extension;
+        if (elementExtension is Map && elementExtension['pageField'] != null) {
+          final String field = elementExtension['pageField'].toString();
+          final dynamic preExtension = preElement?.extension;
+          final bool isFieldStart =
+              !(preExtension is Map && preExtension['pageField'] == field);
+          if (isFieldStart) {
+            int slots = 1;
+            for (int k = j + 1; k < curRow.elementList.length; k++) {
+              final dynamic nextExtension = curRow.elementList[k].extension;
+              if (nextExtension is Map && nextExtension['pageField'] == field) {
+                slots++;
+              } else {
+                break;
+              }
+            }
+            final String resolved = _resolvePageFieldValue(field, pageNo);
+            element.value = resolved;
+            element.metrics.width = _measureFieldWidth(element, resolved, scale);
+            for (int k = 1; k < slots; k++) {
+              final IRowElement slot = curRow.elementList[j + k];
+              slot.value = '';
+              slot.metrics.width = 0;
+            }
+          }
+        }
         final IElementPosition pos = positionList[elementIndex];
         final List<double> leftTop =
             pos.coordinate['leftTop'] ?? <double>[0, 0];
@@ -4504,6 +4672,31 @@ class Draw {
           );
         } else if (element.type == ElementType.tab) {
           textParticle?.complete();
+          // F4.4: leader da tabulação (pontilhado/tracejado/sublinhado do
+          // Sumário e afins) desenhado na linha de base ao longo do TAB.
+          final String? leader = element.tabLeader;
+          final double leaderWidth = element.metrics.width;
+          if (leader != null &&
+              leader != 'none' &&
+              leaderWidth > 4 * scale) {
+            ctx.save();
+            ctx.beginPath();
+            ctx.strokeStyle = element.color ?? '#000000';
+            ctx.lineWidth = 1 * scale;
+            switch (leader) {
+              case 'hyphen' || 'middleDot':
+                ctx.setLineDash(<num>[3 * scale, 3 * scale]);
+              case 'underscore' || 'heavy':
+                ctx.setLineDash(<num>[]);
+              default: // 'dot'
+                ctx.setLineDash(<num>[1.5 * scale, 2 * scale]);
+            }
+            final double leaderY = y + baselineOffset - 1 * scale;
+            ctx.moveTo(x + 2 * scale, leaderY);
+            ctx.lineTo(x + leaderWidth - 2 * scale, leaderY);
+            ctx.stroke();
+            ctx.restore();
+          }
         } else if (element.rowFlex == RowFlex.alignment ||
             element.rowFlex == RowFlex.justify) {
           textParticle?.record(ctx, element, x, y + baselineOffset);

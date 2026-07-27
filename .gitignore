@@ -22,5 +22,15 @@ resources/01.zip
 # Capturas de referência (Word Online etc.) — não versionar
 resources/word.example/
 resources/word.example.zip
-resources/01/
-resources/01.zip
+resources/google-docs/
+resources/google-docs.zip
+
+# Saída do dart2js do app de exemplo (gerada por tool/serve_web.dart)
+example/web/main.dart.js
+example/web/main.dart.js.deps
+example/web/main.dart.js.map
+
+# Chrome baixado pelo puppeteer para verificação visual
+.local-chrome/
+
+

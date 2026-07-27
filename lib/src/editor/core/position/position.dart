@@ -96,6 +96,56 @@ class Position {
     return floatPositionList;
   }
 
+  /// Posição inicial de um float (surround/floatTop/floatBottom).
+  ///
+  /// Com âncora de DOCX (`extension['wpAnchor']`, offsets em px não escalado
+  /// relativos a page/margin/column/paragraph) resolve a posição absoluta na
+  /// página; sem âncora, cai na posição de fluxo do elemento (comportamento
+  /// original). Valores retornados NÃO escalados (consumidos ×scale no draw).
+  Map<String, num> _initialFloatPosition(
+      IElement element, double x, double y, int pageNo) {
+    final dynamic ext = element.extension;
+    final dynamic anchor = ext is Map ? ext['wpAnchor'] : null;
+    if (anchor is! Map) {
+      return <String, num>{'x': x, 'y': y, 'pageNo': pageNo};
+    }
+    final double scale = (options.scale ?? 1).toDouble();
+    final List<double> margins = (draw.getMargins() as List)
+        .map<double>((dynamic v) => (v as num).toDouble() / scale)
+        .toList();
+    final double pageWidth = (draw.getWidth() as num).toDouble() / scale;
+    final double width = (element.width ?? 0).toDouble();
+    final String hRel = (anchor['hRel'] as String?) ?? 'column';
+    final String vRel = (anchor['vRel'] as String?) ?? 'paragraph';
+    final num? ax = anchor['x'] as num?;
+    final num? ay = anchor['y'] as num?;
+    final String? hAlign = anchor['hAlign'] as String?;
+    double fx;
+    if (hAlign != null) {
+      fx = switch (hAlign) {
+        'center' => (pageWidth - width) / 2,
+        'right' => pageWidth - margins[1] - width,
+        _ => margins[3],
+      };
+    } else if (ax != null) {
+      fx = hRel == 'page' ? ax.toDouble() : margins[3] + ax.toDouble();
+    } else {
+      fx = x / scale;
+    }
+    double fy;
+    if (ay != null) {
+      fy = switch (vRel) {
+        'page' => ay.toDouble(),
+        'margin' => margins[0] + ay.toDouble(),
+        // paragraph/line: offset relativo à posição de fluxo do elemento.
+        _ => y / scale + ay.toDouble(),
+      };
+    } else {
+      fy = y / scale;
+    }
+    return <String, num>{'x': fx, 'y': fy, 'pageNo': pageNo};
+  }
+
   List<IElementPosition> getTablePositionList(
       List<IElement> sourceElementList) {
     final int? index = positionContext.index;
@@ -294,11 +344,8 @@ class Position {
               ),
             );
           }
-          element.imgFloatPosition ??= <String, num>{
-            'x': x,
-            'y': y,
-            'pageNo': pageNo,
-          };
+          element.imgFloatPosition ??=
+              _initialFloatPosition(element, x, y, pageNo);
           floatPositionList.add(
             IFloatPosition(
               pageNo: pageNo,

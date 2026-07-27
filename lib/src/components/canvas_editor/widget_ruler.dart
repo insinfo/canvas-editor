@@ -14,7 +14,23 @@ enum _RulerDrag {
   firstLine, // ▽ superior: só o delta da primeira linha
   hanging, // △ inferior: recuo das linhas de continuação (mantém a 1ª fixa)
   indentRight, // △ direito
+  tabStop, // parada de tabulação (clique adiciona, fora da régua remove)
+  tableColumn, // fronteira de coluna da tabela sob o cursor (régua contextual)
 }
+
+const List<String> _tabTypeCycle = <String>[
+  'left',
+  'center',
+  'right',
+  'decimal',
+];
+
+String _tabTypeTitle(String type) => switch (type) {
+      'center' => 'Tabulação centralizada',
+      'right' => 'Tabulação direita',
+      'decimal' => 'Tabulação decimal',
+      _ => 'Tabulação esquerda',
+    };
 
 /// Régua de página estilo Word/OnlyOffice.
 ///
@@ -27,8 +43,9 @@ class WidgetRuler extends UiComponent {
   WidgetRuler(this._command, this._draw) {
     root = DivElement()..classes.add('ce-rulers');
     _corner = DivElement()
-      ..classes.add('ce-ruler-corner')
-      ..title = 'Seletor de tabulação';
+      ..classes.addAll(<String>['ce-ruler-corner', 'ce-ruler-corner--left'])
+      ..title = '${_tabTypeTitle('left')} — clique para alternar';
+    listen(_corner.onClick, (_) => _cycleTabType());
     _horizontal = DivElement()..classes.add('ce-ruler-horizontal');
     _vertical = DivElement()..classes.add('ce-ruler-vertical');
     root.children.addAll(<Element>[_corner, _horizontal, _vertical]);
@@ -55,6 +72,21 @@ class WidgetRuler extends UiComponent {
   double _indentLeft = 0;
   double _firstLine = 0;
   double _indentRight = 0;
+
+  // Tab stops do parágrafo do cursor (posições em px NÃO escalado a partir
+  // da margem esquerda, como no modelo).
+  List<ITabStop> _tabStops = <ITabStop>[];
+  String _tabType = 'left';
+  int _dragTabIndex = -1;
+  bool _tabRemovePending = false;
+  final List<DivElement> _tabMarkers = <DivElement>[];
+
+  // Régua CONTEXTUAL de tabela (Word): com o cursor dentro de uma tabela, a
+  // régua mostra as fronteiras das colunas; arrastar redimensiona a coluna.
+  final List<DivElement> _columnMarkers = <DivElement>[];
+  List<double> _columnEdges = <double>[]; // x na página (px de tela)
+  int _dragColumnIndex = -1;
+  double _dragColumnStartX = 0;
 
   // Marcadores persistentes (reposicionados sem reconstruir a régua — o
   // sync com o cursor roda por tecla via rangeStyleChange coalescido).
@@ -85,7 +117,7 @@ class WidgetRuler extends UiComponent {
     final double pxPerCm = 96 / 2.54 * _scale;
     final int viewportHeight = root.parent?.clientHeight ?? 520;
     final double verticalHeight =
-        (viewportHeight - 24).clamp(180, 1 << 20).toDouble();
+        (viewportHeight - 21).clamp(180, 1 << 20).toDouble();
 
     _hookScrollOnce();
     _readParagraphIndents();
@@ -144,32 +176,88 @@ class WidgetRuler extends UiComponent {
     final double beforeLeft = _indentLeft;
     final double beforeFirst = _firstLine;
     final double beforeRight = _indentRight;
+    final String beforeTabs = _tabSignature();
     _readParagraphIndents();
+    final bool tabsChanged = beforeTabs != _tabSignature();
+    // A régua de tabela é contextual: entrar/sair de tabela ou mudar as
+    // larguras precisa refletir nos marcadores de coluna (Word).
+    final String beforeColumns = _columnSignature();
+    final bool columnsChanged = beforeColumns != _liveColumnSignature();
     if (beforeLeft == _indentLeft &&
         beforeFirst == _firstLine &&
-        beforeRight == _indentRight) {
+        beforeRight == _indentRight &&
+        !tabsChanged &&
+        !columnsChanged) {
       return;
     }
     _positionMarkers();
+    if (tabsChanged) _renderTabMarkers();
+    if (columnsChanged) _renderColumnMarkers();
+  }
+
+  String _columnSignature() =>
+      _columnEdges.map((double x) => x.toStringAsFixed(1)).join('|');
+
+  /// Assinatura das fronteiras de coluna da tabela sob o cursor AGORA (sem
+  /// tocar no DOM) — comparada com a última renderizada.
+  String _liveColumnSignature() {
+    final IElement? table = _command.getCursorTableElement();
+    final Map<String, double>? rect = _command.getCursorTableRect();
+    final List<IColgroup>? colgroup = table?.colgroup;
+    if (table == null || rect == null || colgroup == null) return '';
+    final StringBuffer buffer = StringBuffer();
+    double x = rect['x'] ?? 0;
+    buffer.write(x.toStringAsFixed(1));
+    for (final IColgroup col in colgroup) {
+      x += col.width * _scale;
+      buffer.write('|${x.toStringAsFixed(1)}');
+    }
+    return buffer.toString();
+  }
+
+  String _tabSignature() => _tabStops
+      .map((ITabStop stop) =>
+          '${stop.type}:${stop.position.toStringAsFixed(1)}')
+      .join('|');
+
+  void _cycleTabType() {
+    final int next =
+        (_tabTypeCycle.indexOf(_tabType) + 1) % _tabTypeCycle.length;
+    _corner.classes.remove('ce-ruler-corner--$_tabType');
+    _tabType = _tabTypeCycle[next];
+    _corner
+      ..classes.add('ce-ruler-corner--$_tabType')
+      ..title = '${_tabTypeTitle(_tabType)} — clique para alternar';
   }
 
   void _readParagraphIndents() {
     _indentLeft = 0;
     _firstLine = 0;
     _indentRight = 0;
+    _tabStops = <ITabStop>[];
     try {
       final dynamic raw = _draw.getRange().getRangeParagraphElementList();
       if (raw is List) {
+        bool indentsFound = false;
+        bool tabsFound = false;
         for (final dynamic item in raw) {
           if (item is! IElement) continue;
-          if (item.paraIndentLeft != null ||
-              item.paraIndentFirstLine != null ||
-              item.paraIndentRight != null) {
+          if (!indentsFound &&
+              (item.paraIndentLeft != null ||
+                  item.paraIndentFirstLine != null ||
+                  item.paraIndentRight != null)) {
             _indentLeft = (item.paraIndentLeft ?? 0) * _scale;
             _firstLine = (item.paraIndentFirstLine ?? 0) * _scale;
             _indentRight = (item.paraIndentRight ?? 0) * _scale;
-            break;
+            indentsFound = true;
           }
+          if (!tabsFound && item.paraTabStops != null) {
+            _tabStops = item.paraTabStops!
+                .map((ITabStop stop) => stop.clone())
+                .toList();
+            tabsFound = true;
+          }
+          if (indentsFound && tabsFound) break;
         }
       }
     } catch (_) {
@@ -192,7 +280,11 @@ class WidgetRuler extends UiComponent {
       _marginShade(start: false, size: right),
     ]);
     _appendTicks(_horizontal,
-        extent: _pageWidth, pxPerCm: pxPerCm, zero: left, horizontal: true);
+        extent: _pageWidth,
+        pxPerCm: pxPerCm,
+        zero: left,
+        horizontal: true,
+        contentEnd: contentWidth);
     _markerMarginLeft = _marker(
         'ce-ruler__margin-handle ce-ruler__margin-handle--left',
         'Margem esquerda',
@@ -218,6 +310,77 @@ class WidgetRuler extends UiComponent {
       _markerRight!,
     ]);
     _positionMarkers();
+    _renderTabMarkers();
+    _renderColumnMarkers();
+  }
+
+  /// (Re)cria os marcadores de tab stop na régua horizontal.
+  void _renderTabMarkers() {
+    for (final DivElement marker in _tabMarkers) {
+      marker.remove();
+    }
+    _tabMarkers.clear();
+    for (int index = 0; index < _tabStops.length; index++) {
+      final ITabStop stop = _tabStops[index];
+      final DivElement marker = DivElement()
+        ..classes
+            .addAll(<String>['ce-ruler__tab', 'ce-ruler__tab--${stop.type}'])
+        ..title = '${_tabTypeTitle(stop.type)} — arraste para fora para '
+            'remover'
+        ..dataset['drag'] = _RulerDrag.tabStop.name
+        ..dataset['tabIndex'] = '$index';
+      _horizontal.append(marker);
+      _tabMarkers.add(marker);
+    }
+    _positionTabMarkers();
+  }
+
+  /// Régua contextual de tabela (Word): marcadores nas fronteiras das colunas
+  /// da tabela sob o cursor. Fora de tabela, remove os marcadores.
+  void _renderColumnMarkers() {
+    for (final DivElement marker in _columnMarkers) {
+      marker.remove();
+    }
+    _columnMarkers.clear();
+    _columnEdges = <double>[];
+    if (_drag == _RulerDrag.tableColumn) return;
+    final IElement? table = _command.getCursorTableElement();
+    final Map<String, double>? rect = _command.getCursorTableRect();
+    final List<IColgroup>? colgroup = table?.colgroup;
+    if (table == null ||
+        rect == null ||
+        colgroup == null ||
+        colgroup.isEmpty) {
+      return;
+    }
+    double x = rect['x'] ?? 0;
+    // Fronteira ESQUERDA da tabela + fim de cada coluna (a última fronteira é
+    // a borda direita da tabela — arrastável como no Word).
+    _columnEdges.add(x);
+    for (final IColgroup col in colgroup) {
+      x += col.width * _scale;
+      _columnEdges.add(x);
+    }
+    for (int index = 0; index < _columnEdges.length; index++) {
+      final DivElement marker = DivElement()
+        ..classes.add('ce-ruler__column')
+        ..title = 'Mover coluna da tabela'
+        ..dataset['drag'] = _RulerDrag.tableColumn.name
+        ..dataset['colIndex'] = '$index'
+        ..style.left = '${_columnEdges[index].clamp(0, _pageWidth)}px';
+      _horizontal.append(marker);
+      _columnMarkers.add(marker);
+    }
+  }
+
+  void _positionTabMarkers() {
+    final int count = _tabMarkers.length < _tabStops.length
+        ? _tabMarkers.length
+        : _tabStops.length;
+    for (int index = 0; index < count; index++) {
+      final double x = _margins[3] + _tabStops[index].position * _scale;
+      _tabMarkers[index].style.left = '${x.clamp(0, _pageWidth)}px';
+    }
   }
 
   void _positionMarkers() {
@@ -251,7 +414,11 @@ class WidgetRuler extends UiComponent {
       ..style.height =
           '${(pageHeight - top - bottom).clamp(0, pageHeight).toDouble()}px');
     _appendTicks(inner,
-        extent: pageHeight, pxPerCm: pxPerCm, zero: top, horizontal: false);
+        extent: pageHeight,
+        pxPerCm: pxPerCm,
+        zero: top,
+        horizontal: false,
+        contentEnd: (pageHeight - top - bottom).clamp(1, pageHeight).toDouble());
     _vertical.append(inner);
     _verticalInner = inner;
     _syncVerticalScroll();
@@ -265,13 +432,17 @@ class WidgetRuler extends UiComponent {
     return shade;
   }
 
+  /// Escala da régua. [contentEnd] é a extensão da ÁREA DE TEXTO a partir de
+  /// [zero]: como no Word, os números aparecem só dentro dela — as zonas de
+  /// margem recebem apenas ponto (¼) e tique curto (½), sem numeração.
   void _appendTicks(Element ruler,
       {required double extent,
       required double pxPerCm,
       required double zero,
-      required bool horizontal}) {
+      required bool horizontal,
+      required double contentEnd}) {
     final double quarter = pxPerCm / 4;
-    void appendTick(double position, int distance) {
+    void appendTick(double position, int distance, {bool numbered = false}) {
       final int part = distance % 4;
       final SpanElement tick = SpanElement()
         ..classes.addAll(<String>[
@@ -284,7 +455,7 @@ class WidgetRuler extends UiComponent {
                   : 'quarter',
         ])
         ..style.setProperty(horizontal ? 'left' : 'top', '${position}px');
-      if (part == 0) {
+      if (part == 0 && numbered) {
         final int number = distance ~/ 4;
         if (number > 0) {
           tick.append(SpanElement()
@@ -299,8 +470,10 @@ class WidgetRuler extends UiComponent {
     for (int distance = 1;; distance++) {
       final double position = zero + distance * quarter;
       if (position > extent) break;
-      appendTick(position, distance);
+      appendTick(position, distance,
+          numbered: position <= zero + contentEnd + 0.5);
     }
+    // Margem inicial (à esquerda/acima do zero): ticks sem número, como o Word.
     for (int distance = 1;; distance++) {
       final double position = zero - distance * quarter;
       if (position < 0) break;
@@ -323,12 +496,51 @@ class WidgetRuler extends UiComponent {
     if (target is! Element) return;
     final Element? marker = target.closest('[data-drag]');
     final String? name = marker?.dataset['drag'];
-    if (name == null) return;
+    if (name == null) {
+      // Clique no fundo da régua dentro da área de texto: adiciona uma
+      // parada do tipo selecionado no canto e já inicia o arrasto (Word).
+      _startAddTabStop(event);
+      return;
+    }
     _drag = _RulerDrag.values.firstWhere(
       (_RulerDrag value) => value.name == name,
       orElse: () => _RulerDrag.none,
     );
     if (_drag == _RulerDrag.none) return;
+    if (_drag == _RulerDrag.tabStop) {
+      _dragTabIndex = int.tryParse(marker?.dataset['tabIndex'] ?? '') ?? -1;
+      if (_dragTabIndex < 0 || _dragTabIndex >= _tabStops.length) {
+        _drag = _RulerDrag.none;
+        return;
+      }
+      _tabRemovePending = false;
+    }
+    if (_drag == _RulerDrag.tableColumn) {
+      _dragColumnIndex = int.tryParse(marker?.dataset['colIndex'] ?? '') ?? -1;
+      if (_dragColumnIndex < 0 || _dragColumnIndex >= _columnEdges.length) {
+        _drag = _RulerDrag.none;
+        return;
+      }
+      _dragColumnStartX = _columnEdges[_dragColumnIndex];
+    }
+    event
+      ..preventDefault()
+      ..stopPropagation();
+    root.classes.add('is-dragging');
+    _showGuide(event.client.x.toDouble());
+  }
+
+  void _startAddTabStop(MouseEvent event) {
+    final Rectangle<num> bounds = _horizontal.getBoundingClientRect();
+    final double x = (event.client.x - bounds.left).toDouble();
+    final double left = _margins[3];
+    final double right = _margins[1];
+    if (x <= left + 1 || x >= _pageWidth - right - 1) return;
+    _tabStops.add(ITabStop(type: _tabType, position: (x - left) / _scale));
+    _renderTabMarkers();
+    _drag = _RulerDrag.tabStop;
+    _dragTabIndex = _tabStops.length - 1;
+    _tabRemovePending = false;
     event
       ..preventDefault()
       ..stopPropagation();
@@ -388,6 +600,28 @@ class WidgetRuler extends UiComponent {
         _indentRight = (_pageWidth - _margins[1] - x)
             .clamp(0, _pageWidth - _margins[1] - _margins[3] - minContent)
             .toDouble();
+      case _RulerDrag.tabStop:
+        if (_dragTabIndex < 0 || _dragTabIndex >= _tabStops.length) return;
+        final double contentWidth =
+            (_pageWidth - _margins[3] - _margins[1]).clamp(1, _pageWidth);
+        _tabStops[_dragTabIndex].position =
+            ((x - _margins[3]).clamp(0, contentWidth)) / _scale;
+        // Arrastar para fora da régua (verticalmente) remove a parada.
+        final double clientY = event.client.y.toDouble();
+        _tabRemovePending =
+            clientY < bounds.top - 14 || clientY > bounds.bottom + 14;
+        if (_dragTabIndex < _tabMarkers.length) {
+          _tabMarkers[_dragTabIndex]
+              .classes
+              .toggle('is-removing', _tabRemovePending);
+        }
+        _positionTabMarkers();
+      case _RulerDrag.tableColumn:
+        // Só arrasta o marcador; a largura é aplicada no mouseup (um render).
+        if (_dragColumnIndex >= 0 && _dragColumnIndex < _columnMarkers.length) {
+          _columnMarkers[_dragColumnIndex].style.left =
+              '${x.clamp(0, _pageWidth)}px';
+        }
       case _RulerDrag.none:
         return;
     }
@@ -401,7 +635,38 @@ class WidgetRuler extends UiComponent {
     _drag = _RulerDrag.none;
     root.classes.remove('is-dragging');
     _hideGuide();
-    if (completed == _RulerDrag.marginLeft ||
+    if (completed == _RulerDrag.tableColumn) {
+      final int index = _dragColumnIndex;
+      _dragColumnIndex = -1;
+      if (index >= 0 && index < _columnMarkers.length) {
+        final double endX = double.tryParse(_columnMarkers[index]
+                .style
+                .left
+                .replaceAll('px', '')) ??
+            _dragColumnStartX;
+        final double delta = endX - _dragColumnStartX;
+        // Fronteira 0 = borda esquerda da tabela (não redimensiona coluna no
+        // modelo do editor sem overflow); as demais movem a coluna index-1.
+        if (index > 0 && delta.abs() >= 1) {
+          _command.executeTableColumnWidth(index - 1, delta);
+        }
+      }
+      window.requestAnimationFrame((_) => refresh());
+      return;
+    }
+    if (completed == _RulerDrag.tabStop) {
+      if (_tabRemovePending &&
+          _dragTabIndex >= 0 &&
+          _dragTabIndex < _tabStops.length) {
+        _tabStops.removeAt(_dragTabIndex);
+      }
+      _tabRemovePending = false;
+      _dragTabIndex = -1;
+      _tabStops.sort(
+          (ITabStop a, ITabStop b) => a.position.compareTo(b.position));
+      _command.executeSetTabStops(
+          _tabStops.map((ITabStop stop) => stop.clone()).toList());
+    } else if (completed == _RulerDrag.marginLeft ||
         completed == _RulerDrag.marginRight) {
       final List<double> visual =
           _margins.map((double value) => value / _scale).toList();

@@ -42,6 +42,7 @@ const List<String> editorElementCopyAttr = <String>[
   'paraIndentLeft',
   'paraIndentFirstLine',
   'paraIndentRight',
+  'paraTabStops',
   'textDecoration',
 ];
 
@@ -64,6 +65,7 @@ const List<String> editorElementZipAttr = <String>[
   'paraIndentLeft',
   'paraIndentFirstLine',
   'paraIndentRight',
+  'paraTabStops',
   'dashArray',
   'trList',
   'tableToolDisabled',

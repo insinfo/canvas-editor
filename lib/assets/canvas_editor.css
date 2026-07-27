@@ -426,12 +426,17 @@
 /* Controles de edição de tabela. Sem position:absolute estes elementos,
    anexados ao stage pelo core, participam do fluxo e aumentam artificialmente
    o scrollHeight ao focar uma célula. */
+/* ── Ferramentas de tabela estilo WORD ───────────────────────────────────
+   O Word não mostra barras permanentes (isso é Google Docs): as faixas de
+   seleção de linha/coluna são INVISÍVEIS e só destacam no hover; visíveis
+   são a alça de mover (✥, canto superior esquerdo) e a de redimensionar
+   (quadradinho vazado, canto inferior direito). */
 .ce-embed .ce-table-tool__row {
   position: absolute;
   width: 12px;
   overflow: hidden;
-  border-radius: 7px;
-  background: #e2e6ed;
+  border-radius: 0;
+  background: transparent;
 }
 
 .ce-embed .ce-table-tool__row__item,
@@ -442,6 +447,9 @@
 
 .ce-embed .ce-table-tool__row__item { width: 100%; }
 
+.ce-embed .ce-table-tool__row__item:hover,
+.ce-embed .ce-table-tool__col__item:hover { background: #dbe6f7; }
+
 .ce-embed .ce-table-tool__row__item.active,
 .ce-embed .ce-table-tool__col__item.active { background: #c4d7fa; }
 
@@ -450,40 +458,59 @@
   display: flex;
   height: 12px;
   overflow: hidden;
-  border-radius: 7px;
-  background: #e2e6ed;
+  border-radius: 0;
+  background: transparent;
 }
 
-.ce-embed .ce-table-tool__quick__add,
-.ce-embed .ce-table-tool__select {
+/* ⊕ de inserir linha/coluna: discreto, aparece no hover (como no Word). */
+.ce-embed .ce-table-tool__quick__add {
   position: absolute;
-  width: 16px;
-  height: 16px;
+  width: 14px;
+  height: 14px;
+  border: 1px solid #9aa4b1;
   border-radius: 50%;
-  background: #e2e6ed;
+  background: #fff;
+  opacity: 0;
   cursor: pointer;
+  transition: opacity .12s linear;
 }
+.ce-embed .ce-page-container:hover .ce-table-tool__quick__add,
+.ce-embed .ce-table-tool__quick__add:hover { opacity: 1; }
 
 .ce-embed .ce-table-tool__quick__add::after {
   content: "+";
   position: absolute;
   inset: 50% auto auto 50%;
-  color: #fff;
+  color: #56606e;
+  font: 12px/1 Arial, sans-serif;
   transform: translate(-50%, -55%);
 }
 
+/* Alça de MOVER a tabela (✥) — canto superior esquerdo, fora da grade. */
 .ce-embed .ce-table-tool__select {
-  border-radius: 3px;
-  background: transparent;
-}
-
-.ce-embed .ce-table-tool__select::after {
-  content: ":::";
   position: absolute;
-  inset: 50% auto auto 50%;
-  color: #7b8492;
-  transform: translate(-75%, -50%) rotate(-90deg);
+  width: 15px;
+  height: 15px;
+  border: 1px solid #8a929d;
+  border-radius: 2px;
+  background: #fff
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 12'%3E%3Cpath d='M6 1v10M1 6h10M6 1l-1.6 1.6M6 1l1.6 1.6M6 11l-1.6-1.6M6 11l1.6-1.6M1 6l1.6-1.6M1 6l1.6 1.6M11 6l-1.6-1.6M11 6l-1.6 1.6' stroke='rgb(70,79,90)' fill='none' stroke-width='1'/%3E%3C/svg%3E")
+    center / 11px 11px no-repeat;
+  cursor: move;
 }
+.ce-embed .ce-table-tool__select:hover { border-color: #185abd; }
+
+/* Alça de REDIMENSIONAR a tabela — canto inferior direito (Word). */
+.ce-embed .ce-table-tool__resize {
+  position: absolute;
+  width: 9px;
+  height: 9px;
+  box-sizing: border-box;
+  border: 1px solid #6d7682;
+  background: #fff;
+  cursor: nwse-resize;
+}
+.ce-embed .ce-table-tool__resize:hover { border-color: #185abd; }
 
 .ce-embed .ce-table-tool__anchor { position: absolute; z-index: 9; }
 .ce-embed .ce-table-tool__col .ce-table-tool__anchor {
@@ -520,14 +547,33 @@
   position: absolute;
   z-index: 40;
   align-items: center;
+  flex-wrap: wrap;
   gap: 2px;
   min-height: 34px;
+  max-width: 396px;
   padding: 3px;
   border: 1px solid #c4ccd8;
   border-radius: 6px;
   background: #fff;
   box-shadow: 0 5px 18px rgb(20 34 55 / 24%);
   transform: translateX(-20%);
+}
+
+/* Botão de cor da mini-toolbar: input nativo escondido sob o botão. */
+.ce-floating-toolbar__color {
+  position: relative;
+  display: inline-flex;
+}
+.ce-floating-toolbar__color-input {
+  position: absolute;
+  left: 4px;
+  bottom: 0;
+  width: 0;
+  height: 0;
+  padding: 0;
+  border: 0;
+  opacity: 0;
+  pointer-events: none;
 }
 
 .ce-floating-toolbar button {
@@ -612,27 +658,32 @@
   height: 0;
   pointer-events: none;
 }
+/* Régua estilo Word: faixa CHAPADA (sem caixa/sombra), margens em cinza e
+   área de texto branca; escala com pontos (¼), tique curto (½) e número
+   centralizado no cm. */
 .ce-ruler-horizontal,
 .ce-ruler-vertical {
   position: absolute;
   overflow: hidden;
   box-sizing: border-box;
-  border: 1px solid #aeb4bc;
-  background: #e2e5e9;
-  color: #4a515b;
+  border: none;
+  background: #e7ebf0;
+  color: #6b7480;
   font: 8px/1 Arial, sans-serif;
-  box-shadow: 0 1px 2px rgb(0 0 0 / 10%);
+  box-shadow: none;
   user-select: none;
 }
 .ce-ruler-horizontal {
   top: 0;
   left: 50%;
-  height: 23px;
+  height: 20px;
   transform: translateX(-50%);
+  /* Clique no fundo da régua adiciona uma parada de tabulação (Word). */
+  pointer-events: auto;
 }
 .ce-ruler-vertical {
-  top: 24px;
-  width: 23px;
+  top: 21px;
+  width: 20px;
 }
 /* Escala da página ativa: desliza com o scroll (translateY via JS). */
 .ce-ruler-vertical__inner {
@@ -645,86 +696,132 @@
 .ce-ruler-corner {
   position: absolute;
   top: 0;
-  width: 23px;
-  height: 23px;
+  width: 20px;
+  height: 20px;
   box-sizing: border-box;
-  border: 1px solid #aeb4bc;
-  background: #edf0f3;
+  border: none;
+  background: #eef1f5;
   pointer-events: auto;
 }
+.ce-ruler-corner { cursor: pointer; }
+.ce-ruler-corner:hover { background: #e0e6ee; }
+/* Glifo do seletor de tabulação: barra inferior + haste (posição varia). */
 .ce-ruler-corner::before {
   content: "";
   position: absolute;
-  left: 7px;
-  top: 6px;
-  width: 7px;
-  height: 7px;
+  top: 5px;
+  bottom: 6px;
   border-left: 2px solid #4e5865;
+}
+.ce-ruler-corner::after {
+  content: "";
+  position: absolute;
+  left: 5px;
+  width: 8px;
+  bottom: 6px;
   border-bottom: 2px solid #4e5865;
 }
+.ce-ruler-corner--left::before { left: 5px; }
+.ce-ruler-corner--center::before,
+.ce-ruler-corner--decimal::before { left: 9px; }
+.ce-ruler-corner--right::before { left: 12px; }
+.ce-ruler-corner--decimal::after {
+  box-shadow: 11px -2px 0 -0.5px #4e5865;
+}
+/* A faixa BRANCA (área de texto) do Word é mais BAIXA que a régua: fica
+   recuada em cima/embaixo, deixando a moldura cinza aparecer. */
 .ce-ruler__paper {
   position: absolute;
   z-index: 0;
-  top: 0;
-  bottom: 0;
+  top: 4px;
+  bottom: 4px;
   background: #fff;
 }
 .ce-ruler-vertical .ce-ruler__paper {
-  left: 0;
-  right: 0;
+  left: 4px;
+  right: 4px;
+  top: 0;
   bottom: auto;
 }
+/* O fundo cinza da régua JÁ é a cor das margens (como no Word) — o shade
+   extra fica transparente e serve só de referência de hit-test. */
 .ce-ruler__margin {
   position: absolute;
   z-index: 1;
   top: 0;
   bottom: 0;
-  background: #d7dbe0;
+  background: transparent;
 }
 .ce-ruler__tick {
   position: absolute;
   z-index: 2;
   box-sizing: border-box;
-  border-color: #68717d;
-  opacity: .78;
+  border-color: #848d99;
+  opacity: 1;
 }
+/* Word: ¼ = ponto, ½ = tique curto centrado, cm = só o número. */
 .ce-ruler__tick.horizontal {
-  bottom: 1px;
+  top: 50%;
   width: 0;
   border-left: 1px solid;
 }
-.ce-ruler__tick.horizontal.major { height: 6px; }
-.ce-ruler__tick.horizontal.half { height: 7px; }
-.ce-ruler__tick.horizontal.quarter { height: 4px; }
+.ce-ruler__tick.horizontal.major { border-left: none; }
+.ce-ruler__tick.horizontal.half {
+  height: 6px;
+  transform: translateY(-50%);
+}
+.ce-ruler__tick.horizontal.quarter {
+  width: 2px;
+  height: 2px;
+  border: 0;
+  border-radius: 50%;
+  background: #98a1ac;
+  transform: translate(-1px, -1px);
+}
 .ce-ruler__tick.vertical {
-  right: 1px;
+  left: 50%;
   height: 0;
   border-top: 1px solid;
 }
-.ce-ruler__tick.vertical.major { width: 6px; }
-.ce-ruler__tick.vertical.half { width: 7px; }
-.ce-ruler__tick.vertical.quarter { width: 4px; }
+.ce-ruler__tick.vertical.major { border-top: none; }
+.ce-ruler__tick.vertical.half {
+  width: 6px;
+  transform: translateX(-50%);
+}
+.ce-ruler__tick.vertical.quarter {
+  width: 2px;
+  height: 2px;
+  border: 0;
+  border-radius: 50%;
+  background: #98a1ac;
+  transform: translate(-1px, -1px);
+}
 .ce-ruler__number {
   position: absolute;
-  color: #424a55;
+  color: #5f6a76;
   opacity: 1;
-  font-size: 8px;
+  font-size: 9px;
 }
 .ce-ruler__tick.horizontal .ce-ruler__number {
   left: 0;
-  bottom: 7px;
-  transform: translateX(-50%);
-}
-.ce-ruler__tick.vertical .ce-ruler__number {
-  right: 7px;
   top: 0;
-  transform: translateY(-50%);
+  bottom: auto;
+  transform: translate(-50%, -50%);
 }
+/* Word mantém os números da régua vertical na HORIZONTAL (sem rotação). */
+.ce-ruler__tick.vertical .ce-ruler__number {
+  right: auto;
+  left: 0;
+  top: 0;
+  transform: translate(-50%, -50%);
+}
+/* Word não mostra alça de margem: a FRONTEIRA cinza/branco é a zona de
+   arrasto (só o cursor muda; um traço azul aparece no hover). */
 .ce-ruler__margin-handle {
   position: absolute;
   z-index: 4;
   top: 0;
-  width: 5px;
+  width: 7px;
   height: 100%;
   transform: translateX(-50%);
   cursor: ew-resize;
@@ -733,41 +830,98 @@
 .ce-ruler__margin-handle::after {
   content: "";
   position: absolute;
-  left: 2px;
+  left: 3px;
   top: 0;
   bottom: 0;
-  border-left: 1px solid #7d858f;
+  border-left: 1px solid #185abd;
+  opacity: 0;
 }
+/* Marcadores de recuo do Word: formas CLARAS com contorno nítido, desenhadas
+   em SVG (clip-path + drop-shadow borrava as bordas). O conjunto
+   ▽ (1ª linha) + △ (deslocado) + □ (recuo esq.) forma a ampulheta do Word. */
 .ce-ruler__indent {
   position: absolute;
   z-index: 5;
-  width: 0;
-  height: 0;
+  width: 10px;
+  height: 8px;
+  transform: translateX(-50%);
+  pointer-events: auto;
+  cursor: ew-resize;
+  background-repeat: no-repeat;
+  background-position: center;
+  background-size: 100% 100%;
+}
+.ce-ruler__indent--first {
+  top: 1px;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 10 8'%3E%3Cpath d='M0.5 0.5H9.5V3.4L5 7.5L0.5 3.4Z' fill='rgb(247,248,250)' stroke='rgb(109,118,130)'/%3E%3C/svg%3E");
+}
+.ce-ruler__indent--hanging,
+.ce-ruler__indent--right {
+  bottom: 5px;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 10 8'%3E%3Cpath d='M5 0.5L9.5 4.6V7.5H0.5V4.6Z' fill='rgb(247,248,250)' stroke='rgb(109,118,130)'/%3E%3C/svg%3E");
+}
+.ce-ruler__indent--leftbox {
+  bottom: 1px;
+  height: 5px;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 10 5'%3E%3Crect x='0.5' y='0.5' width='9' height='4' fill='rgb(247,248,250)' stroke='rgb(109,118,130)'/%3E%3C/svg%3E");
+}
+/* Paradas de tabulação na régua (F4.4): glifo L/⊥/」/⊥· na borda inferior. */
+.ce-ruler__tab {
+  position: absolute;
+  z-index: 5;
+  bottom: 1px;
+  width: 11px;
+  height: 8px;
   transform: translateX(-50%);
   pointer-events: auto;
   cursor: ew-resize;
 }
-.ce-ruler__indent--first {
-  top: 1px;
-  border-left: 5px solid transparent;
-  border-right: 5px solid transparent;
-  border-top: 7px solid #59616d;
+.ce-ruler__tab::before {
+  content: "";
+  position: absolute;
+  bottom: 0;
+  border-bottom: 2px solid #2f3640;
 }
-/* Controle de 3 peças do Word: △ (hanging) sobre a caixa □ (recuo esq.). */
-.ce-ruler__indent--hanging,
-.ce-ruler__indent--right {
-  bottom: 6px;
-  border-left: 5px solid transparent;
-  border-right: 5px solid transparent;
-  border-bottom: 7px solid #59616d;
+.ce-ruler__tab::after {
+  content: "";
+  position: absolute;
+  bottom: 0;
+  height: 7px;
+  border-left: 2px solid #2f3640;
 }
-.ce-ruler__indent--leftbox {
-  bottom: 1px;
-  width: 10px;
-  height: 5px;
-  background: #59616d;
-  border-radius: 1px;
+.ce-ruler__tab--left::before { left: 4px; width: 6px; }
+.ce-ruler__tab--left::after { left: 4px; }
+.ce-ruler__tab--right::before { right: 4px; width: 6px; }
+.ce-ruler__tab--right::after { right: 4px; }
+.ce-ruler__tab--center::before,
+.ce-ruler__tab--decimal::before { left: 1px; right: 1px; }
+.ce-ruler__tab--center::after,
+.ce-ruler__tab--decimal::after { left: 4px; }
+.ce-ruler__tab--decimal::before {
+  box-shadow: 8px -4px 0 -0.5px #2f3640;
 }
+.ce-ruler__tab:hover::before,
+.ce-ruler__tab:hover::after { border-color: #185abd; }
+.ce-ruler__tab.is-removing { opacity: .3; }
+/* Régua CONTEXTUAL de tabela (Word): fronteiras das colunas da tabela sob o
+   cursor — duas barras verticais curtas, arrastáveis para redimensionar. */
+.ce-ruler__column {
+  position: absolute;
+  z-index: 6;
+  top: 3px;
+  bottom: 3px;
+  width: 7px;
+  transform: translateX(-50%);
+  pointer-events: auto;
+  cursor: col-resize;
+  background-repeat: no-repeat;
+  background-position: center;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 7 14'%3E%3Crect x='0.5' y='0.5' width='2' height='13' fill='rgb(247,248,250)' stroke='rgb(109,118,130)'/%3E%3Crect x='4.5' y='0.5' width='2' height='13' fill='rgb(247,248,250)' stroke='rgb(109,118,130)'/%3E%3C/svg%3E");
+}
+.ce-ruler__column:hover {
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 7 14'%3E%3Crect x='0.5' y='0.5' width='2' height='13' fill='rgb(207,225,247)' stroke='rgb(24,90,189)'/%3E%3Crect x='4.5' y='0.5' width='2' height='13' fill='rgb(207,225,247)' stroke='rgb(24,90,189)'/%3E%3C/svg%3E");
+}
+.ce-rulers.is-dragging .ce-ruler__column { cursor: col-resize !important; }
 .ce-ruler-guide {
   position: fixed;
   z-index: 40;
@@ -776,11 +930,17 @@
   pointer-events: none;
 }
 /* Hover dos controles da régua (feedback estilo Word). */
-.ce-ruler__indent--first:hover { border-top-color: #185abd; }
+.ce-ruler__indent--first:hover {
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 10 8'%3E%3Cpath d='M0.5 0.5H9.5V3.4L5 7.5L0.5 3.4Z' fill='rgb(207,225,247)' stroke='rgb(24,90,189)'/%3E%3C/svg%3E");
+}
 .ce-ruler__indent--hanging:hover,
-.ce-ruler__indent--right:hover { border-bottom-color: #185abd; }
-.ce-ruler__indent--leftbox:hover { background: #185abd; }
-.ce-ruler__margin-handle:hover::after { border-left-color: #185abd; }
+.ce-ruler__indent--right:hover {
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 10 8'%3E%3Cpath d='M5 0.5L9.5 4.6V7.5H0.5V4.6Z' fill='rgb(207,225,247)' stroke='rgb(24,90,189)'/%3E%3C/svg%3E");
+}
+.ce-ruler__indent--leftbox:hover {
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 10 5'%3E%3Crect x='0.5' y='0.5' width='9' height='4' fill='rgb(207,225,247)' stroke='rgb(24,90,189)'/%3E%3C/svg%3E");
+}
+.ce-ruler__margin-handle:hover::after { opacity: 1; }
 
 /* ── Indicador de zona (Cabeçalho/Rodapé): moldura tracejada + label ───── */
 .ce-zone-indicator {

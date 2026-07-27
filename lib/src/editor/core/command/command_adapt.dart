@@ -1441,6 +1441,107 @@ class CommandAdapt {
     ));
   }
 
+  /// Define as paradas de tabulação dos parágrafos da seleção (régua F4.4).
+  void setTabStops(List<ITabStop> tabStops) {
+    if (_isReadonly()) return;
+    final IRange currentRange = range.getRange();
+    if (currentRange.startIndex < 0 && currentRange.endIndex < 0) return;
+    final bool collapsed = currentRange.startIndex == currentRange.endIndex;
+    final List<IElement> paragraph = _castElementList(
+      collapsed
+          ? range.getRangeParagraphElementList()
+          : range.getSelectionElementList(),
+    );
+    if (paragraph.isEmpty) return;
+    final List<ITabStop>? stops = tabStops.isEmpty
+        ? null
+        : (tabStops.map((ITabStop stop) => stop.clone()).toList()
+          ..sort((ITabStop a, ITabStop b) => a.position.compareTo(b.position)));
+    for (final IElement element in paragraph) {
+      element.paraTabStops =
+          stops?.map((ITabStop stop) => stop.clone()).toList();
+    }
+    draw.render(IDrawOption(
+      curIndex: collapsed ? currentRange.endIndex : currentRange.startIndex,
+      isSetCursor: collapsed,
+    ));
+  }
+
+  /// Redimensiona a coluna [index] da tabela sob o cursor em [deltaPx] px de
+  /// tela (usado pelos marcadores de coluna da régua, como no Word: arrastar
+  /// a fronteira tira largura da coluna seguinte, mantendo a tabela).
+  /// Retorna true quando a largura mudou.
+  bool tableColumnWidth(int index, double deltaPx) {
+    if (_isReadonly()) return false;
+    final IElement? table = getCursorTableElement();
+    final List<IColgroup>? colgroup = table?.colgroup;
+    if (table == null || colgroup == null || colgroup.isEmpty) return false;
+    if (index < 0 || index >= colgroup.length) return false;
+    const double minWidth = 20;
+    final double scale = (options.scale ?? 1).toDouble();
+    double delta = deltaPx / scale;
+    final double current = colgroup[index].width;
+    if (delta < 0 && current + delta < minWidth) {
+      delta = minWidth - current;
+    }
+    final bool hasNext = index + 1 < colgroup.length;
+    if (hasNext) {
+      final double next = colgroup[index + 1].width;
+      if (delta > 0 && next - delta < minWidth) {
+        delta = next - minWidth;
+      }
+    } else {
+      // Última coluna: cresce a tabela até a largura útil da página.
+      final double innerWidth = draw.getInnerWidth() / scale;
+      final double tableWidth = table.width ?? 0;
+      if (delta > 0 && tableWidth + delta > innerWidth) {
+        delta = innerWidth - tableWidth;
+      }
+    }
+    if (delta == 0) return false;
+    colgroup[index].width += delta;
+    if (hasNext) {
+      colgroup[index + 1].width -= delta;
+    } else {
+      table.width = (table.width ?? 0) + delta;
+    }
+    draw.render(IDrawOption(isSetCursor: false));
+    return true;
+  }
+
+  /// Elemento de tabela sob o cursor (null fora de tabela) — usado pela régua
+  /// contextual e pelos controles de coluna.
+  IElement? getCursorTableElement() {
+    final dynamic context = position.getPositionContext();
+    if (context == null || context.isTable != true) return null;
+    final int? index = context.index as int?;
+    if (index == null) return null;
+    final List<IElement> elementList = draw.getOriginalElementList();
+    if (index < 0 || index >= elementList.length) return null;
+    final IElement element = elementList[index];
+    return element.type == ElementType.table ? element : null;
+  }
+
+  /// Posição (x, y da página e nº da página) da tabela sob o cursor, em px de
+  /// tela relativos à página. Null fora de tabela.
+  Map<String, double>? getCursorTableRect() {
+    final dynamic context = position.getPositionContext();
+    if (context == null || context.isTable != true) return null;
+    final int? index = context.index as int?;
+    if (index == null) return null;
+    final List<IElementPosition> positionList =
+        position.getOriginalPositionList();
+    if (index < 0 || index >= positionList.length) return null;
+    final IElementPosition target = positionList[index];
+    final List<double>? leftTop = target.coordinate['leftTop'];
+    if (leftTop == null || leftTop.length < 2) return null;
+    return <String, double>{
+      'x': leftTop[0],
+      'y': leftTop[1],
+      'pageNo': target.pageNo.toDouble(),
+    };
+  }
+
   void insertTable(int row, int col) {
     if (_isReadonly() || _isDisabled()) {
       return;
@@ -2137,6 +2238,58 @@ class CommandAdapt {
         curIndex: endIndex,
       ),
     );
+  }
+
+  /// Abre a UI de recorte/zoom da imagem selecionada — no Word isso é o botão
+  /// "Cortar" da aba de imagem (NÃO o duplo-clique, que só seleciona).
+  void openImagePreviewer() {
+    draw.getPreviewer()?.render();
+  }
+
+  /// Alinha a imagem selecionada na página, como o "Alinhar" do Word:
+  /// flutuante → reposiciona em relação às margens; embutida → usa o
+  /// alinhamento do parágrafo. [align] = 'left' | 'center' | 'right'.
+  void imageAlign(IElement element, String align) {
+    if (_isReadonly() || element.type != ElementType.image) return;
+    final double scale = (options.scale ?? 1).toDouble();
+    final ImageDisplay display = element.imgDisplay ?? ImageDisplay.block;
+    final bool isFloat = display == ImageDisplay.surround ||
+        display == ImageDisplay.floatTop ||
+        display == ImageDisplay.floatBottom;
+    if (isFloat) {
+      final List<double> margins = draw
+          .getMargins()
+          .map((num value) => value.toDouble() / scale)
+          .toList();
+      final double pageWidth = draw.getWidth() / scale;
+      final double width = (element.width ?? 0).toDouble();
+      final double x = switch (align) {
+        'center' => (pageWidth - width) / 2,
+        'right' => pageWidth - margins[1] - width,
+        _ => margins[3],
+      };
+      final Map<String, num> floatPosition =
+          Map<String, num>.from(element.imgFloatPosition ?? <String, num>{});
+      floatPosition['x'] = x;
+      floatPosition['y'] = floatPosition['y'] ?? 0;
+      floatPosition['pageNo'] = floatPosition['pageNo'] ?? draw.getPageNo();
+      element.imgFloatPosition = floatPosition;
+      // Marca para o sync DOCX regenerar a âncora (wp:anchor) no save.
+      final dynamic ext = element.extension;
+      if (ext is Map) {
+        ext['imgFloatMoved'] = true;
+      } else if (ext == null) {
+        element.extension = <String, dynamic>{'imgFloatMoved': true};
+      }
+      draw.render(IDrawOption(isSetCursor: false));
+      return;
+    }
+    element.rowFlex = switch (align) {
+      'center' => RowFlex.center,
+      'right' => RowFlex.right,
+      _ => RowFlex.left,
+    };
+    draw.render(IDrawOption(isSetCursor: false));
   }
 
   Future<List<String>> getImage([IGetImageOption? payload]) {

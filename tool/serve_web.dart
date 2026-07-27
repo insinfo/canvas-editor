@@ -51,8 +51,12 @@ Future<void> main(List<String> args) async {
       createStaticHandler('example', defaultDocument: 'index.html');
   final handler = const Pipeline().addHandler((Request request) {
     const assetPrefix = 'packages/canvas_text_editor/assets/';
-    if (request.url.path.startsWith(assetPrefix)) {
-      final relative = request.url.path.substring(assetPrefix.length);
+    // O index fica em example/web/ — o link relativo do widget vira
+    // web/packages/..., então casa o prefixo em qualquer profundidade.
+    final int assetIdx = request.url.path.indexOf(assetPrefix);
+    if (assetIdx >= 0) {
+      final relative =
+          request.url.path.substring(assetIdx + assetPrefix.length);
       final assetRoot = p.canonicalize(p.join('lib', 'assets'));
       final assetPath = p.canonicalize(
         p.joinAll(<String>[assetRoot, ...p.split(relative)]),

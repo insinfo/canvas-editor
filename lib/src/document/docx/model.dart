@@ -372,12 +372,32 @@ class WpSymbol extends WpRunContent {
   WpSymbol({this.font, this.charHex});
 }
 
-/// `<w:drawing>` inline: imagem via `a:blip r:embed`.
+/// `<w:drawing>`: imagem via `a:blip r:embed` — inline (`wp:inline`) ou
+/// flutuante (`wp:anchor`, com wrap e posição absoluta).
 class WpDrawing extends WpRunContent {
   final String? embedRelId;
   final double? widthEmu;
   final double? heightEmu;
   final bool isInline;
+
+  // ---- Âncora (wp:anchor) — null quando inline ----
+  /// `@behindDoc`: atrás do texto.
+  final bool behindDoc;
+
+  /// Tipo de wrap: 'none' | 'square' | 'tight' | 'through' | 'topAndBottom'.
+  final String? wrapType;
+
+  /// `wp:positionH@relativeFrom` ('page' | 'margin' | 'column' | ...).
+  final String? posHRelativeFrom;
+
+  /// `wp:positionH > wp:align` ('left' | 'center' | 'right') — exclusivo
+  /// com [posHOffsetEmu].
+  final String? posHAlign;
+  final int? posHOffsetEmu;
+
+  /// `wp:positionV@relativeFrom` ('page' | 'margin' | 'paragraph' | 'line').
+  final String? posVRelativeFrom;
+  final int? posVOffsetEmu;
 
   /// XML bruto para preservação (D1).
   final String rawXml;
@@ -387,6 +407,13 @@ class WpDrawing extends WpRunContent {
     this.widthEmu,
     this.heightEmu,
     required this.isInline,
+    this.behindDoc = false,
+    this.wrapType,
+    this.posHRelativeFrom,
+    this.posHAlign,
+    this.posHOffsetEmu,
+    this.posVRelativeFrom,
+    this.posVOffsetEmu,
     required this.rawXml,
   });
 }

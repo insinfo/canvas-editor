@@ -5,6 +5,7 @@ import 'dart:math' as math;
 
 import '../../dataset/constant/cursor.dart';
 import '../../dataset/constant/editor.dart';
+import '../../dataset/enum/element.dart';
 import '../../dataset/enum/observer.dart';
 import '../../interface/cursor.dart';
 import '../../interface/editor.dart';
@@ -181,12 +182,33 @@ class Cursor {
         : draw.getPageNo();
     final double preY = cursorPageNo * (height + pageGap);
 
+    // Word: o caret tem a altura do TEXTO na posição, NÃO a do objeto. Com o
+    // caret ao lado de uma imagem inline (ex.: logo do rodapé) as métricas da
+    // posição são as da IMAGEM e o caret virava uma barra gigante.
+    double caretBase = metrics.height;
+    final int cursorIndex = cursorPosition.index;
+    final List<IElement> cursorElementList =
+        (draw.getElementList() as List).cast<IElement>();
+    if (cursorIndex >= 0 && cursorIndex < cursorElementList.length) {
+      final IElement cursorElement = cursorElementList[cursorIndex];
+      final ElementType? type = cursorElement.type;
+      final bool isObject = type == ElementType.image ||
+          type == ElementType.latex ||
+          type == ElementType.block ||
+          type == ElementType.table;
+      if (isObject) {
+        caretBase = (cursorElement.size ?? options.defaultSize ?? 16)
+                .toDouble() *
+            scale;
+      }
+    }
+
     final double defaultOffsetHeight = cursorAgentOffsetHeight * scale;
     final double increaseHeight = math.min(
-      metrics.height / 4,
+      caretBase / 4,
       defaultOffsetHeight,
     );
-    final double cursorHeight = metrics.height + increaseHeight * 2;
+    final double cursorHeight = caretBase + increaseHeight * 2;
     final TextAreaElement agentCursorDom = cursorAgent.getAgentCursorDom();
     if (isFocus) {
       Timer.run(focus);

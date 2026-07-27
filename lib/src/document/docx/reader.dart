@@ -402,14 +402,48 @@ class DocxReader {
       embed = blip.getAttribute('r:embed') ?? blip.getAttribute('r:link');
       if (embed != null) break;
     }
+    // Âncora flutuante (wp:anchor): wrap + posição absoluta (F4 wrap real).
+    var behindDoc = false;
+    String? wrapType;
+    String? posHRel, posHAlign, posVRel;
+    int? posHOffset, posVOffset;
     if (anchor != null) {
-      _notes.add('drawing flutuante (anchor) tratado como inline');
+      behindDoc = anchor.getAttribute('behindDoc') == '1' ||
+          anchor.getAttribute('behindDoc') == 'true';
+      for (final wrap in const <String, String>{
+        'wp:wrapNone': 'none',
+        'wp:wrapSquare': 'square',
+        'wp:wrapTight': 'tight',
+        'wp:wrapThrough': 'through',
+        'wp:wrapTopAndBottom': 'topAndBottom',
+      }.entries) {
+        if (anchor.firstChild(wrap.key) != null) {
+          wrapType = wrap.value;
+          break;
+        }
+      }
+      final posH = anchor.firstChild('wp:positionH');
+      posHRel = posH?.getAttribute('relativeFrom');
+      posHAlign = posH?.firstChild('wp:align')?.text.trim();
+      posHOffset =
+          int.tryParse(posH?.firstChild('wp:posOffset')?.text.trim() ?? '');
+      final posV = anchor.firstChild('wp:positionV');
+      posVRel = posV?.getAttribute('relativeFrom');
+      posVOffset =
+          int.tryParse(posV?.firstChild('wp:posOffset')?.text.trim() ?? '');
     }
     return WpDrawing(
       embedRelId: embed,
       widthEmu: double.tryParse(extent?.getAttribute('cx') ?? ''),
       heightEmu: double.tryParse(extent?.getAttribute('cy') ?? ''),
       isInline: inline != null,
+      behindDoc: behindDoc,
+      wrapType: wrapType,
+      posHRelativeFrom: posHRel,
+      posHAlign: posHAlign,
+      posHOffsetEmu: posHOffset,
+      posVRelativeFrom: posVRel,
+      posVOffsetEmu: posVOffset,
       rawXml: el.toXmlString(),
     );
   }

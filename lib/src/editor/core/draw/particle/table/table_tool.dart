@@ -43,6 +43,7 @@ class TableTool {
   DivElement? _toolTableSelectBtn;
   DivElement? _toolColContainer;
   DivElement? _toolBorderContainer;
+  DivElement? _toolResizeBtn;
   DivElement? _anchorLine;
   double _mousedownX = 0;
   double _mousedownY = 0;
@@ -69,12 +70,14 @@ class TableTool {
     _toolTableSelectBtn?.remove();
     _toolColContainer?.remove();
     _toolBorderContainer?.remove();
+    _toolResizeBtn?.remove();
     _toolRowContainer = null;
     _toolRowAddBtn = null;
     _toolColAddBtn = null;
     _toolTableSelectBtn = null;
     _toolColContainer = null;
     _toolBorderContainer = null;
+    _toolResizeBtn = null;
   }
 
   void render() {
@@ -425,6 +428,90 @@ class TableTool {
     }
     _container.append(borderContainer);
     _toolBorderContainer = borderContainer;
+
+    // Alça de redimensionar a tabela (canto inferior direito, como no Word):
+    // arrasta escalando as colunas proporcionalmente e as linhas em altura.
+    final DivElement resizeBtn = DivElement()
+      ..classes.add('$editorPrefix-table-tool__resize')
+      ..title = 'Redimensionar tabela'
+      ..style.left = '${tableX + tableWidth}px'
+      ..style.top = '${tableY + visibleHeight}px'
+      ..style.transform = 'translate(-2px, -2px)';
+    resizeBtn.onMouseDown.listen(
+        (MouseEvent evt) => _onTableResizeMouseDown(evt, element));
+    _container.append(resizeBtn);
+    _toolResizeBtn = resizeBtn;
+  }
+
+  /// Redimensionamento proporcional da tabela inteira pela alça do canto
+  /// inferior direito (Word): dx escala as larguras das colunas, dy as
+  /// alturas das linhas. Aplica no mouseup (1 render).
+  void _onTableResizeMouseDown(MouseEvent evt, IElement element) {
+    final double scale = _scale();
+    _mousedownX = evt.client.x.toDouble();
+    _mousedownY = evt.client.y.toDouble();
+    if (document.body != null) {
+      document.body!.style.cursor = 'nwse-resize';
+    }
+    double dx = 0;
+    double dy = 0;
+    StreamSubscription<MouseEvent>? moveSub;
+    moveSub = document.onMouseMove.listen((MouseEvent moveEvt) {
+      dx = moveEvt.client.x.toDouble() - _mousedownX;
+      dy = moveEvt.client.y.toDouble() - _mousedownY;
+      _toolResizeBtn?.style.transform =
+          'translate(${dx - 2}px, ${dy - 2}px)';
+      moveEvt.preventDefault();
+    });
+    StreamSubscription<MouseEvent>? upSub;
+    upSub = document.onMouseUp.listen((MouseEvent upEvt) {
+      bool changed = false;
+      final List<IColgroup>? colgroup = element.colgroup;
+      final double tableWidth = element.width ?? 0;
+      if (colgroup != null && colgroup.isNotEmpty && tableWidth > 0) {
+        final double innerWidth = _draw.getInnerWidth() / scale;
+        double target = tableWidth + dx / scale;
+        final double minWidth = _minTdWidth * colgroup.length;
+        if (target < minWidth) target = minWidth;
+        if (target > innerWidth) target = innerWidth;
+        final double factor = target / tableWidth;
+        if ((factor - 1).abs() > 0.001) {
+          for (final IColgroup col in colgroup) {
+            col.width *= factor;
+          }
+          element.width = target;
+          changed = true;
+        }
+      }
+      final List<ITr>? trList = element.trList;
+      final double tableHeight = element.height ?? 0;
+      if (trList != null && trList.isNotEmpty && tableHeight > 0) {
+        final double minHeight =
+            (_options.table?.defaultTrMinHeight ?? 20).toDouble();
+        double target = tableHeight + dy / scale;
+        final double floor = minHeight * trList.length;
+        if (target < floor) target = floor;
+        final double factor = target / tableHeight;
+        if ((factor - 1).abs() > 0.001) {
+          for (final ITr tr in trList) {
+            tr.height *= factor;
+            tr.minHeight = tr.height;
+          }
+          changed = true;
+        }
+      }
+      if (changed) {
+        _draw.render(IDrawOption(isSetCursor: false));
+      }
+      moveSub?.cancel();
+      upSub?.cancel();
+      if (document.body != null) {
+        document.body!.style.cursor = '';
+      }
+      upEvt.preventDefault();
+    });
+    evt.preventDefault();
+    evt.stopPropagation();
   }
 
   void _setAnchorActive(DivElement container, int index) {

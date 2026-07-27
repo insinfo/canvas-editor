@@ -85,6 +85,7 @@ IElement _cloneElement(
       paraIndentLeft: source.paraIndentLeft,
       paraIndentFirstLine: source.paraIndentFirstLine,
       paraIndentRight: source.paraIndentRight,
+      paraTabStops: _cloneTabStops(source.paraTabStops),
       hide: source.hide,
       conceptId: source.conceptId,
       actualSize: source.actualSize,
@@ -133,6 +134,7 @@ IElement _cloneElement(
     paraIndentLeft: source.paraIndentLeft,
     paraIndentFirstLine: source.paraIndentFirstLine,
     paraIndentRight: source.paraIndentRight,
+    paraTabStops: _cloneTabStops(source.paraTabStops),
     textDecoration: _cloneTextDecoration(source.textDecoration),
     hide: source.hide,
     groupIds: source.groupIds?.toList(),
@@ -304,6 +306,13 @@ List<IElement> _cloneElementList(List<IElement>? source) {
     return <IElement>[];
   }
   return source.map((element) => _cloneElement(element)).toList();
+}
+
+List<ITabStop>? _cloneTabStops(List<ITabStop>? source) {
+  if (source == null) {
+    return null;
+  }
+  return source.map((ITabStop stop) => stop.clone()).toList();
 }
 
 ITextDecoration? _cloneTextDecoration(ITextDecoration? source) {
@@ -804,6 +813,8 @@ dynamic _getElementAttr(IElement element, String attr) {
       return element.paraIndentFirstLine;
     case 'paraIndentRight':
       return element.paraIndentRight;
+    case 'paraTabStops':
+      return element.paraTabStops;
     case 'letterSpacing':
       return element.letterSpacing;
     case 'textDecoration':
@@ -980,6 +991,11 @@ void _setElementAttr(IElement element, String attr, dynamic value) {
       break;
     case 'paraIndentRight':
       element.paraIndentRight = value as double?;
+      break;
+    case 'paraTabStops':
+      element.paraTabStops = value == null
+          ? null
+          : List<ITabStop>.from(value as Iterable<dynamic>);
       break;
     case 'letterSpacing':
       element.letterSpacing = value as double?;

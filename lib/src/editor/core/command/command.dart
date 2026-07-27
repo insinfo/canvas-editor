@@ -170,6 +170,12 @@ class Command {
   void executeParagraphIndent(double left, double firstLine, [double? right]) =>
       _adapt.paragraphIndent(left, firstLine, right);
 
+  /// Substitui as paradas de tabulação (`w:tabs`) dos parágrafos da seleção.
+  /// Posições em px não escalado a partir da margem esquerda; lista vazia
+  /// remove todas as paradas.
+  void executeSetTabStops(List<ITabStop> tabStops) =>
+      _adapt.setTabStops(tabStops);
+
   // Table commands --------------------------------------------------------
   void executeInsertTable(int row, int col) => _adapt.insertTable(row, col);
 
@@ -214,6 +220,23 @@ class Command {
       _adapt.tableTdBackgroundColor(payload);
 
   void executeTableSelectAll() => _adapt.tableSelectAll();
+
+  /// Redimensiona a coluna [index] da tabela sob o cursor (régua contextual).
+  bool executeTableColumnWidth(int index, double deltaPx) =>
+      _adapt.tableColumnWidth(index, deltaPx);
+
+  /// Abre a UI de recorte/zoom da imagem ("Cortar" da aba Imagem do Word).
+  void executeOpenImagePreviewer() => _adapt.openImagePreviewer();
+
+  /// Alinha a imagem na página ('left' | 'center' | 'right'), como o Word.
+  void executeImageAlign(IElement element, String align) =>
+      _adapt.imageAlign(element, align);
+
+  /// Tabela sob o cursor (null fora de tabela) — régua/UI contextual.
+  IElement? getCursorTableElement() => _adapt.getCursorTableElement();
+
+  /// Geometria da tabela sob o cursor na página (x/y/pageNo em px de tela).
+  Map<String, double>? getCursorTableRect() => _adapt.getCursorTableRect();
 
   /// "Repetir Linhas de Cabeçalho" do Word (w:tblHeader) na linha atual.
   void executeToggleTableHeaderRow() => _adapt.toggleTableHeaderRow();

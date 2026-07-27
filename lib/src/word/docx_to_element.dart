@@ -8,6 +8,7 @@ import 'dart:convert';
 
 import 'package:canvas_text_editor/ce_docx.dart';
 
+import '../editor/dataset/enum/common.dart';
 import '../editor/dataset/enum/element.dart';
 import '../editor/dataset/enum/row.dart';
 import '../editor/dataset/enum/table/table.dart';
@@ -166,15 +167,19 @@ class DocxToElementConverter {
         : _convertBlocks(headerBlocks.blocks, fromPart: headerBlocks.partName);
     final headerTextBoxes = List<DocxTextBox>.from(_textBoxes);
 
-    // F4.7: parágrafos do rodapé com campos PAGE/NUMPAGES viram o formato
-    // dinâmico do pageNumber do editor (em vez do resultado em cache).
+    // F4.7b: o número de página fica no rodapé como CONTEÚDO EDITÁVEL (Word):
+    // os runs do resultado de PAGE/NUMPAGES saem marcados com
+    // extension['pageField'] e o render resolve o valor por página. Só quando
+    // o rodapé NÃO tem campos marcáveis (ex.: fldSimple) caímos no antigo
+    // pageNumber pintado no canvas — aí a linha em cache é removida.
     final pageNumber =
         footerBlocks == null ? null : _extractPageNumber(footerBlocks);
     final footer = footerBlocks == null
         ? <IElement>[]
-        : _convertFooterBlocks(footerBlocks.blocks, footerBlocks.partName,
-            pageNumber?.paragraphs ?? const <WpParagraph>{});
-    if (pageNumber != null) {
+        : _convertFooterBlocks(
+            footerBlocks.blocks, footerBlocks.partName, const <WpParagraph>{});
+    final bool hasEditablePageFields = _hasPageField(footer);
+    if (pageNumber != null && !hasEditablePageFields) {
       _stripCachedPageNumberLines(footer);
     }
 
@@ -220,11 +225,13 @@ class DocxToElementConverter {
       ],
       headerDistancePx: Units.twipToPx(section?.headerDistanceTwips ?? 708),
       footerDistancePx: Units.twipToPx(section?.footerDistanceTwips ?? 708),
-      pageNumberFormat: pageNumber?.format,
-      pageNumberRowFlex: pageNumber?.rowFlex,
-      pageNumberSize: pageNumber?.size,
-      pageNumberFont: pageNumber?.font,
-      pageNumberColor: pageNumber?.color,
+      // Com campos editáveis no rodapé, o pageNumber pintado no canvas fica
+      // DESLIGADO (senão o número apareceria duas vezes).
+      pageNumberFormat: hasEditablePageFields ? null : pageNumber?.format,
+      pageNumberRowFlex: hasEditablePageFields ? null : pageNumber?.rowFlex,
+      pageNumberSize: hasEditablePageFields ? null : pageNumber?.size,
+      pageNumberFont: hasEditablePageFields ? null : pageNumber?.font,
+      pageNumberColor: hasEditablePageFields ? null : pageNumber?.color,
       notes: _notes,
     );
   }
@@ -628,6 +635,34 @@ class DocxToElementConverter {
     return elements;
   }
 
+  /// Instrução do campo complexo em curso (entre fldChar begin e end).
+  String? _fieldInstruction;
+
+  /// Elemento que já carrega o resultado do campo de página em curso — os
+  /// runs seguintes do mesmo campo são concatenados nele.
+  IElement? _pageFieldElement;
+
+  /// true quando algum elemento (em qualquer nível) carrega um campo de página
+  /// marcado — indica que o rodapé/cabeçalho renderiza o número como conteúdo.
+  static bool _hasPageField(List<IElement> elements) {
+    for (final element in elements) {
+      final dynamic ext = element.extension;
+      if (ext is Map && ext['pageField'] != null) return true;
+      final children = element.valueList;
+      if (children != null && _hasPageField(children)) return true;
+    }
+    return false;
+  }
+
+  /// 'pageNo' | 'pageCount' quando a instrução do campo é PAGE/NUMPAGES.
+  static String? _pageFieldOf(String? instruction) {
+    if (instruction == null) return null;
+    final String upper = instruction.toUpperCase();
+    if (upper.contains('NUMPAGES')) return 'pageCount';
+    if (upper.contains('PAGE')) return 'pageNo';
+    return null;
+  }
+
   _FieldState _convertRun(
     WpParagraph paragraph,
     WpRun run,
@@ -647,15 +682,46 @@ class DocxToElementConverter {
             'separate' => _FieldState.result,
             _ => _FieldState.none, // end
           };
+          if (fieldChar.fldCharType == 'begin') {
+            _fieldInstruction = '';
+            _pageFieldElement = null;
+          }
+          if (fieldChar.fldCharType == 'end') {
+            _fieldInstruction = null;
+            _pageFieldElement = null;
+          }
         case WpInstrText instr:
           if (state == _FieldState.instruction) {
+            _fieldInstruction = '${_fieldInstruction ?? ''}${instr.text}';
             _notes.add('campo com resultado em cache: ${instr.text.trim()} '
                 '(motor de campos na Fase 4.7)');
           }
         case WpText text:
           // Dentro da instrução do campo o texto não é visível.
           if (state != _FieldState.instruction && text.text.isNotEmpty) {
-            into.add(_styledText(text.text, rPr, rowFlex, spacing));
+            // F4.7b: resultado de PAGE/NUMPAGES continua sendo TEXTO editável
+            // (como no Word), mas marcado para o render resolver o valor por
+            // página em vez de mostrar o cache do arquivo. O resultado pode vir
+            // partido em vários runs ("1"+"9") — eles são FUNDIDOS num único
+            // elemento, senão cada pedaço mostraria o número inteiro ("1010").
+            final String? field = state == _FieldState.result
+                ? _pageFieldOf(_fieldInstruction)
+                : null;
+            if (field != null && _pageFieldElement != null) {
+              _pageFieldElement!.value += text.text;
+              continue;
+            }
+            final element = _styledText(text.text, rPr, rowFlex, spacing);
+            if (field != null) {
+              final dynamic ext = element.extension;
+              if (ext is Map) {
+                ext['pageField'] = field;
+              } else {
+                element.extension = <String, dynamic>{'pageField': field};
+              }
+              _pageFieldElement = element;
+            }
+            into.add(element);
           }
         case WpTabChar _:
           final tab =
@@ -757,16 +823,40 @@ class DocxToElementConverter {
     }
     final contentType =
         file.imageContentType(relId, fromPart: fromPart) ?? 'image/png';
-    if (!drawing.isInline) {
-      _notes.add('imagem flutuante renderizada como inline (Fase 4)');
-    }
-    return IElement(
+    final element = IElement(
       type: ElementType.image,
       value: 'data:$contentType;base64,${base64Encode(bytes)}',
       width: drawing.widthEmu == null ? 100 : Units.emuToPx(drawing.widthEmu!),
       height:
           drawing.heightEmu == null ? 100 : Units.emuToPx(drawing.heightEmu!),
-    )..extension = {'wpDrawing': drawing.rawXml};
+    )..extension = <String, dynamic>{'wpDrawing': drawing.rawXml};
+    if (!drawing.isInline) {
+      // wp:anchor → modo de exibição do editor (wrap real):
+      //   behindDoc → atrás do texto; wrapNone → na frente do texto;
+      //   square/tight/through → quadrado (surround); topAndBottom ≈ block.
+      final ImageDisplay display = drawing.behindDoc
+          ? ImageDisplay.floatBottom
+          : switch (drawing.wrapType) {
+              'square' || 'tight' || 'through' => ImageDisplay.surround,
+              'topAndBottom' => ImageDisplay.block,
+              _ => ImageDisplay.floatTop,
+            };
+      element.imgDisplay = display;
+      (element.extension as Map<String, dynamic>)['wpAnchor'] =
+          <String, dynamic>{
+        'display': display.name,
+        'hRel': drawing.posHRelativeFrom,
+        'hAlign': drawing.posHAlign,
+        if (drawing.posHOffsetEmu != null)
+          'x': Units.emuToPx(drawing.posHOffsetEmu!.toDouble()),
+        'vRel': drawing.posVRelativeFrom,
+        if (drawing.posVOffsetEmu != null)
+          'y': Units.emuToPx(drawing.posVOffsetEmu!.toDouble()),
+      };
+      _notes.add('imagem flutuante (anchor) → ${display.name} '
+          '(wrap=${drawing.wrapType ?? 'none'})');
+    }
+    return element;
   }
 
   // ---- Tabela ----
@@ -870,9 +960,16 @@ class DocxToElementConverter {
             visible(effectiveBorders.insideV));
     String? borderColor;
     if (hasTableBorders) {
-      final sample = effectiveBorders.insideH ??
-          effectiveBorders.top ??
-          effectiveBorders.left;
+      // Amostra a cor do primeiro lado VISÍVEL (bordas só-externas têm
+      // insideH='none' e a cor útil fica em top/left).
+      final sample = <WpBorder?>[
+        effectiveBorders.insideH,
+        effectiveBorders.top,
+        effectiveBorders.left,
+        effectiveBorders.bottom,
+        effectiveBorders.right,
+        effectiveBorders.insideV,
+      ].firstWhere(visible, orElse: () => null);
       borderColor = _hexColor(sample?.color);
     }
 
@@ -976,7 +1073,33 @@ class DocxToElementConverter {
       indentFirstLinePx: ((firstLineTwips ?? 0) - (hangingTwips ?? 0)) == 0
           ? null
           : ((firstLineTwips ?? 0) - (hangingTwips ?? 0)) / 15.0,
+      tabStops: _tabStops(pPr.tabs),
     );
+  }
+
+  /// `w:tabs` → paradas da régua (F4.4). 'clear'/'bar' são descartados;
+  /// start/end são os nomes bidi de left/right.
+  static List<ITabStop>? _tabStops(List<WpTabStop>? tabs) {
+    if (tabs == null || tabs.isEmpty) return null;
+    final List<ITabStop> stops = <ITabStop>[];
+    for (final tab in tabs) {
+      final String? type = switch (tab.val) {
+        'left' || 'start' || 'num' => 'left',
+        'center' => 'center',
+        'right' || 'end' => 'right',
+        'decimal' => 'decimal',
+        _ => null,
+      };
+      if (type == null) continue;
+      stops.add(ITabStop(
+        type: type,
+        position: tab.posTwips / 15.0,
+        leader: tab.leader,
+      ));
+    }
+    if (stops.isEmpty) return null;
+    stops.sort((a, b) => a.position.compareTo(b.position));
+    return stops;
   }
 
   static void _applySpacing(IElement element, _ParaSpacing? spacing) {
@@ -989,6 +1112,9 @@ class DocxToElementConverter {
     element.paraIndentLeft = spacing.indentLeftPx;
     element.paraIndentFirstLine = spacing.indentFirstLinePx;
     element.paraIndentRight = spacing.indentRightPx;
+    element.paraTabStops = spacing.tabStops
+        ?.map((ITabStop stop) => stop.clone())
+        .toList();
   }
 
   static String? _hexColor(String? color) {
@@ -1101,6 +1227,7 @@ class _ParaSpacing {
   final double? indentLeftPx;
   final double? indentFirstLinePx;
   final double? indentRightPx;
+  final List<ITabStop>? tabStops;
 
   const _ParaSpacing({
     required this.lineSpacingRule,
@@ -1110,5 +1237,6 @@ class _ParaSpacing {
     this.indentLeftPx,
     this.indentFirstLinePx,
     this.indentRightPx,
+    this.tabStops,
   });
 }

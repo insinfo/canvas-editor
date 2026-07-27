@@ -259,7 +259,9 @@ void dblclick(dynamic host, dynamic evt) {
   }
 
   if (positionContext.isImage == true && positionContext.isDirectHit == true) {
-    draw.getPreviewer()?.render();
+    // Word: duplo-clique na imagem NÃO abre visualizador — só mantém a imagem
+    // selecionada (as alças + a aba contextual "Imagem" do ribbon é o que
+    // aparece). O visualizador/recorte fica na UI de imagem, não aqui.
     return;
   }
 

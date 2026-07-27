@@ -11,7 +11,12 @@ enum FloatingToolbarMode { hidden, text, table, image }
 /// mini-toolbar e pelas abas contextuais do ribbon.
 FloatingToolbarMode resolveSelectionContext(Command command) {
   final IRange range = command.getRange();
-  final bool isTable = range.tableId != null;
+  // `range.tableId` só é preenchido em seleção que ATRAVESSA células; com o
+  // caret dentro de uma célula ele fica null — por isso o contexto de tabela
+  // (aba do ribbon + mini-toolbar) não aparecia ao simplesmente clicar numa
+  // célula. O sinal correto é o mesmo do TableTool: o contexto de posição.
+  final bool isTable =
+      range.tableId != null || command.getCursorTableElement() != null;
   final bool isCollapsed = range.startIndex == range.endIndex &&
       (!isTable ||
           (range.startTrIndex == range.endTrIndex &&
@@ -127,11 +132,72 @@ class WidgetFloatingToolbar extends UiComponent {
       _divider(),
       _button('repeatHeader', 'ti-table-options', 'Repetir linhas de cabeçalho',
           _command.executeToggleTableHeaderRow),
+      _divider(),
+      _button('valignTop', 'ti-layout-align-top', 'Alinhar no topo',
+          () => _command.executeTableTdVerticalAlign(VerticalAlign.top)),
+      _button('valignMiddle', 'ti-layout-align-middle', 'Alinhar no meio',
+          () => _command.executeTableTdVerticalAlign(VerticalAlign.middle)),
+      _button('valignBottom', 'ti-layout-align-bottom', 'Alinhar embaixo',
+          () => _command.executeTableTdVerticalAlign(VerticalAlign.bottom)),
+      _divider(),
+      _button('borderAll', 'ti-border-all', 'Todas as bordas',
+          () => _command.executeTableBorderType(TableBorder.all)),
+      _button('borderOuter', 'ti-border-outer', 'Bordas externas',
+          () => _command.executeTableBorderType(TableBorder.external)),
+      _button('borderInner', 'ti-border-inner', 'Bordas internas',
+          () => _command.executeTableBorderType(TableBorder.internal)),
+      _button('borderNone', 'ti-border-none', 'Sem bordas',
+          () => _command.executeTableBorderType(TableBorder.empty)),
+      _button('borderDash', 'ti-border-style-2', 'Borda tracejada',
+          () => _command.executeTableBorderType(TableBorder.dash)),
+      _colorPicker('borderColor', 'ti-brush', 'Cor da borda',
+          (String value) => _command.executeTableBorderColor(value)),
+      _divider(),
+      _colorPicker('cellFill', 'ti-paint', 'Cor de fundo da célula',
+          (String value) => _command.executeTableTdBackgroundColor(value)),
+      _button('slashForward', 'ti-slash', 'Diagonal ↗',
+          () => _command.executeTableTdSlashType(TdSlash.forward)),
+      _button('slashBack', 'ti-backslash', 'Diagonal ↘',
+          () => _command.executeTableTdSlashType(TdSlash.back)),
     ]);
+  }
+
+  /// Botão com input de cor embutido (borda/preenchimento de célula).
+  Element _colorPicker(
+    String id,
+    String icon,
+    String label,
+    void Function(String) onPick,
+  ) {
+    final InputElement input = InputElement(type: 'color')
+      ..classes.add('ce-floating-toolbar__color-input');
+    input.onInput.listen((_) {
+      final String? value = input.value;
+      if (value != null && value.isNotEmpty) onPick(value);
+    });
+    final ButtonElement button = ButtonElement()
+      ..type = 'button'
+      ..title = label
+      ..setAttribute('aria-label', label)
+      ..append(SpanElement()..classes.addAll(<String>['ti', icon]))
+      ..onMouseDown.listen((MouseEvent event) => event.preventDefault())
+      ..onClick.listen((_) => input.click());
+    _buttons[id] = button;
+    return SpanElement()
+      ..classes.add('ce-floating-toolbar__color')
+      ..append(button)
+      ..append(input);
   }
 
   void _buildImageCommands() {
     _imageGroup.children.addAll(<Element>[
+      _alignButton('imgAlignLeft', 'ti-align-box-left-middle',
+          'Alinhar à esquerda', 'left'),
+      _alignButton('imgAlignCenter', 'ti-align-box-center-middle',
+          'Centralizar na página', 'center'),
+      _alignButton('imgAlignRight', 'ti-align-box-right-middle',
+          'Alinhar à direita', 'right'),
+      _divider(),
       _button('imageChange', 'ti-photo-edit', 'Alterar imagem', _changeImage),
       _button('imageSave', 'ti-download', 'Salvar imagem',
           _command.executeSaveAsImageElement),
@@ -166,6 +232,19 @@ class WidgetFloatingToolbar extends UiComponent {
     });
     input.click();
   }
+
+  ButtonElement _alignButton(
+    String id,
+    String icon,
+    String label,
+    String align,
+  ) =>
+      _button(id, icon, label, () {
+        final RangeContext? context = _command.getRangeContext();
+        final IElement? element = context?.startElement;
+        if (element == null || element.type != ElementType.image) return;
+        _command.executeImageAlign(element, align);
+      });
 
   ButtonElement _wrapButton(
     String id,
@@ -248,8 +327,12 @@ class WidgetFloatingToolbar extends UiComponent {
       hide();
       return;
     }
-    _textGroup.style.display =
-        _mode == FloatingToolbarMode.text ? 'contents' : 'none';
+    // Word: dentro de tabela a mini-toolbar traz formatação de TEXTO **e** os
+    // controles de tabela (fonte/negrito + Inserir/Excluir no mesmo balão).
+    _textGroup.style.display = _mode == FloatingToolbarMode.text ||
+            _mode == FloatingToolbarMode.table
+        ? 'contents'
+        : 'none';
     _tableGroup.style.display =
         _mode == FloatingToolbarMode.table ? 'contents' : 'none';
     if (_mode == FloatingToolbarMode.table) {

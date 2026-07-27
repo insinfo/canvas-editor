@@ -187,19 +187,27 @@ void main() {
       expect(image!.height, greaterThan(1));
     });
 
-    test('footer: campos PAGE/NUMPAGES viram formato dinâmico (F4.7)', () {
+    test('footer: PAGE/NUMPAGES ficam como conteúdo editável (F4.7b)', () {
+      // Word: o número de página é TEXTO do rodapé (dá para clicar, editar e
+      // formatar) cujo valor é resolvido por página. O painter no canvas
+      // (pageNumberFormat) fica desligado para não duplicar o número.
       for (final result in [etp, tr]) {
-        expect(result.pageNumberFormat, 'Página {pageNo} | {pageCount}');
-        expect(result.pageNumberSize, isNotNull);
-        // O parágrafo do campo sai do rodapé estático (sem duplicação).
-        expect(_plainText(result.footer), isNot(contains('Página')));
+        expect(result.pageNumberFormat, isNull);
+        expect(_plainText(result.footer), contains('Página'));
+        final marked = <String>[];
+        for (final element in result.footer) {
+          final dynamic ext = element.extension;
+          if (ext is Map && ext['pageField'] != null) {
+            marked.add(ext['pageField'] as String);
+          }
+        }
+        expect(marked, containsAll(<String>['pageNo', 'pageCount']),
+            reason: 'os runs do campo saem marcados p/ resolução por página');
+        // Cada campo vira UM elemento (o resultado em cache pode vir partido
+        // em vários runs — "1"+"5" — e a fusão evita renderizar "1010").
+        expect(marked.where((f) => f == 'pageNo').length, 1);
+        expect(marked.where((f) => f == 'pageCount').length, 1);
       }
-      // O parágrafo do campo começa com 2 <w:tab/> (tab stops center+right
-      // do estilo Rodapé do Word) → número à DIREITA, como o Word renderiza
-      // (screenshot de referência); a suposição anterior (jc left) era só o
-      // jc do parágrafo, ignorando os tabs.
-      expect(etp.pageNumberRowFlex, RowFlex.right);
-      expect(tr.pageNumberRowFlex, anyOf(RowFlex.center, RowFlex.right));
     });
 
     test('distâncias de header/footer vêm do pgMar (F4.6)', () {

@@ -28,6 +28,23 @@ export './title.dart';
 export './table/colgroup.dart';
 export './table/tr.dart';
 
+/// Parada de tabulação do parágrafo (`w:tab` dentro de `w:tabs`).
+///
+/// [position] é medida em px NÃO escalado a partir da margem esquerda da
+/// página (mesma origem dos marcadores da régua, como no Word).
+class ITabStop {
+  ITabStop({required this.type, required this.position, this.leader});
+
+  /// 'left' | 'center' | 'right' | 'decimal'.
+  String type;
+  double position;
+
+  /// Preenchimento até a parada ('dot', 'hyphen', 'underscore') — w:leader.
+  String? leader;
+
+  ITabStop clone() => ITabStop(type: type, position: position, leader: leader);
+}
+
 class IElementBasic {
   String? id;
   ElementType? type;
@@ -503,6 +520,15 @@ class IElement
   /// `w:ind@right` em px: recuo à direita (reduz a largura útil da linha).
   double? paraIndentRight;
 
+  /// `w:tabs` do parágrafo (F4.4): paradas de tabulação editáveis pela
+  /// régua. Posições em px não escalado a partir da margem esquerda.
+  List<ITabStop>? paraTabStops;
+
+  /// Transitório do layout (não serializado): leader da parada de tabulação
+  /// atingida por este TAB ('dot' | 'hyphen' | 'underscore') — o render
+  /// desenha o preenchimento (pontilhado do Sumário etc.).
+  String? tabLeader;
+
   // IElementRule
   @override
   bool? hide;
@@ -682,6 +708,7 @@ class IElement
     this.paraIndentLeft,
     this.paraIndentFirstLine,
     this.paraIndentRight,
+    this.paraTabStops,
     // IElementRule
     this.hide,
     // IElementGroup

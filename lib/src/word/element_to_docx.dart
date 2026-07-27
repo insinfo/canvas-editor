@@ -12,6 +12,7 @@ import 'package:canvas_text_editor/ce_opc.dart';
 
 import '../editor/dataset/enum/element.dart';
 import '../editor/dataset/enum/row.dart';
+import '../editor/dataset/enum/table/table.dart';
 import '../editor/dataset/enum/title.dart';
 import '../editor/interface/element.dart';
 import '../editor/interface/table/td.dart';
@@ -102,7 +103,9 @@ class EditorToDocx {
 
       if (spec.table != null) {
         newBody.add(_tableFromElement(
-            spec.table!, originalBlock is WpTable ? originalBlock : null));
+            spec.table!,
+            originalBlock is WpTable ? originalBlock : null,
+            originalSpec?.table));
       } else {
         final WpParagraph paragraph = _paragraphFromElements(spec.elements,
             originalBlock is WpParagraph ? originalBlock.properties : null);
@@ -306,6 +309,24 @@ class EditorToDocx {
         a.url != b.url) {
       return false;
     }
+    // Imagem: mudança de modo de exibição (wrap) ou arrasto de float
+    // precisam regenerar o parágrafo (wp:anchor novo).
+    if (a.imgDisplay != b.imgDisplay ||
+        _hasFlag(a, 'imgFloatMoved') != _hasFlag(b, 'imgFloatMoved')) {
+      return false;
+    }
+    // Propriedades de parágrafo editáveis pela régua/ribbon: sem comparar
+    // aqui, a edição cairia no passthrough D1 e se perderia no save.
+    if (a.paraIndentLeft != b.paraIndentLeft ||
+        a.paraIndentFirstLine != b.paraIndentFirstLine ||
+        a.paraIndentRight != b.paraIndentRight ||
+        a.paraSpacingBefore != b.paraSpacingBefore ||
+        a.paraSpacingAfter != b.paraSpacingAfter ||
+        a.lineSpacingRule != b.lineSpacingRule ||
+        a.lineSpacingValue != b.lineSpacingValue ||
+        !_sameTabStops(a.paraTabStops, b.paraTabStops)) {
+      return false;
+    }
     final aChildren = a.valueList ?? const <IElement>[];
     final bChildren = b.valueList ?? const <IElement>[];
     if (aChildren.length != bChildren.length) return false;
@@ -315,7 +336,41 @@ class EditorToDocx {
     return true;
   }
 
+  static bool _sameEnumNames(List<Enum>? a, List<Enum>? b) {
+    if (identical(a, b)) return true;
+    if (a == null || b == null) {
+      return (a == null || a.isEmpty) && (b == null || b.isEmpty);
+    }
+    if (a.length != b.length) return false;
+    for (var i = 0; i < a.length; i++) {
+      if (a[i].name != b[i].name) return false;
+    }
+    return true;
+  }
+
+  static bool _sameTabStops(List<ITabStop>? a, List<ITabStop>? b) {
+    if (identical(a, b)) return true;
+    if (a == null || b == null) {
+      return (a == null || a.isEmpty) && (b == null || b.isEmpty);
+    }
+    if (a.length != b.length) return false;
+    for (var i = 0; i < a.length; i++) {
+      if (a[i].type != b[i].type ||
+          a[i].position != b[i].position ||
+          a[i].leader != b[i].leader) {
+        return false;
+      }
+    }
+    return true;
+  }
+
   bool _sameTable(IElement a, IElement b) {
+    // Bordas da tabela (toolbar contextual): mudou → regenerar tblBorders.
+    if (a.borderType != b.borderType ||
+        a.borderColor != b.borderColor ||
+        a.borderWidth != b.borderWidth) {
+      return false;
+    }
     final aTr = a.trList ?? const [];
     final bTr = b.trList ?? const [];
     if (aTr.length != bTr.length) return false;
@@ -326,7 +381,10 @@ class EditorToDocx {
         final bTd = bTr[r].tdList[c];
         if (aTd.colspan != bTd.colspan ||
             aTd.rowspan != bTd.rowspan ||
-            aTd.backgroundColor != bTd.backgroundColor) {
+            aTd.backgroundColor != bTd.backgroundColor ||
+            aTd.verticalAlign != bTd.verticalAlign ||
+            !_sameEnumNames(aTd.borderTypes, bTd.borderTypes) ||
+            !_sameEnumNames(aTd.slashTypes, bTd.slashTypes)) {
           return false;
         }
         final aValue = _meaningful(aTd.value);
@@ -497,6 +555,17 @@ class EditorToDocx {
     final double? indentLeftPx = paragraphAnchor?.paraIndentLeft;
     final double? firstLinePx = paragraphAnchor?.paraIndentFirstLine;
     final double? indentRightPx = paragraphAnchor?.paraIndentRight;
+    // F4.4: tab stops editados na régua vencem os do estilo base.
+    final List<WpTabStop>? tabStops = paragraphAnchor?.paraTabStops == null
+        ? null
+        : <WpTabStop>[
+            for (final stop in paragraphAnchor!.paraTabStops!)
+              WpTabStop(
+                val: stop.type,
+                posTwips: (stop.position * 15).round(),
+                leader: stop.leader,
+              ),
+          ];
     final WpSpacing? spacing =
         lineRule == null && beforePx == null && afterPx == null
             ? base?.spacing
@@ -537,7 +606,8 @@ class EditorToDocx {
               jc == null &&
               headingLevel == null &&
               spacing == null &&
-              indent == null
+              indent == null &&
+              tabStops == null
           ? null
           : WpParagraphProperties(
               styleId: headingStyleId ?? base?.styleId,
@@ -545,7 +615,7 @@ class EditorToDocx {
               jc: jc ?? base?.jc,
               spacing: spacing,
               indent: indent,
-              tabs: base?.tabs,
+              tabs: tabStops ?? base?.tabs,
               shading: base?.shading,
               borders: base?.borders,
               keepNext: headingLevel != null ? true : base?.keepNext,
@@ -652,11 +722,111 @@ class EditorToDocx {
 
   WpDrawing? _drawingFor(IElement element) {
     final extension = element.extension;
-    if (extension is Map && extension['wpDrawing'] is String) {
-      return WpDrawing(
-          isInline: true, rawXml: extension['wpDrawing'] as String);
+    final String? raw = extension is Map && extension['wpDrawing'] is String
+        ? extension['wpDrawing'] as String
+        : null;
+    final Map<dynamic, dynamic>? anchor =
+        extension is Map && extension['wpAnchor'] is Map
+            ? extension['wpAnchor'] as Map
+            : null;
+    final bool moved = _hasFlag(element, 'imgFloatMoved');
+    final String displayName = element.imgDisplay?.name ??
+        (anchor == null ? 'inline' : anchor['display'] as String? ?? 'inline');
+    final String originalDisplay = anchor == null
+        ? 'inline'
+        : anchor['display'] as String? ?? 'inline';
+    final bool displayChanged = element.imgDisplay != null &&
+        element.imgDisplay!.name != originalDisplay &&
+        !(anchor == null &&
+            (element.imgDisplay!.name == 'inline' ||
+                element.imgDisplay!.name == 'block'));
+
+    // Passthrough D1: XML original intacto quando nada de âncora mudou.
+    if (raw != null && !moved && !displayChanged) {
+      return WpDrawing(isInline: anchor == null, rawXml: raw);
     }
-    return _embedNewImage(element);
+
+    // Regeneração: reusa o <a:graphic> original (mantém rel/media) ou embute
+    // a imagem nova; só o envelope wp:inline/wp:anchor é reconstruído.
+    String? graphic = raw == null ? null : _extractGraphic(raw);
+    if (graphic == null) {
+      final WpDrawing? fresh = _embedNewImage(element);
+      if (fresh == null) return null;
+      graphic = _extractGraphic(fresh.rawXml);
+      if (graphic == null) return fresh;
+    }
+    final cx = ((element.width ?? 100) * 9525).round();
+    final cy = ((element.height ?? 100) * 9525).round();
+    final id = _docPrId++;
+    final bool isFloat = displayName == 'surround' ||
+        displayName == 'floatTop' ||
+        displayName == 'floatBottom' ||
+        (displayName == 'block' && anchor != null);
+    if (!isFloat) {
+      final xml = '<w:drawing>'
+          '<wp:inline distT="0" distB="0" distL="0" distR="0">'
+          '<wp:extent cx="$cx" cy="$cy"/>'
+          '<wp:docPr id="$id" name="Imagem $id"/>'
+          '$graphic</wp:inline></w:drawing>';
+      notes.add('imagem regenerada como inline (modo $displayName)');
+      return WpDrawing(isInline: true, rawXml: xml);
+    }
+
+    // Posição: preferir a posição ao vivo (arrasto/troca de modo no editor,
+    // px da página → relativeFrom="page"); senão, offsets originais da âncora.
+    final Map<String, num>? live = element.imgFloatPosition;
+    String positionXml;
+    if (live != null) {
+      final int px = (((live['x'] ?? 0)).toDouble() * 9525).round();
+      final int py = (((live['y'] ?? 0)).toDouble() * 9525).round();
+      positionXml =
+          '<wp:positionH relativeFrom="page"><wp:posOffset>$px</wp:posOffset>'
+          '</wp:positionH>'
+          '<wp:positionV relativeFrom="page"><wp:posOffset>$py</wp:posOffset>'
+          '</wp:positionV>';
+    } else {
+      final String hRel = anchor?['hRel'] as String? ?? 'column';
+      final String vRel = anchor?['vRel'] as String? ?? 'paragraph';
+      final String? hAlign = anchor?['hAlign'] as String?;
+      final int ax = (((anchor?['x'] as num?) ?? 0).toDouble() * 9525).round();
+      final int ay = (((anchor?['y'] as num?) ?? 0).toDouble() * 9525).round();
+      positionXml = '<wp:positionH relativeFrom="$hRel">'
+          '${hAlign != null ? '<wp:align>$hAlign</wp:align>' : '<wp:posOffset>$ax</wp:posOffset>'}'
+          '</wp:positionH>'
+          '<wp:positionV relativeFrom="$vRel">'
+          '<wp:posOffset>$ay</wp:posOffset></wp:positionV>';
+    }
+    final String behindDoc = displayName == 'floatBottom' ? '1' : '0';
+    final String wrapXml = switch (displayName) {
+      'surround' => '<wp:wrapSquare wrapText="bothSides"/>',
+      'block' => '<wp:wrapTopAndBottom/>',
+      _ => '<wp:wrapNone/>',
+    };
+    final xml = '<w:drawing>'
+        '<wp:anchor distT="0" distB="0" distL="114300" distR="114300" '
+        'simplePos="0" relativeHeight="251658240" behindDoc="$behindDoc" '
+        'locked="0" layoutInCell="1" allowOverlap="1">'
+        '<wp:simplePos x="0" y="0"/>'
+        '$positionXml'
+        '<wp:extent cx="$cx" cy="$cy"/>'
+        '<wp:effectExtent l="0" t="0" r="0" b="0"/>'
+        '$wrapXml'
+        '<wp:docPr id="$id" name="Imagem $id"/>'
+        '$graphic</wp:anchor></w:drawing>';
+    notes.add('imagem flutuante regenerada como wp:anchor (modo $displayName'
+        '${moved ? ', reposicionada' : ''})');
+    return WpDrawing(isInline: false, rawXml: xml);
+  }
+
+  /// Extrai o subtree `<a:graphic>…</a:graphic>` de um drawing preservado —
+  /// regenerar só o envelope mantém o blip/rel/media originais.
+  static String? _extractGraphic(String drawingXml) {
+    final int start = drawingXml.indexOf('<a:graphic');
+    if (start < 0) return null;
+    const String closeTag = '</a:graphic>';
+    final int end = drawingXml.lastIndexOf(closeTag);
+    if (end < start) return null;
+    return drawingXml.substring(start, end + closeTag.length);
   }
 
   WpDrawing? _embedNewImage(IElement element) {
@@ -722,8 +892,18 @@ class EditorToDocx {
   // Regeneração de tabela
   // ---------------------------------------------------------------------
 
-  WpTable _tableFromElement(IElement element, WpTable? base) {
+  WpTable _tableFromElement(IElement element, WpTable? base,
+      [IElement? original]) {
     final colgroup = element.colgroup ?? const <IColgroup>[];
+    // Bordas editadas na toolbar contextual: só sobrescrevem o tblPr original
+    // quando o usuário mexeu (senão o passthrough do tblPr preserva estilos
+    // por-lado que o modelo do editor não representa).
+    final bool tableBordersChanged = original != null &&
+        (original.borderType != element.borderType ||
+            original.borderColor != element.borderColor ||
+            original.borderWidth != element.borderWidth);
+    final bool cellVisualsChanged =
+        original != null && !_sameCellVisuals(element, original);
     final grid = base != null && base.gridColumnsTwips.length == colgroup.length
         ? base.gridColumnsTwips
         : [for (final col in colgroup) (col.width * 15).round()];
@@ -760,6 +940,9 @@ class EditorToDocx {
             width: _cellWidth(grid, col, span),
             gridSpan: span > 1 ? span : null,
             vMerge: td.rowspan > 1 ? 'restart' : null,
+            borders: cellVisualsChanged && td.borderTypes != null
+                ? _tcBordersFor(td.borderTypes!, element.borderColor)
+                : null,
             shading: td.backgroundColor != null
                 ? WpShading(
                     val: 'clear',
@@ -774,6 +957,10 @@ class EditorToDocx {
           ),
           blocks: _cellBlocks(td),
         ));
+        if (td.slashTypes?.isNotEmpty == true) {
+          notes.add('diagonal de célula não exportada (sem tl2br/tr2bl no '
+              'writer) — apenas visual no editor');
+        }
         if (td.rowspan > 1) {
           pending[col] = _PendingMerge(td.rowspan - 1, span);
         }
@@ -787,8 +974,21 @@ class EditorToDocx {
       ));
     }
 
-    return WpTable(
-      properties: base?.properties ??
+    final WpTableProperties? baseProps = base?.properties;
+    final WpTableProperties props;
+    if (tableBordersChanged) {
+      props = WpTableProperties(
+        styleId: baseProps?.styleId,
+        width: baseProps?.width ?? const WpTableWidth(value: 5000, type: 'pct'),
+        jc: baseProps?.jc,
+        borders: _tblBordersFor(element),
+        indentTwips: baseProps?.indentTwips,
+        layout: baseProps?.layout,
+      );
+      notes.add('bordas da tabela regeneradas '
+          '(${element.borderType?.value ?? 'all'})');
+    } else {
+      props = baseProps ??
           const WpTableProperties(
             width: WpTableWidth(value: 5000, type: 'pct'),
             borders: WpBorders(
@@ -799,9 +999,89 @@ class EditorToDocx {
               insideH: WpBorder(val: 'single', sizeEighths: 4, color: '000000'),
               insideV: WpBorder(val: 'single', sizeEighths: 4, color: '000000'),
             ),
-          ),
+          );
+    }
+    return WpTable(
+      properties: props,
       gridColumnsTwips: grid,
       rows: rows,
+    );
+  }
+
+  /// Assinatura visual das células (bordas/diagonais) — decide se o tcBorders
+  /// deve ser regenerado a partir do estado do editor.
+  static bool _sameCellVisuals(IElement a, IElement b) {
+    final aTr = a.trList ?? const <ITr>[];
+    final bTr = b.trList ?? const <ITr>[];
+    if (aTr.length != bTr.length) return false;
+    for (var r = 0; r < aTr.length; r++) {
+      if (aTr[r].tdList.length != bTr[r].tdList.length) return false;
+      for (var c = 0; c < aTr[r].tdList.length; c++) {
+        if (!_sameEnumNames(
+            aTr[r].tdList[c].borderTypes, bTr[r].tdList[c].borderTypes)) {
+          return false;
+        }
+      }
+    }
+    return true;
+  }
+
+  /// `w:tblBorders` a partir do estado do editor (TableBorder + cor/largura).
+  WpBorders _tblBordersFor(IElement element) {
+    final String color =
+        (element.borderColor ?? '#000000').replaceFirst('#', '');
+    // px → oitavos de ponto (1px = 0,75pt = 6/8): mínimo 2 (0,25pt).
+    final int size =
+        (((element.borderWidth ?? 0.66) * 6).round()).clamp(2, 96);
+    final String val =
+        element.borderType == TableBorder.dash ? 'dashed' : 'single';
+    const WpBorder none = WpBorder(val: 'none', sizeEighths: 0, color: 'auto');
+    final WpBorder line = WpBorder(val: val, sizeEighths: size, color: color);
+    return switch (element.borderType) {
+      TableBorder.empty => const WpBorders(
+          top: none,
+          left: none,
+          bottom: none,
+          right: none,
+          insideH: none,
+          insideV: none),
+      TableBorder.external => WpBorders(
+          top: line,
+          left: line,
+          bottom: line,
+          right: line,
+          insideH: none,
+          insideV: none),
+      TableBorder.internal => WpBorders(
+          top: none,
+          left: none,
+          bottom: none,
+          right: none,
+          insideH: line,
+          insideV: line),
+      _ => WpBorders(
+          top: line,
+          left: line,
+          bottom: line,
+          right: line,
+          insideH: line,
+          insideV: line),
+    };
+  }
+
+  /// `w:tcBorders` a partir dos lados visíveis do editor.
+  static WpBorders _tcBordersFor(List<TdBorder> sides, String? color) {
+    final String resolved = (color ?? '#000000').replaceFirst('#', '');
+    WpBorder line() =>
+        WpBorder(val: 'single', sizeEighths: 4, color: resolved);
+    const WpBorder none = WpBorder(val: 'nil', sizeEighths: 0, color: 'auto');
+    WpBorder pick(TdBorder side) =>
+        sides.any((TdBorder s) => s.name == side.name) ? line() : none;
+    return WpBorders(
+      top: pick(TdBorder.top),
+      left: pick(TdBorder.left),
+      bottom: pick(TdBorder.bottom),
+      right: pick(TdBorder.right),
     );
   }
 

@@ -392,6 +392,14 @@ void _moveImgPosition(IElement element, dynamic evt, dynamic host) {
 			final int pageNo = (draw.getPageNo() as num?)?.toInt() ?? 0;
 			floatPosition['pageNo'] = pageNo;
 			element.imgFloatPosition = floatPosition;
+			// Marca o arrasto para o sync DOCX regenerar a âncora (wp:anchor)
+			// deste parágrafo no save (senão cai no passthrough e se perde).
+			final dynamic ext = element.extension;
+			if (ext is Map) {
+				ext['imgFloatMoved'] = true;
+			} else if (ext == null) {
+				element.extension = <String, dynamic>{'imgFloatMoved': true};
+			}
 		}
 	}
 	draw.getImageParticle()?.destroyFloatImage();

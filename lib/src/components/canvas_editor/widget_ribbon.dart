@@ -414,7 +414,21 @@ class WidgetRibbon extends UiComponent {
             _imageWrapButton('ctx-wrap-behind', 'ti-stack-back',
                 'Atrás do texto', ImageDisplay.floatBottom),
           ]),
+          _group('Organizar', <Element>[
+            _imageAlignButton(
+                'ctx-img-align-left', 'ti-align-box-left-middle',
+                'Alinhar à esquerda', 'left'),
+            _imageAlignButton(
+                'ctx-img-align-center', 'ti-align-box-center-middle',
+                'Centralizar na página', 'center'),
+            _imageAlignButton(
+                'ctx-img-align-right', 'ti-align-box-right-middle',
+                'Alinhar à direita', 'right'),
+          ]),
           _group('Imagem', <Element>[
+            _button('ctx-image-crop', 'ti-crop', 'Cortar',
+                () => _command.executeOpenImagePreviewer(),
+                labeled: true),
             _button('ctx-image-save', 'ti-download', 'Salvar imagem',
                 () => _command.executeSaveAsImageElement(),
                 labeled: true),
@@ -423,6 +437,16 @@ class WidgetRibbon extends UiComponent {
         contextual: true);
     shell.children.addAll(<Element>[tabs, panels]);
     return shell;
+  }
+
+  ButtonElement _imageAlignButton(
+      String id, String icon, String label, String align) {
+    return _button(id, icon, label, () {
+      final RangeContext? context = _command.getRangeContext();
+      final IElement? element = context?.startElement;
+      if (element == null || element.type != ElementType.image) return;
+      _command.executeImageAlign(element, align);
+    });
   }
 
   ButtonElement _imageWrapButton(
@@ -440,6 +464,7 @@ class WidgetRibbon extends UiComponent {
   /// para Página Inicial.
   void syncSelectionContext(FloatingToolbarMode mode) {
     if (mode == _contextMode) return;
+    final FloatingToolbarMode previous = _contextMode;
     _contextMode = mode;
     final bool showTable = mode == FloatingToolbarMode.table;
     final bool showImage = mode == FloatingToolbarMode.image;
@@ -448,6 +473,14 @@ class WidgetRibbon extends UiComponent {
     if ((_activeTabId == 'table-tools' && !showTable) ||
         (_activeTabId == 'image-tools' && !showImage)) {
       _activateTab(_shell, 'home');
+    }
+    // Word ATIVA a aba contextual ao selecionar o objeto ("Formato de Imagem"
+    // / "Layout de Tabela" abrem sozinhas). Só na TRANSIÇÃO para o contexto —
+    // depois o usuário fica livre para trocar de aba.
+    if (showImage && previous != FloatingToolbarMode.image) {
+      _activateTab(_shell, 'image-tools');
+    } else if (showTable && previous != FloatingToolbarMode.table) {
+      _activateTab(_shell, 'table-tools');
     }
   }
 
