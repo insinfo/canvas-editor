@@ -308,6 +308,98 @@ Known remaining work:
   and covered by VM unit tests; the E2E suite validates that the generated
   PDF contains the document text as extractable `Tj` operators.
 
+### Word-Faithful Ruler, Contextual UI and DOCX Round-Trip (2026-07-26)
+
+**Ruler (F4.4 + visual fidelity)**
+
+- **Real tab stops**: new `ITabStop` model (`left`/`center`/`right`/`decimal`
+  plus leader), honored by the layout — a TAB now advances to the next stop and
+  centers/right-aligns/decimal-aligns the following run, instead of using a
+  fixed width. Leaders (`dot`, `hyphen`, `underscore`) are painted along the
+  tab, which is what the table of contents uses.
+- Ruler interaction matches Word: the corner box cycles the tab type, clicking
+  the ruler adds a stop and starts dragging it, dragging moves it and dragging
+  it off the ruler removes it. Stops follow the caret's paragraph.
+- **Visual rules measured from Word screenshots**: margins are no longer
+  numbered (only quarter dots and half ticks live there), numbers start at 1
+  inside the text area and stop at the right margin, vertical-ruler numbers are
+  upright, indent markers are light shapes with a crisp outline (drawn as inline
+  SVG — `clip-path` + `drop-shadow` blurred them), the band is 20px with the
+  white text area inset, and the margin handle is invisible until hovered.
+- **Contextual table ruler**: with the caret inside a table, the ruler shows the
+  column boundary markers (Word's double-bar glyph); dragging one resizes the
+  column through the new `executeTableColumnWidth`.
+
+**DOCX round-trip**
+
+- `w:tabs` are read into `paraTabStops` and written back, with ruler-edited
+  stops overriding the paragraph style.
+- **Floating images (`wp:anchor`)**: `behindDoc`, the wrap type
+  (`none`/`square`/`tight`/`through`/`topAndBottom`) and the H/V position are
+  parsed and mapped to the editor's display modes; the first layout resolves the
+  absolute position from the anchor. Saving keeps untouched documents
+  byte-identical and, when the wrap changes or the image is dragged, regenerates
+  only the `wp:inline`/`wp:anchor` envelope while reusing the original
+  `<a:graphic>` (media and relationships are preserved).
+- **Table visuals**: table borders, per-cell borders, shading, vertical
+  alignment and **cell diagonals (`w:tl2br`/`w:tr2bl`)** now travel from the
+  editor to the file and back.
+- **Fixed silent data loss**: the save-time comparison ignored paragraph
+  properties (indents, spacing, tab stops), image properties (display mode,
+  drag) and cell visuals (vertical alignment, per-cell borders, diagonals), so
+  edits made only through the ruler or the contextual toolbars fell into the
+  passthrough path and were dropped on save.
+
+**Page numbering**
+
+- The result of `PAGE`/`NUMPAGES` fields stays in the footer as **editable
+  text** (marked with `extension['pageField']`) and the value is resolved per
+  page at paint time, replacing the number that used to be painted straight onto
+  the canvas and could not be clicked. Multi-run field results are merged so a
+  field renders once.
+- Footers containing fields are laid out **per page** (cached by digit-count
+  signature), matching Word's per-page relayout — without it a one-digit and a
+  two-digit number would share the same box.
+- New **Insert → Page Number** dialog (format, alignment, start-at) inserts or
+  replaces the footer numbering.
+
+**Contextual UI (Word-style)**
+
+- **Root-cause fix**: the table context was resolved from `range.tableId`, which
+  is only set for selections that cross cells — with the caret inside a single
+  cell it is null, so the contextual ribbon tab and the table mini-toolbar never
+  appeared when clicking a cell. It now uses the same position context the table
+  tool uses.
+- Contextual tabs auto-activate on selection, like Word opening "Picture
+  Format"; the table mini-toolbar shows text formatting *and* table controls
+  together; image alignment (left/center/right) was added to both the ribbon and
+  the mini-toolbar.
+- **Table handles**: the always-visible bars were replaced by Word's model —
+  invisible row/column strips that highlight on hover, a move handle at the
+  top-left and a new resize handle at the bottom-right that scales columns and
+  rows proportionally.
+- **Table style gallery**: nine Word-like styles (plain, grid, light grid, gray
+  header, banded rows, blue/orange/green accents, horizontal lines only) applied
+  through clickable previews in the contextual Table tab.
+- Double-clicking an image no longer opens the full-screen viewer (not Word
+  behavior); cropping moved to a **Crop** button in the Image tab.
+
+**Fixes**
+
+- The caret next to an inline image (for example the footer logo) took the
+  image's height and rendered as a giant bar; it now uses the font height.
+- **Restored missing dialog CSS**: none of the `Dialog` component classes had
+  styles after the restructuring, so every editor dialog (hyperlink, date,
+  controls and the new page-number one) opened unstyled at the bottom of the
+  page.
+- `tool/serve_web.dart` now serves package assets when the app is opened under
+  `/web/`, and the dart2js output plus the Puppeteer Chrome download are no
+  longer tracked by git.
+
+**Tests**: three new VM suites (tab stops, floating images, table visuals) and
+an updated page-field expectation, for 77 green tests including the
+byte-identical save guards.
+
 ## 1.0.0
 
 - Initial version.
