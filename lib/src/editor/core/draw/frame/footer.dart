@@ -55,6 +55,64 @@ class Footer {
     _evenAndOdd = evenAndOdd;
   }
 
+  // F4.7b: rodapés com campo de página (PAGE/NUMPAGES) precisam de layout POR
+  // PÁGINA — a largura de "1" e de "10" é diferente e o Word re-layouta cada
+  // rodapé. As páginas cujos campos têm a MESMA contagem de dígitos produzem
+  // exatamente a mesma geometria (dígitos são tabulares), então o cache é
+  // indexado pela assinatura de dígitos ("1|2") e fica com poucas entradas.
+  final Map<String, List<IRow>> _fieldRowCache = <String, List<IRow>>{};
+  final Map<String, List<IElementPosition>> _fieldPositionCache =
+      <String, List<IElementPosition>>{};
+
+  bool _hasPageField(List<IElement> elementList) {
+    for (final IElement element in elementList) {
+      final dynamic ext = element.extension;
+      if (ext is Map && ext['pageField'] != null) return true;
+    }
+    return false;
+  }
+
+  /// Layout do rodapé para [pageNo] quando ele tem campos de página: mede com
+  /// os valores RESOLVIDOS (não com o cache do arquivo) e guarda por
+  /// assinatura de dígitos. Retorna null quando não há campo.
+  ({List<IRow> rows, List<IElementPosition> positions})? _pageFieldLayout(
+      List<IElement> elementList, int pageNo) {
+    if (!_hasPageField(elementList)) return null;
+    final List<String> resolved = <String>[];
+    final List<int> indexes = <int>[];
+    for (int i = 0; i < elementList.length; i++) {
+      final dynamic ext = elementList[i].extension;
+      if (ext is Map && ext['pageField'] != null) {
+        resolved.add(
+            _draw.resolvePageFieldValue(ext['pageField'].toString(), pageNo));
+        indexes.add(i);
+      }
+    }
+    final String signature =
+        resolved.map((String value) => '${value.length}').join('|');
+    final List<IRow>? cachedRows = _fieldRowCache[signature];
+    if (cachedRows != null) {
+      return (rows: cachedRows, positions: _fieldPositionCache[signature]!);
+    }
+    // Mede com os valores resolvidos e restaura o modelo (o texto do arquivo
+    // continua sendo o conteúdo editável).
+    final List<String> original = <String>[
+      for (final int index in indexes) elementList[index].value
+    ];
+    for (int k = 0; k < indexes.length; k++) {
+      elementList[indexes[k]].value = resolved[k];
+    }
+    final List<IRow> rows = _computeRowListFor(elementList);
+    final List<IElementPosition> positions = <IElementPosition>[];
+    _computePositionListFor(rows, positions);
+    for (int k = 0; k < indexes.length; k++) {
+      elementList[indexes[k]].value = original[k];
+    }
+    _fieldRowCache[signature] = rows;
+    _fieldPositionCache[signature] = positions;
+    return (rows: rows, positions: positions);
+  }
+
   bool _useFirstOn(int pageNo) =>
       _titlePage && pageNo == 0 && _firstElementList.isNotEmpty;
 
@@ -133,6 +191,8 @@ class Footer {
   }
 
   void recovery() {
+    _fieldRowCache.clear();
+    _fieldPositionCache.clear();
     _rowList = <IRow>[];
     _positionList = <IElementPosition>[];
     _firstRowList = <IRow>[];
@@ -246,6 +306,14 @@ class Footer {
       elementList = _evenElementList;
       rowSource = _evenRowList;
       positionList = _evenPositionList;
+    }
+    // Campos de página: geometria medida com o valor DESTA página (o Word
+    // re-layouta cada rodapé) — sem isso "1" e "10" dividiriam a mesma caixa.
+    final ({List<IRow> rows, List<IElementPosition> positions})? fieldLayout =
+        _pageFieldLayout(elementList, pageNo);
+    if (fieldLayout != null) {
+      rowSource = fieldLayout.rows;
+      positionList = fieldLayout.positions;
     }
     final List<IRow> renderRows = <IRow>[];
     double curHeight = 0;

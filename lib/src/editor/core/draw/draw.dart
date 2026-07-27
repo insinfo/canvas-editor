@@ -3214,24 +3214,8 @@ class Draw {
         double fontAscent;
         double fontDescent;
         if (ttf != null) {
-          // F4.7b: o PRIMEIRO caractere de um campo de página reserva 2
-          // dígitos — o valor resolvido por página pode crescer em relação ao
-          // cache do arquivo ("1" no arquivo, "10" na página 10). Dígitos são
-          // tabulares, então reservar por contagem basta. Os caracteres
-          // seguintes do MESMO campo não repetem a reserva (senão o rodapé
-          // ganharia um vão a cada dígito).
-          String measureValue = element.value;
-          final dynamic pageFieldExt = element.extension;
-          if (measureValue.length < 2 &&
-              pageFieldExt is Map &&
-              pageFieldExt['pageField'] != null) {
-            final dynamic prePageFieldExt = preElement?.extension;
-            final bool isFieldStart = !(prePageFieldExt is Map &&
-                prePageFieldExt['pageField'] == pageFieldExt['pageField']);
-            if (isFieldStart) measureValue = measureValue.padLeft(2, '0');
-          }
           metrics.width =
-              isZero ? 0 : ttf.measureWidth(measureValue, scaledSize);
+              isZero ? 0 : ttf.measureWidth(element.value, scaledSize);
           glyphAscent = isZero ? scaledSize : ttf.ascentPx(scaledSize);
           glyphDescent = ttf.descentPx(scaledSize);
           // lineGap todo acima (baseline ancorada pelo descent embaixo).
@@ -4380,6 +4364,9 @@ class Draw {
   /// Valor de um campo de página para a página [pageNo] (0-based):
   /// 'pageNo' → número da página; 'pageCount' → total de páginas. Respeita
   /// `pageNumber.startPageNo/fromPageNo` quando configurados.
+  String resolvePageFieldValue(String field, int pageNo) =>
+      _resolvePageFieldValue(field, pageNo);
+
   String _resolvePageFieldValue(String field, int pageNo) {
     final dynamic option = _options.pageNumber;
     final int fromPageNo = (option?.fromPageNo as int?) ?? 0;
