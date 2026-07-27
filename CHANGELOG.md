@@ -384,6 +384,13 @@ Known remaining work:
 - Double-clicking an image no longer opens the full-screen viewer (not Word
   behavior); cropping moved to a **Crop** button in the Image tab.
 
+**Header text boxes (carimbos)**
+
+- **In-place editing**, replacing the external panel with a textarea: an
+  editable field is placed exactly over the box, with the same font, size,
+  color and fill, so text is typed where it is drawn. It commits on blur or
+  with Escape/Ctrl+Enter and its keystrokes never reach the main editor.
+
 **Fixes**
 
 - The caret next to an inline image (for example the footer logo) took the
