@@ -4374,7 +4374,10 @@ class Draw {
     final int fromPageNo = (option?.fromPageNo as int?) ?? 0;
     final int startPageNo = (option?.startPageNo as int?) ?? 1;
     if (field == 'pageCount') {
-      return '${getPageCount() - fromPageNo}';
+      // `_pageList.length` direto: `getPageCount()` chama
+      // ensureContainerMounted() (leituras de DOM) e isto roda dentro da
+      // pintura, por página.
+      return '${_pageList.length - fromPageNo}';
     }
     if (field == 'pageNo') {
       return '${pageNo + startPageNo - fromPageNo}';
@@ -4526,6 +4529,10 @@ class Draw {
     final BlockParticle? blockParticle = _blockParticle as BlockParticle?;
     final Position? position = _position as Position?;
     final double rangeMinWidth = (_options.rangeMinWidth ?? 5).toDouble();
+    // Campos de página só existem em cabeçalho/rodapé: no corpo (onde está a
+    // esmagadora maioria dos elementos) nem se testa por eles na pintura.
+    final bool mayHavePageField =
+        zone == EditorZone.header || zone == EditorZone.footer;
     for (final IRow curRow in rowList) {
       final IElementFillRect rangeRecord =
           IElementFillRect(x: 0, y: 0, width: 0, height: 0);
@@ -4548,7 +4555,8 @@ class Draw {
         // os demais ficam vazios com largura 0 (senão cada slot desenharia o
         // número todo — "1010" — e o batch de texto sairia esticado, porque a
         // pintura escala o batch pela soma das larguras do layout).
-        final dynamic elementExtension = element.extension;
+        final dynamic elementExtension =
+            mayHavePageField ? element.extension : null;
         if (elementExtension is Map && elementExtension['pageField'] != null) {
           final String field = elementExtension['pageField'].toString();
           final dynamic preExtension = preElement?.extension;

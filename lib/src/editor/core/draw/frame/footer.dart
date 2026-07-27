@@ -64,12 +64,26 @@ class Footer {
   final Map<String, List<IElementPosition>> _fieldPositionCache =
       <String, List<IElementPosition>>{};
 
+  // Resultado do último `_hasPageField` por lista (a varredura roda a cada
+  // pintura de página; a lista do rodapé só muda ao carregar/editar).
+  List<IElement>? _pageFieldScanSource;
+  bool _pageFieldScanResult = false;
+
   bool _hasPageField(List<IElement> elementList) {
+    if (identical(_pageFieldScanSource, elementList)) {
+      return _pageFieldScanResult;
+    }
+    var found = false;
     for (final IElement element in elementList) {
       final dynamic ext = element.extension;
-      if (ext is Map && ext['pageField'] != null) return true;
+      if (ext is Map && ext['pageField'] != null) {
+        found = true;
+        break;
+      }
     }
-    return false;
+    _pageFieldScanSource = elementList;
+    _pageFieldScanResult = found;
+    return found;
   }
 
   /// Layout do rodapé para [pageNo] quando ele tem campos de página: mede com
@@ -193,6 +207,7 @@ class Footer {
   void recovery() {
     _fieldRowCache.clear();
     _fieldPositionCache.clear();
+    _pageFieldScanSource = null;
     _rowList = <IRow>[];
     _positionList = <IElementPosition>[];
     _firstRowList = <IRow>[];
