@@ -221,6 +221,9 @@ class Command {
 
   void executeTableSelectAll() => _adapt.tableSelectAll();
 
+  /// Aplica um estilo da galeria à tabela sob o cursor (Word).
+  void executeTableStyle(ITableStyle style) => _adapt.tableStyle(style);
+
   /// Redimensiona a coluna [index] da tabela sob o cursor (régua contextual).
   bool executeTableColumnWidth(int index, double deltaPx) =>
       _adapt.tableColumnWidth(index, deltaPx);

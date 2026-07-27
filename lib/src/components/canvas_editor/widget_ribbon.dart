@@ -370,6 +370,7 @@ class WidgetRibbon extends UiComponent {
                 () => _command.executeToggleTableHeaderRow(),
                 labeled: true),
           ]),
+          _group('Estilos de Tabela', <Element>[_tableStyleGallery()]),
           _group('Bordas', <Element>[
             _button('ctx-border-all', 'ti-border-all', 'Todas as bordas',
                 () => _command.executeTableBorderType(TableBorder.all)),
@@ -437,6 +438,56 @@ class WidgetRibbon extends UiComponent {
         contextual: true);
     shell.children.addAll(<Element>[tabs, panels]);
     return shell;
+  }
+
+  /// Galeria de estilos de tabela (Word): miniaturas clicáveis que aplicam
+  /// bordas + preenchimentos do estilo na tabela sob o cursor.
+  DivElement _tableStyleGallery() {
+    final DivElement gallery = DivElement()
+      ..classes.add('ce-table-style-gallery');
+    for (final ITableStyle style in defaultTableStyleGallery) {
+      final DivElement preview = DivElement()
+        ..classes.add('ce-table-style')
+        ..title = style.label
+        ..setAttribute('role', 'button')
+        ..setAttribute('aria-label', 'Estilo de tabela: ${style.label}');
+      final String borderColor = style.borderType == TableBorder.empty
+          ? 'transparent'
+          : (style.borderColor ?? '#000000');
+      // Miniatura 3×3: faixa de cabeçalho + linhas (com faixa alternada).
+      for (int row = 0; row < 3; row++) {
+        final DivElement line = DivElement()
+          ..classes.add('ce-table-style__row');
+        final String? fill = row == 0
+            ? style.headerFill
+            : (row == 2 ? style.bandFill : style.cellFill);
+        line.style
+          ..background = fill ?? 'transparent'
+          ..borderBottom = style.borderType == TableBorder.empty
+              ? 'none'
+              : '1px solid $borderColor';
+        if (row == 0 && style.headerBold) {
+          line.classes.add('ce-table-style__row--header');
+        }
+        for (int col = 0; col < 3; col++) {
+          line.append(DivElement()
+            ..classes.add('ce-table-style__cell')
+            ..style.borderRight = style.borderType == TableBorder.all ||
+                    style.borderType == TableBorder.external
+                ? '1px solid $borderColor'
+                : 'none');
+        }
+        preview.append(line);
+      }
+      preview.style.border = style.borderType == TableBorder.empty ||
+              style.borderType == TableBorder.internal
+          ? '1px solid #d7dce3'
+          : '1px solid $borderColor';
+      preview.onMouseDown.listen((MouseEvent event) => event.preventDefault());
+      preview.onClick.listen((_) => _command.executeTableStyle(style));
+      gallery.append(preview);
+    }
+    return gallery;
   }
 
   ButtonElement _imageAlignButton(

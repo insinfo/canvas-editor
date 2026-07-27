@@ -559,6 +559,36 @@
   transform: translateX(-20%);
 }
 
+/* ── Galeria de estilos de tabela (aba contextual Tabela) ──────────────── */
+.ce-table-style-gallery {
+  display: flex;
+  max-width: 340px;
+  flex-wrap: wrap;
+  gap: 4px;
+  padding: 1px;
+}
+.ce-table-style {
+  width: 48px;
+  height: 32px;
+  box-sizing: border-box;
+  overflow: hidden;
+  border-radius: 2px;
+  background: #fff;
+  cursor: pointer;
+}
+.ce-table-style:hover { outline: 2px solid #185abd; }
+.ce-table-style__row {
+  display: flex;
+  height: 33.33%;
+  box-sizing: border-box;
+}
+.ce-table-style__row--header { border-bottom-width: 2px; }
+.ce-table-style__cell {
+  width: 33.33%;
+  box-sizing: border-box;
+}
+.ce-table-style__cell:last-child { border-right: none !important; }
+
 /* Botão de cor da mini-toolbar: input nativo escondido sob o botão. */
 .ce-floating-toolbar__color {
   position: relative;

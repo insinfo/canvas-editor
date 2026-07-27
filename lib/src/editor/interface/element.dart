@@ -26,6 +26,7 @@ export './radio.dart';
 export './text.dart';
 export './title.dart';
 export './table/colgroup.dart';
+export './table/table_style.dart';
 export './table/tr.dart';
 
 /// Parada de tabulação do parágrafo (`w:tab` dentro de `w:tabs`).

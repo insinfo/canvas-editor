@@ -16,6 +16,7 @@ import '../../dataset/enum/list.dart';
 import '../../dataset/enum/observer.dart';
 import '../../dataset/enum/row.dart';
 import '../../dataset/enum/table/table.dart';
+import '../../interface/table/td.dart';
 import '../../dataset/enum/title.dart';
 import '../../dataset/enum/vertical_align.dart';
 import '../../dataset/enum/watermark.dart';
@@ -1507,6 +1508,37 @@ class CommandAdapt {
     }
     draw.render(IDrawOption(isSetCursor: false));
     return true;
+  }
+
+  /// Aplica um estilo da galeria à tabela sob o cursor (Word: "Estilos de
+  /// Tabela"). Grava o resultado (bordas + preenchimentos + negrito do
+  /// cabeçalho) no modelo — o editor não tem estilo nomeado de tabela.
+  void tableStyle(ITableStyle style) {
+    if (_isReadonly()) return;
+    final IElement? table = getCursorTableElement();
+    final List<ITr>? trList = table?.trList;
+    if (table == null || trList == null || trList.isEmpty) return;
+    table
+      ..borderType = style.borderType
+      ..borderColor = style.borderColor;
+    for (int r = 0; r < trList.length; r++) {
+      final bool isHeader = r == 0 && style.headerFill != null;
+      final bool isBanded =
+          style.bandFill != null && r > 0 && (r - 1).isEven == false;
+      final String? fill = isHeader
+          ? style.headerFill
+          : (isBanded ? style.bandFill : style.cellFill);
+      for (final ITd td in trList[r].tdList) {
+        td.backgroundColor = fill;
+        // Estilo com cabeçalho: negrito na primeira linha (como o Word).
+        if (r == 0 && style.headerBold) {
+          for (final IElement element in td.value) {
+            element.bold = true;
+          }
+        }
+      }
+    }
+    draw.render(IDrawOption(isSetCursor: false));
   }
 
   /// Elemento de tabela sob o cursor (null fora de tabela) — usado pela régua
