@@ -2,6 +2,7 @@ import 'dart:async';
 import 'package:canvas_text_editor/src/dom/dom.dart';
 
 import '../../editor/index.dart';
+import '../../editor/interface/draw.dart' show IDrawImagePayload;
 import '../core/ui_component.dart';
 import '../dialog/dialog.dart';
 import 'widget_floating_toolbar.dart' show FloatingToolbarMode;
@@ -67,6 +68,10 @@ class WidgetRibbon extends UiComponent {
   // Sincronização com a seleção (rangeStyleChange)
   // -----------------------------------------------------------------------
 
+  /// Último estilo de seleção recebido — alimenta "Atualizar estilo para
+  /// Corresponder à Seleção" do menu de contexto da galeria.
+  IRangeStyle? _lastRangeStyle;
+
   /// Espelha o estilo do texto sob o cursor nos controles do ribbon.
   /// Chamado pelo widget no flush do [UiScheduler] — uma vez por frame.
   void syncRangeStyle(IRangeStyle style) {
@@ -79,6 +84,7 @@ class WidgetRibbon extends UiComponent {
     if (style.type == null) {
       return;
     }
+    _lastRangeStyle = style;
 
     _setActive('bold', style.bold);
     _setActive('italic', style.italic);
@@ -242,18 +248,17 @@ class WidgetRibbon extends UiComponent {
             labeled: true),
       ]),
       _group('Tabelas', <Element>[
-        _button('table', 'ti-table', 'Tabela 3 × 3',
-            () => _command.executeInsertTable(3, 3),
+        _dropdownButton(
+            'table', 'ti-table', 'Tabela', _buildInsertTableMenu),
+      ]),
+      _group('Ilustrações', <Element>[
+        _button('image', 'ti-photo', 'Imagens', _insertImageFromFile,
             labeled: true),
+        _dropdownButton('shapes', 'ti-line', 'Formas', _buildShapesMenu),
       ]),
       _group('Cabeçalho e Rodapé', <Element>[
         _button('page-number', 'ti-number-123', 'Número de Página',
             _openPageNumberDialog,
-            labeled: true),
-      ]),
-      _group('Texto e símbolos', <Element>[
-        _button('separator', 'ti-separator-horizontal', 'Separador',
-            () => _command.executeSeparator(<num>[1, 1]),
             labeled: true),
       ]),
       _group('Referências', <Element>[
@@ -443,109 +448,270 @@ class WidgetRibbon extends UiComponent {
     return shell;
   }
 
-  /// "Modificar Estilo" do Word para os níveis de título: escolhe fonte,
-  /// tamanho, cor e negrito e REAPLICA nos títulos daquele nível.
-  void _openTitleStyleDialog() {
-    const Map<String, TitleLevel> levels = <String, TitleLevel>{
-      'Título 1': TitleLevel.first,
-      'Título 2': TitleLevel.second,
-      'Título 3': TitleLevel.third,
-      'Título 4': TitleLevel.fourth,
-      'Título 5': TitleLevel.fifth,
-      'Título 6': TitleLevel.sixth,
-    };
-    final ITitleStyle? current = _command.getTitleStyle(TitleLevel.first);
-    Dialog(DialogOptions(
-      title: 'Modificar estilo de título',
-      data: <DialogData>[
-        DialogData(
-          type: 'select',
-          name: 'level',
-          label: 'Nível',
-          value: TitleLevel.first.value,
-          options: <DialogOptionItem>[
-            for (final MapEntry<String, TitleLevel> entry in levels.entries)
-              DialogOptionItem(label: entry.key, value: entry.value.value),
-          ],
-        ),
-        DialogData(
-          type: 'select',
-          name: 'font',
-          label: 'Fonte',
-          value: current?.font ?? 'Calibri Light',
-          options: <DialogOptionItem>[
-            for (final String font in <String>[
-              'Calibri Light',
-              'Arial',
-              'Times New Roman',
-              'Calibri',
-              'Cambria',
-              'Georgia',
-              'Verdana',
-              'Segoe UI',
-            ])
-              DialogOptionItem(label: font, value: font),
-          ],
-        ),
-        DialogData(
-          type: 'text',
-          name: 'size',
-          label: 'Tamanho (px)',
-          value: '${current?.size ?? ''}',
-          placeholder: 'padrão do nível',
-        ),
-        DialogData(
-          type: 'color',
-          name: 'color',
-          label: 'Cor',
-          value: current?.color ?? '#2F5496',
-        ),
-        DialogData(
-          type: 'select',
-          name: 'bold',
-          label: 'Negrito',
-          value: (current?.bold ?? false) ? 'sim' : 'nao',
-          options: <DialogOptionItem>[
-            DialogOptionItem(label: 'Não', value: 'nao'),
-            DialogOptionItem(label: 'Sim', value: 'sim'),
-          ],
-        ),
-        DialogData(
-          type: 'select',
-          name: 'italic',
-          label: 'Itálico',
-          value: (current?.italic ?? false) ? 'sim' : 'nao',
-          options: <DialogOptionItem>[
-            DialogOptionItem(label: 'Não', value: 'nao'),
-            DialogOptionItem(label: 'Sim', value: 'sim'),
-          ],
-        ),
-      ],
-      onConfirm: (List<DialogConfirm> payload) {
-        TitleLevel level = TitleLevel.first;
-        final ITitleStyle style = ITitleStyle();
-        for (final DialogConfirm field in payload) {
-          switch (field.name) {
-            case 'level':
-              level = TitleLevel.values.firstWhere(
-                (TitleLevel value) => value.value == field.value,
-                orElse: () => TitleLevel.first,
-              );
-            case 'font':
-              if (field.value.isNotEmpty) style.font = field.value;
-            case 'size':
-              style.size = int.tryParse(field.value.trim());
-            case 'color':
-              if (field.value.isNotEmpty) style.color = field.value;
-            case 'bold':
-              style.bold = field.value == 'sim';
-            case 'italic':
-              style.italic = field.value == 'sim';
-          }
-        }
-        _command.executeTitleStyle(level, style);
-      },
-    ));
+  static const Map<TitleLevel, String> _titleLevelNames =
+      <TitleLevel, String>{
+    TitleLevel.first: 'Título 1',
+    TitleLevel.second: 'Título 2',
+    TitleLevel.third: 'Título 3',
+    TitleLevel.fourth: 'Título 4',
+    TitleLevel.fifth: 'Título 5',
+    TitleLevel.sixth: 'Título 6',
+  };
+
+  static const List<String> _styleFontOptions = <String>[
+    'Calibri Light',
+    'Arial',
+    'Times New Roman',
+    'Calibri',
+    'Cambria',
+    'Georgia',
+    'Verdana',
+    'Tahoma',
+    'Segoe UI',
+  ];
+
+  /// Diálogo "Modificar estilo" no formato do Word ("Criar Novo Estilo a
+  /// Partir da Formatação"): propriedades, barra de formatação (fonte,
+  /// tamanho, N/I e cor) e PREVIEW ao vivo entre parágrafos cinza. Confirmar
+  /// reaplica o estilo em todos os títulos do nível (executeTitleStyle).
+  void _openTitleStyleDialog({TitleLevel level = TitleLevel.first}) {
+    final HTMLDivElement mask = HTMLDivElement()
+      ..classList.add('dialog-mask')
+      ..setAttribute('editor-component', 'component');
+    final HTMLDivElement container = HTMLDivElement()
+      ..classList.add('dialog-container')
+      ..setAttribute('editor-component', 'component');
+    final HTMLDivElement dialog = HTMLDivElement()
+      ..classList.addAll(<String>['dialog', 'ce-style-dialog']);
+    container.append(dialog);
+
+    void close() {
+      mask.remove();
+      container.remove();
+    }
+
+    final HTMLDivElement titleBar = HTMLDivElement()
+      ..classList.add('dialog-title')
+      ..append(HTMLSpanElement()..text = 'Modificar estilo');
+    final Element closeIcon = document.createElement('i');
+    closeIcon.onClick.listen((_) => close());
+    titleBar.append(closeIcon);
+    dialog.append(titleBar);
+
+    // ── Estado editável ──
+    TitleLevel currentLevel = level;
+    ITitleStyle draft =
+        _command.getTitleStyle(level)?.clone() ?? ITitleStyle();
+
+    // ── Propriedades (Nome) ──
+    final HTMLSelectElement levelSelect = HTMLSelectElement();
+    for (final MapEntry<TitleLevel, String> entry
+        in _titleLevelNames.entries) {
+      levelSelect.append(
+          HTMLOptionElement()..text = entry.value..value = entry.key.value);
+    }
+    levelSelect.value = level.value;
+
+    // ── Formatação ──
+    final HTMLSelectElement fontSelect = HTMLSelectElement()
+      ..classList.add('ce-style-dialog__font');
+    for (final String font in _styleFontOptions) {
+      fontSelect.append(HTMLOptionElement()..text = font..value = font);
+    }
+    final HTMLSelectElement sizeSelect = HTMLSelectElement();
+    sizeSelect
+        .append(HTMLOptionElement()..text = 'padrão do nível'..value = '');
+    for (final int size in <int>[
+      12, 14, 16, 18, 20, 22, 24, 26, 28, 32, 36, 42, 48
+    ]) {
+      sizeSelect.append(HTMLOptionElement()..text = '$size'..value = '$size');
+    }
+    final HTMLButtonElement boldButton = HTMLButtonElement()
+      ..type = 'button'
+      ..classList.add('ce-style-dialog__toggle')
+      ..text = 'N'
+      ..style.fontWeight = 'bold'
+      ..title = 'Negrito';
+    final HTMLButtonElement italicButton = HTMLButtonElement()
+      ..type = 'button'
+      ..classList.add('ce-style-dialog__toggle')
+      ..text = 'I'
+      ..style.fontStyle = 'italic'
+      ..title = 'Itálico';
+    final HTMLInputElement colorInput = (HTMLInputElement()..type = 'color')
+      ..classList.add('ce-style-dialog__color')
+      ..title = 'Cor da fonte';
+
+    // ── Preview ao vivo (como o quadro do Word) ──
+    final HTMLDivElement previewSample = HTMLDivElement()
+      ..classList.add('ce-style-dialog__sample');
+    const String ghost =
+        'Parágrafo anterior Parágrafo anterior Parágrafo anterior '
+        'Parágrafo anterior Parágrafo anterior Parágrafo anterior';
+    const String ghostNext =
+        'Parágrafo seguinte Parágrafo seguinte Parágrafo seguinte '
+        'Parágrafo seguinte Parágrafo seguinte Parágrafo seguinte';
+    final HTMLDivElement preview = HTMLDivElement()
+      ..classList.add('ce-style-dialog__preview')
+      ..appendAll(<Element>[
+        HTMLDivElement()
+          ..classList.add('ce-style-dialog__ghost')
+          ..text = ghost,
+        previewSample,
+        HTMLDivElement()
+          ..classList.add('ce-style-dialog__ghost')
+          ..text = ghostNext,
+        HTMLDivElement()
+          ..classList.add('ce-style-dialog__ghost')
+          ..text = ghostNext,
+      ]);
+
+    void syncControlsFromDraft() {
+      fontSelect.value = draft.font ?? 'Calibri Light';
+      sizeSelect.value = draft.size == null ? '' : '${draft.size}';
+      colorInput.value = draft.color ?? '#2F5496';
+      boldButton.classList.toggle('active', draft.bold ?? false);
+      italicButton.classList.toggle('active', draft.italic ?? false);
+    }
+
+    void syncPreview() {
+      previewSample
+        ..text = _titleLevelNames[currentLevel] ?? 'Título'
+        ..style.fontFamily = draft.font ?? 'Calibri Light'
+        ..style.fontSize = '${draft.size ?? 20}px'
+        ..style.color = draft.color ?? '#2F5496'
+        ..style.fontWeight = (draft.bold ?? false) ? 'bold' : 'normal'
+        ..style.fontStyle = (draft.italic ?? false) ? 'italic' : 'normal';
+    }
+
+    levelSelect.onChange.listen((_) {
+      currentLevel = TitleLevel.values.firstWhere(
+        (TitleLevel value) => value.value == levelSelect.value,
+        orElse: () => TitleLevel.first,
+      );
+      draft = _command.getTitleStyle(currentLevel)?.clone() ?? ITitleStyle();
+      syncControlsFromDraft();
+      syncPreview();
+    });
+    fontSelect.onChange.listen((_) {
+      draft.font = fontSelect.value;
+      syncPreview();
+    });
+    sizeSelect.onChange.listen((_) {
+      draft.size = int.tryParse(sizeSelect.value);
+      syncPreview();
+    });
+    boldButton.onClick.listen((_) {
+      draft.bold = !(draft.bold ?? false);
+      boldButton.classList.toggle('active', draft.bold ?? false);
+      syncPreview();
+    });
+    italicButton.onClick.listen((_) {
+      draft.italic = !(draft.italic ?? false);
+      italicButton.classList.toggle('active', draft.italic ?? false);
+      syncPreview();
+    });
+    colorInput.onInput.listen((_) {
+      draft.color = colorInput.value;
+      syncPreview();
+    });
+
+    HTMLDivElement fieldRow(String label, List<Element> controls) =>
+        HTMLDivElement()
+          ..classList.add('ce-style-dialog__row')
+          ..append(HTMLSpanElement()
+            ..classList.add('ce-style-dialog__label')
+            ..text = label)
+          ..append(HTMLDivElement()
+            ..classList.add('ce-style-dialog__controls')
+            ..appendAll(controls));
+
+    dialog.appendAll(<Element>[
+      HTMLDivElement()
+        ..classList.add('ce-style-dialog__section')
+        ..text = 'Propriedades',
+      fieldRow('Nome', <Element>[levelSelect]),
+      HTMLDivElement()
+        ..classList.add('ce-style-dialog__section')
+        ..text = 'Formatação',
+      fieldRow('', <Element>[
+        fontSelect,
+        sizeSelect,
+        boldButton,
+        italicButton,
+        colorInput,
+      ]),
+      preview,
+      HTMLDivElement()
+        ..classList.add('ce-style-dialog__hint')
+        ..text = 'Estilo: Mostrar na galeria de Estilos\n'
+            'Reaplica em todos os títulos deste nível',
+    ]);
+
+    final HTMLDivElement menu = HTMLDivElement()..classList.add('dialog-menu');
+    final HTMLButtonElement cancelButton = HTMLButtonElement()
+      ..classList.add('dialog-menu__cancel')
+      ..text = 'Cancelar'
+      ..type = 'button';
+    cancelButton.onClick.listen((_) => close());
+    final HTMLButtonElement okButton = HTMLButtonElement()
+      ..text = 'OK'
+      ..type = 'submit';
+    okButton.onClick.listen((_) {
+      _command.executeTitleStyle(currentLevel, draft.clone());
+      close();
+    });
+    menu.appendAll(<Element>[cancelButton, okButton]);
+    dialog.append(menu);
+
+    syncControlsFromDraft();
+    syncPreview();
+    document.body?.append(mask);
+    document.body?.append(container);
+  }
+
+  /// "Atualizar Título N para Corresponder à Seleção" (menu de contexto da
+  /// galeria, como o Word): copia fonte/tamanho/N/I/cor da seleção atual
+  /// para o estilo do nível e reaplica nos títulos existentes.
+  void _updateTitleStyleFromSelection(TitleLevel level) {
+    final IRangeStyle? style = _lastRangeStyle;
+    if (style == null) return;
+    _command.executeTitleStyle(
+      level,
+      ITitleStyle(
+        font: style.font,
+        size: style.size.round(),
+        color: style.color,
+        bold: style.bold,
+        italic: style.italic,
+      ),
+    );
+  }
+
+  /// Menu de contexto (botão direito) dos cartões da galeria de estilos —
+  /// como no Word: "Atualizar ... para Corresponder à Seleção" e
+  /// "Modificar…".
+  void _openStyleContextMenu(HTMLButtonElement card, TitleLevel? level) {
+    final HTMLDivElement menu = HTMLDivElement();
+    if (level != null) {
+      menu.append(_menuItem(
+        'Atualizar ${_titleLevelNames[level]} para Corresponder à Seleção',
+        'Copia a formatação da seleção para o estilo',
+        () => _updateTitleStyleFromSelection(level),
+      ));
+      menu.append(_menuItem(
+        'Modificar…',
+        'Alterar a aparência deste nível de título',
+        () => _openTitleStyleDialog(level: level),
+      ));
+    } else {
+      menu.append(_menuItem(
+        'Limpar formatação da seleção',
+        'Volta a seleção ao estilo Normal',
+        _command.executeFormat,
+      ));
+    }
+    _openMenuFor(card, menu);
   }
 
   /// "Número de Página" (Word): escolhe formato, alinhamento e a partir de
@@ -1024,13 +1190,20 @@ class WidgetRibbon extends UiComponent {
   }
 
   HTMLButtonElement _styleCommand(String label, TitleLevel? level) {
-    final HTMLButtonElement button = HTMLButtonElement()
+    late final HTMLButtonElement button;
+    button = HTMLButtonElement()
       ..type = 'button'
       ..classList.add('ce-word-style')
       ..dataset['styleLevel'] = level?.value ?? 'normal'
       ..text = label
       ..onMouseDown.listen((event) => event.preventDefault())
-      ..onClick.listen((_) => _command.executeTitle(level));
+      ..onClick.listen((_) => _command.executeTitle(level))
+      // Word: botão direito no cartão da galeria abre "Atualizar para
+      // Corresponder à Seleção" / "Modificar…".
+      ..onContextMenu.listen((MouseEvent event) {
+        event.preventDefault();
+        _openStyleContextMenu(button, level);
+      });
     _styleButtons[level] = button;
     return button;
   }
@@ -1141,6 +1314,141 @@ class WidgetRibbon extends UiComponent {
         action();
         _closeMenu();
       });
+  }
+
+  /// Menu "Tabela" da aba Inserir no formato do Word: grade 10×8 com hover
+  /// que pré-visualiza N×M ("Tabela 4x3") e insere ao clicar, mais o item
+  /// "Inserir Tabela…" com linhas/colunas digitadas.
+  HTMLDivElement _buildInsertTableMenu() {
+    const int gridCols = 10;
+    const int gridRows = 8;
+    final HTMLDivElement caption = HTMLDivElement()
+      ..classList.add('ce-table-grid__caption')
+      ..text = 'Inserir Tabela';
+    final HTMLDivElement grid = HTMLDivElement()
+      ..classList.add('ce-table-grid');
+    final List<HTMLDivElement> cells = <HTMLDivElement>[];
+    for (int r = 0; r < gridRows; r++) {
+      for (int c = 0; c < gridCols; c++) {
+        final HTMLDivElement cell = HTMLDivElement()
+          ..classList.add('ce-table-grid__cell')
+          ..dataset['row'] = '$r'
+          ..dataset['col'] = '$c';
+        cell.onMouseEnter.listen((_) {
+          for (final HTMLDivElement other in cells) {
+            final int or = int.parse(other.data('row')!);
+            final int oc = int.parse(other.data('col')!);
+            other.classList.toggle('hover', or <= r && oc <= c);
+          }
+          caption.text = 'Tabela ${c + 1}x${r + 1}';
+        });
+        cell.onClick.listen((_) {
+          _command.executeInsertTable(r + 1, c + 1);
+          _closeMenu();
+        });
+        cells.add(cell);
+        grid.append(cell);
+      }
+    }
+    grid.onMouseLeave.listen((_) {
+      for (final HTMLDivElement other in cells) {
+        other.classList.remove('hover');
+      }
+      caption.text = 'Inserir Tabela';
+    });
+    final HTMLDivElement menu = HTMLDivElement()
+      ..classList.add('ce-table-grid__menu')
+      ..appendAll(<Element>[
+        caption,
+        grid,
+        HTMLDivElement()..classList.add('ce-word-menu__divider'),
+        _menuItem('Inserir Tabela…', 'Escolher número de linhas e colunas',
+            _openInsertTableDialog),
+      ]);
+    return menu;
+  }
+
+  void _openInsertTableDialog() {
+    Dialog(DialogOptions(
+      title: 'Inserir tabela',
+      data: <DialogData>[
+        DialogData(
+            type: 'number', name: 'cols', label: 'Número de colunas',
+            value: '3'),
+        DialogData(
+            type: 'number', name: 'rows', label: 'Número de linhas',
+            value: '3'),
+      ],
+      onConfirm: (List<DialogConfirm> payload) {
+        int rows = 3;
+        int cols = 3;
+        for (final DialogConfirm field in payload) {
+          if (field.name == 'rows') {
+            rows = int.tryParse(field.value.trim()) ?? 3;
+          } else if (field.name == 'cols') {
+            cols = int.tryParse(field.value.trim()) ?? 3;
+          }
+        }
+        if (rows > 0 && cols > 0) {
+          _command.executeInsertTable(rows.clamp(1, 200), cols.clamp(1, 63));
+        }
+      },
+    ));
+  }
+
+  /// "Imagens" da aba Inserir (Word): abre o seletor de arquivo e insere a
+  /// imagem no cursor com o tamanho natural.
+  void _insertImageFromFile() {
+    final HTMLInputElement input = (HTMLInputElement()..type = 'file')
+      ..accept = '.png, .jpg, .jpeg, .gif, .webp';
+    input.onChange.first.then((_) {
+      final File? file =
+          input.files?.isNotEmpty == true ? input.files!.first : null;
+      if (file == null) return;
+      final FileReader reader = FileReader()..readAsDataURL(file);
+      reader.onLoad.first.then((_) {
+        final String? value = readerResultAsString(reader);
+        if (value == null || value.isEmpty) return;
+        final HTMLImageElement image = HTMLImageElement()..src = value;
+        image.onLoad.first.then((_) {
+          final num width =
+              image.naturalWidth != 0 ? image.naturalWidth : image.width;
+          final num height =
+              image.naturalHeight != 0 ? image.naturalHeight : image.height;
+          _command.executeImage(IDrawImagePayload(
+            value: value,
+            width: width.toDouble(),
+            height: height.toDouble(),
+          ));
+        });
+      });
+    });
+    input.click();
+  }
+
+  /// "Formas" da aba Inserir: linhas horizontais (o motor suporta o
+  /// separador com padrões de traço).
+  HTMLDivElement _buildShapesMenu() {
+    HTMLDivElement shape(String name, List<num> dash) {
+      final HTMLDivElement item = _menuItem(
+          name, '', () => _command.executeSeparator(dash));
+      item.append(HTMLDivElement()
+        ..classList.add('ce-shape-preview')
+        ..style.borderTopStyle = dash.isEmpty ? 'solid' : 'dashed');
+      return item;
+    }
+
+    return HTMLDivElement()
+      ..appendAll(<Element>[
+        HTMLDivElement()
+          ..classList.add('ce-table-grid__caption')
+          ..text = 'Linhas',
+        shape('Linha contínua', <num>[]),
+        shape('Linha tracejada', <num>[3, 1]),
+        shape('Linha pontilhada', <num>[1, 1]),
+        shape('Traço longo', <num>[6, 2]),
+        shape('Traço e ponto', <num>[6, 2, 2, 2]),
+      ]);
   }
 
   HTMLDivElement _buildMarginsMenu() {

@@ -320,6 +320,22 @@ class WidgetFloatingToolbar extends UiComponent {
       if (!_pointerInside) hide();
       return;
     }
+    final IRange range = _command.getRange();
+    // Seleção que atravessa células (linha/coluna/tabela inteira pelas alças
+    // ✥/barras) — o balão vai para CIMA da tabela, fora dela.
+    final bool crossCell = _mode == FloatingToolbarMode.table &&
+        (range.isCrossRowCol == true ||
+            range.startTdIndex != range.endTdIndex ||
+            range.startTrIndex != range.endTrIndex);
+    // Word: caret apenas digitando numa célula NÃO mostra balão flutuante
+    // (fica só a aba contextual "Tabela" no ribbon) — senão ele cobre as
+    // células e atrapalha a digitação.
+    if (_mode == FloatingToolbarMode.table &&
+        !crossCell &&
+        range.startIndex == range.endIndex) {
+      if (!_pointerInside) hide();
+      return;
+    }
     final IElementPosition? position = _command.getCursorPosition();
     final HTMLCanvasElement? page =
         _draw.getPage(position?.pageNo ?? -1) as HTMLCanvasElement?;
@@ -347,9 +363,34 @@ class WidgetFloatingToolbar extends UiComponent {
       final IElement? element = context?.startElement;
       if (element != null) _syncImageDisplay(element);
     }
-    final DOMRect pageRect = page.getBoundingClientRect();
     final DOMRect rootRect = _editorRoot.getBoundingClientRect();
     final double scale = (_draw.getOptions().scale as num?)?.toDouble() ?? 1;
+
+    // Seleção de linha/coluna/tabela: balão ACIMA da borda superior da
+    // tabela (como o Word ao clicar na alça ✥), nunca sobre as células.
+    if (crossCell) {
+      final Map<String, double>? tableRect = _command.getCursorTableRect();
+      final HTMLCanvasElement? tablePage = tableRect == null
+          ? null
+          : _draw.getPage(tableRect['pageNo']!.toInt()) as HTMLCanvasElement?;
+      if (tableRect != null && tablePage != null) {
+        final DOMRect tablePageRect = tablePage.getBoundingClientRect();
+        final double x = tablePageRect.left.toDouble() -
+            rootRect.left.toDouble() +
+            tableRect['x']! * scale;
+        final double y = tablePageRect.top.toDouble() -
+            rootRect.top.toDouble() +
+            tableRect['y']! * scale;
+        root.style
+          ..display = 'flex'
+          ..left = '${x.round()}px'
+          ..top = '${(y - 10).round()}px'
+          ..transform = 'translateY(-100%)';
+        return;
+      }
+    }
+
+    final DOMRect pageRect = page.getBoundingClientRect();
     final double x = pageRect.left.toDouble() -
         rootRect.left.toDouble() +
         (position?.coordX ?? pageRect.width.toDouble() / 2) * scale;
@@ -359,7 +400,8 @@ class WidgetFloatingToolbar extends UiComponent {
     root.style
       ..display = 'flex'
       ..left = '${x.round()}px'
-      ..top = '${(y - 44).round()}px';
+      ..top = '${(y - 44).round()}px'
+      ..transform = '';
   }
 
   void hide() {

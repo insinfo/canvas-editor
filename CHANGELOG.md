@@ -1,5 +1,25 @@
 ## 2.0.0-dev — Complete Restructuring
 
+### UI contextual estilo Word — rodada 2 (2026-07-27)
+
+- **Mini-UI de tabela como no Word**: com o caret apenas digitando numa
+  célula o balão flutuante NÃO aparece (ele cobria as células); ele surge ao
+  selecionar linha/coluna/tabela pelas alças (✥ inclusive) e é posicionado
+  ACIMA da borda superior da tabela, fora dela.
+- **Menu de contexto da galeria de estilos** (botão direito no cartão, como
+  no Word): "Atualizar Título N para Corresponder à Seleção" (copia
+  fonte/tamanho/N/I/cor da seleção e reaplica no nível) e "Modificar…".
+- **Diálogo "Modificar estilo" no formato do Word**: seções
+  Propriedades/Formatação, barra com fonte/tamanho/N/I/cor e preview ao
+  vivo entre parágrafos fantasma; nível pré-selecionado. (Corrigido de
+  quebra: selects de TODOS os diálogos abriam vazios — o glue `children` do
+  package:web materializa uma List morta e as `<option>` nunca eram
+  anexadas; agora `append` direto.)
+- **Aba Inserir estilo Word**: botão Tabela com grade 10×8 com hover
+  ("Tabela 4x3") + "Inserir Tabela…" com linhas/colunas; grupo Ilustrações
+  com Imagens (seletor de arquivo, tamanho natural) e Formas (linhas
+  contínua/tracejada/pontilhada/traço-ponto).
+
 ### Migração `dart:html` → `package:web` 1.1.1 (2026-07-27)
 
 - **Toda a lib compilável migrada** (107 arquivos, ~3000 sites): `lib/`,

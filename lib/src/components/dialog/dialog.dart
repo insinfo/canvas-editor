@@ -113,8 +113,10 @@ class Dialog {
       if (data.type == 'select') {
         final select = HTMLSelectElement();
         for (final option in data.options ?? const <DialogOptionItem>[]) {
-          select.children
-              .add((HTMLOptionElement()..text = option.label..value = option.value));
+          // append direto: o glue `children` do package:web materializa uma
+          // List MORTA — add() nela não anexa nada e o select ficava vazio.
+          select.append(
+              HTMLOptionElement()..text = option.label..value = option.value);
         }
         input = select;
       } else if (data.type == 'textarea') {

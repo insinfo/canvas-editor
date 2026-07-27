@@ -218,17 +218,20 @@ void main() {
         (element) => element.type == ElementType.table,
       );
       if (table.id == null) return false;
+      // Seleção que ATRAVESSA células (1ª linha): como o Word, o balão
+      // flutuante de tabela só aparece em seleção de linha/coluna/tabela —
+      // caret colapsado digitando numa célula não mostra balão.
       final range = IRange(
         startIndex: 0,
         endIndex: 0,
         tableId: table.id,
         startTdIndex: 0,
-        endTdIndex: 0,
+        endTdIndex: 1,
         startTrIndex: 0,
         endTrIndex: 0,
       );
       widget.command.executeSetPositionContext(range);
-      widget.command.executeSetRange(0, 0, table.id, 0, 0, 0, 0);
+      widget.command.executeSetRange(0, 0, table.id, 0, 1, 0, 0);
       widget.editor.getDraw().getTableTool()?.render();
       widget.refreshFloatingToolbar();
       return true;
