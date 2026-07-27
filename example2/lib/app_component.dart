@@ -3,6 +3,7 @@ import 'dart:html';
 import 'dart:js_util' as js_util;
 
 import 'package:canvas_text_editor/canvas_text_editor.dart';
+import 'package:web/web.dart' as dom;
 import 'package:limitless_ui/limitless_ui.dart';
 import 'package:ngdart/angular.dart';
 
@@ -46,8 +47,10 @@ class AppComponent implements AfterViewInit, OnDestroy {
     if (host == null) {
       throw StateError('O host do editor não foi criado pelo AngularDart.');
     }
+    // Ponte dart:html (AngularDart) → package:web: no dart2js/DDC o elemento
+    // do dart:html É o mesmo nó JS, então o cast via Object é seguro.
     _canvasEditor = CanvasEditorWidget(
-      host,
+      (host as Object) as dom.HTMLElement,
       config: CanvasEditorConfig(
         appearance: CanvasEditorAppearance.word,
         height: '560px',

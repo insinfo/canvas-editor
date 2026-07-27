@@ -13,12 +13,6 @@
 
 include: package:lints/recommended.yaml
 
-analyzer:
-  exclude:
-    # Demo AngularDart 8 legada — fora do escopo da migração dart:html →
-    # package:web (ver doc/plano_migracao_dart_html_package_web.md).
-    - example2/**
-
 # Uncomment the following section to specify additional rules.
 
 
