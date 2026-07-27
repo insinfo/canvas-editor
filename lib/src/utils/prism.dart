@@ -1,4 +1,4 @@
-import 'dart:js_util' as js_util;
+import 'package:canvas_text_editor/src/dom/dom.dart';
 
 class PrismKindStyle {
 	final String? color;
@@ -100,7 +100,9 @@ List<FormatPrismToken> formatPrismToken(List<dynamic> payload) {
 
 	void format(List<dynamic> tokenList) {
 		for (final element in tokenList) {
-			final normalized = js_util.dartify(element);
+			// Tokens vêm do Prism (JS cru) ou já em Dart — dartify só nos JS.
+			final dynamic normalized =
+					jsIsJSAny(element) ? (element as JSAny).dartify() : element;
 
 			if (normalized is FormatPrismToken) {
 				formatTokenList.add(normalized);
@@ -133,14 +135,14 @@ List<FormatPrismToken> formatPrismToken(List<dynamic> payload) {
 					format(List<dynamic>.from(contentValue));
 				}
 			} else if (normalized != null &&
-					js_util.hasProperty(normalized, 'content')) {
-				final dynamic typeValue = js_util.hasProperty(normalized, 'type')
-						? js_util.getProperty(normalized, 'type')
-						: null;
-				final dynamic contentValue =
-						js_util.getProperty(normalized, 'content');
-				final type = typeValue is String ? typeValue : null;
-				final dartifiedContent = js_util.dartify(contentValue);
+					jsIsJSObject(normalized) &&
+					(normalized as JSObject).hasProperty('content'.toJS).toDart) {
+				final JSObject jsToken = normalized;
+				final JSAny? typeProp = jsToken.getProperty('type'.toJS);
+				final String? type =
+						typeProp.isA<JSString>() ? (typeProp! as JSString).toDart : null;
+				final dynamic dartifiedContent =
+						jsToken.getProperty('content'.toJS)?.dartify();
 
 				if (dartifiedContent is String) {
 					final style = getPrismKindStyle(type);

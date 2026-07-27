@@ -1,4 +1,4 @@
-import 'dart:html';
+import 'package:canvas_text_editor/src/dom/dom.dart';
 
 import '../../../dataset/constant/context_menu.dart';
 import '../../../dataset/enum/common.dart';
@@ -17,14 +17,14 @@ List<IRegisterContextMenu> get imageMenus => <IRegisterContextMenu>[
             !payload.editorHasSelection &&
             payload.startElement?.type == ElementType.image,
         callback: (command, _) {
-          final FileUploadInputElement input = FileUploadInputElement()
+          final HTMLInputElement input = (HTMLInputElement()..type = 'file')
             ..accept = '.png, .jpg, .jpeg';
           input.onChange.first.then((_) {
             final File? file = input.files?.first;
             if (file == null) {
               return;
             }
-            final FileReader reader = FileReader()..readAsDataUrl(file);
+            final FileReader reader = FileReader()..readAsDataURL(file);
             reader.onLoad.first.then((_) {
               final dynamic value = reader.result;
               if (value is String && value.isNotEmpty) {

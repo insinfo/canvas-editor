@@ -1,6 +1,5 @@
 import 'dart:async';
-import 'dart:html';
-import 'dart:js_util' as js_util;
+import 'package:canvas_text_editor/src/dom/dom.dart';
 import 'dart:math' as math;
 
 import '../../dataset/constant/cursor.dart';
@@ -53,33 +52,33 @@ class IMoveCursorToVisibleOption {
 class Cursor {
   Cursor(dynamic drawInstance, dynamic canvasEvent)
       : draw = drawInstance,
-        container = drawInstance.getContainer() as DivElement,
+        container = drawInstance.getContainer() as HTMLDivElement,
         position = drawInstance.getPosition() as Position,
         options = drawInstance.getOptions() as IEditorOption,
-        cursorDom = DivElement(),
+        cursorDom = HTMLDivElement(),
         cursorAgent = CursorAgent(drawInstance, canvasEvent),
         _animationClass = '$editorPrefix-cursor--animation' {
-    cursorDom.classes.add('$editorPrefix-cursor');
+    cursorDom.classList.add('$editorPrefix-cursor');
     container.append(cursorDom);
   }
 
   final dynamic draw;
-  final DivElement container;
+  final HTMLDivElement container;
   final Position position;
   final IEditorOption options;
 
-  final DivElement cursorDom;
+  final HTMLDivElement cursorDom;
   final CursorAgent cursorAgent;
   final String _animationClass;
 
   Timer? blinkTimer;
   int? hitLineStartIndex;
 
-  DivElement getCursorDom() {
+  HTMLDivElement getCursorDom() {
     return cursorDom;
   }
 
-  TextAreaElement getAgentDom() {
+  HTMLTextAreaElement getAgentDom() {
     return cursorAgent.getAgentCursorDom();
   }
 
@@ -100,11 +99,11 @@ class Cursor {
   }
 
   void _blinkStart() {
-    cursorDom.classes.add(_animationClass);
+    cursorDom.classList.add(_animationClass);
   }
 
   void _blinkStop() {
-    cursorDom.classes.remove(_animationClass);
+    cursorDom.classList.remove(_animationClass);
   }
 
   void _setBlinkTimeout() {
@@ -124,12 +123,10 @@ class Cursor {
     if (isMobile && draw.isReadonly() == true) {
       return;
     }
-    final TextAreaElement agentCursorDom = cursorAgent.getAgentCursorDom();
+    final HTMLTextAreaElement agentCursorDom = cursorAgent.getAgentCursorDom();
     if (!identical(document.activeElement, agentCursorDom)) {
       try {
-        js_util.callMethod(agentCursorDom, 'focus', <Object>[
-          js_util.jsify(<String, bool>{'preventScroll': true}),
-        ]);
+        agentCursorDom.focus(FocusOptions(preventScroll: true));
       } catch (_) {
         agentCursorDom.focus();
       }
@@ -209,7 +206,7 @@ class Cursor {
       defaultOffsetHeight,
     );
     final double cursorHeight = caretBase + increaseHeight * 2;
-    final TextAreaElement agentCursorDom = cursorAgent.getAgentCursorDom();
+    final HTMLTextAreaElement agentCursorDom = cursorAgent.getAgentCursorDom();
     if (isFocus) {
       Timer.run(focus);
     }
@@ -282,7 +279,7 @@ class Cursor {
       right = window.innerWidth?.toDouble() ?? 0;
       bottom = window.innerHeight?.toDouble() ?? 0;
     } else {
-      final Rectangle<num> rect = scrollContainer.getBoundingClientRect();
+      final DOMRect rect = scrollContainer.getBoundingClientRect();
       left = rect.left.toDouble();
       right = rect.right.toDouble();
       top = rect.top.toDouble();
@@ -310,7 +307,8 @@ class Cursor {
         isUp ? scrollTop - (top - y) : scrollTop + (y - bottom);
 
     if (isDocumentElement) {
-      window.scrollTo(scrollLeft, targetScrollTop);
+      window.scrollTo(ScrollToOptions(
+          left: scrollLeft.toDouble(), top: targetScrollTop.toDouble()));
     } else {
       scrollContainer.scrollLeft = scrollLeft.round();
       scrollContainer.scrollTop = targetScrollTop.round();

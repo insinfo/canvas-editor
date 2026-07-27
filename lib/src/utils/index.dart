@@ -1,7 +1,5 @@
 import 'dart:async';
-import 'dart:html';
-import 'dart:js' as js;
-import 'dart:js_util' as js_util;
+import 'package:canvas_text_editor/src/dom/dom.dart';
 
 typedef Callback = void Function();
 
@@ -40,10 +38,9 @@ void scrollIntoView(Element container, Element? selected) {
 }
 
 void nextTick(Callback fn) {
-	if (js_util.hasProperty(window, 'requestIdleCallback')) {
-		js_util.callMethod(window, 'requestIdleCallback', [
-			js.allowInterop((Object? _) => fn()),
-		]);
+	// requestIdleCallback ainda não existe no Safari — cai no Timer.
+	if ((window as JSObject).hasProperty('requestIdleCallback'.toJS).toDart) {
+		window.requestIdleCallback(((IdleDeadline _) => fn()).toJS);
 	} else {
 		Timer(Duration.zero, fn);
 	}

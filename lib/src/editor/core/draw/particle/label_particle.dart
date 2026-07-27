@@ -1,4 +1,4 @@
-import 'dart:html';
+import 'package:canvas_text_editor/src/dom/dom.dart';
 
 import '../../../dataset/constant/label.dart';
 import '../../../interface/common.dart';
@@ -44,11 +44,11 @@ class LabelParticle {
         (padding.top + padding.bottom) * scale;
     final double top = y - element.metrics.boundingBoxAscent;
 
-    ctx.fillStyle = backgroundColor;
+    ctx.fillColor = backgroundColor;
     _drawRoundedRect(ctx, x, top, width, height, borderRadius * scale);
     ctx.fill();
 
-    ctx.fillStyle = color;
+    ctx.fillColor = color;
     ctx.fillText(element.value, x + padding.left * scale, y);
     ctx.restore();
   }

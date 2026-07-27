@@ -1,5 +1,5 @@
 import 'dart:async';
-import 'dart:html';
+import 'package:canvas_text_editor/src/dom/dom.dart';
 
 import '../../../dataset/constant/editor.dart';
 import '../../../dataset/enum/common.dart';
@@ -16,19 +16,19 @@ class ImageParticle {
 	ImageParticle(this._draw)
 			: _options = _draw.getOptions(),
 				_container = _draw.getContainer(),
-				_imageCache = <String, ImageElement>{};
+				_imageCache = <String, HTMLImageElement>{};
 
 	final Draw _draw;
 	final IEditorOption _options;
-	final DivElement _container;
-	final Map<String, ImageElement> _imageCache;
+	final HTMLDivElement _container;
+	final Map<String, HTMLImageElement> _imageCache;
 
 	IEditorOption get options => _options;
-	Map<String, ImageElement> get imageCache => _imageCache;
+	Map<String, HTMLImageElement> get imageCache => _imageCache;
 	void registerImageObserver(Future<dynamic> future) => _addImageObserver(future);
 
-	DivElement? _floatImageContainer;
-	ImageElement? _floatImage;
+	HTMLDivElement? _floatImageContainer;
+	HTMLImageElement? _floatImage;
 	bool _reRenderScheduled = false;
 
 	double _scale() => (_options.scale ?? 1).toDouble();
@@ -95,16 +95,16 @@ class ImageParticle {
 			return;
 		}
 		final double scale = _scale();
-		DivElement? container = _floatImageContainer;
-		ImageElement? img = _floatImage;
+		HTMLDivElement? container = _floatImageContainer;
+		HTMLImageElement? img = _floatImage;
 		if (container == null) {
-			container = DivElement()
-				..classes.add('$editorPrefix-float-image');
+			container = HTMLDivElement()
+				..classList.add('$editorPrefix-float-image');
 			_container.append(container);
 			_floatImageContainer = container;
 		}
 		if (img == null) {
-			img = ImageElement();
+			img = HTMLImageElement();
 			container.append(img);
 			_floatImage = img;
 		}
@@ -124,7 +124,7 @@ class ImageParticle {
 	}
 
 	void dragFloatImage(double movementX, double movementY) {
-		final DivElement? container = _floatImageContainer;
+		final HTMLDivElement? container = _floatImageContainer;
 		if (container == null) {
 			return;
 		}
@@ -153,7 +153,7 @@ class ImageParticle {
 		}
 	}
 
-	ImageElement _buildFallbackImage(double width, double height) {
+	HTMLImageElement _buildFallbackImage(double width, double height) {
 		const int tileSize = 8;
 		final double safeWidth = width <= 0 ? tileSize.toDouble() : width;
 		final double safeHeight = height <= 0 ? tileSize.toDouble() : height;
@@ -172,14 +172,14 @@ class ImageParticle {
 				'</defs>'
 				'</svg>';
 
-		final ImageElement fallback = ImageElement();
+		final HTMLImageElement fallback = HTMLImageElement();
 		fallback.src = 'data:image/svg+xml;base64,${convertStringToBase64(svg)}';
 		return fallback;
 	}
 
 	void _drawImageWithCrop(
 		CanvasRenderingContext2D ctx,
-		ImageElement image,
+		HTMLImageElement image,
 		IElement element,
 		double x,
 		double y,
@@ -188,10 +188,10 @@ class ImageParticle {
 	) {
 		final IImageCrop? crop = element.imgCrop;
 		if (crop == null) {
-			ctx.drawImageScaled(image, x, y, width, height);
+			ctx.drawImage(image, x, y, width, height);
 			return;
 		}
-		ctx.drawImageScaledFromSource(
+		ctx.drawImage(
 			image,
 			crop.x.toDouble(),
 			crop.y.toDouble(),
@@ -241,7 +241,7 @@ class ImageParticle {
 		ctx.save();
 		ctx
 			..font = '${fontSize}px $fontFamily'
-			..fillStyle = color
+			..fillColor = color
 			..textAlign = 'center';
 
 		String displayText = captionText;
@@ -304,7 +304,7 @@ class ImageParticle {
 
 		final String source = _normalizeImageSource(element.value);
 		final String cacheKey = source;
-		final ImageElement? cached = _imageCache[cacheKey];
+		final HTMLImageElement? cached = _imageCache[cacheKey];
 		if (cached != null) {
 			_drawImageWithCrop(ctx, cached, element, x, y, width, height);
 			_renderCaption(ctx, element, x, y, width, height);
@@ -313,7 +313,7 @@ class ImageParticle {
 
 		final int renderCountSnapshot = _draw.getRenderCount();
 		final Completer<IElement> completer = Completer<IElement>();
-		final ImageElement image = ImageElement()
+		final HTMLImageElement image = HTMLImageElement()
 			..crossOrigin = 'Anonymous'
 			..src = source;
 
@@ -343,7 +343,7 @@ class ImageParticle {
 		});
 
 		image.onError.first.then((dynamic error) {
-			final ImageElement fallback = _buildFallbackImage(width, height);
+			final HTMLImageElement fallback = _buildFallbackImage(width, height);
 			fallback.onLoad.first.then((_) {
 				_drawImageWithCrop(ctx, fallback, element, x, y, width, height);
 				_renderCaption(ctx, element, x, y, width, height);

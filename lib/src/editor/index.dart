@@ -1,6 +1,6 @@
 import 'dart:core' hide override;
 import 'dart:core' as core show override;
-import 'dart:html';
+import 'package:canvas_text_editor/src/dom/dom.dart' hide Highlight, Plugin;
 
 import 'interface/editor.dart';
 import 'interface/element.dart';
@@ -113,7 +113,7 @@ class Editor implements IPluginHost {
   Draw getDraw() => _draw;
 
   Editor(
-    HtmlElement container,
+    HTMLElement container,
     dynamic data, [
     IEditorOption? options,
   ]) {

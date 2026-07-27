@@ -1,5 +1,5 @@
 import 'dart:async';
-import 'dart:html';
+import 'package:canvas_text_editor/src/dom/dom.dart';
 
 import '../../dataset/enum/observer.dart';
 import '../../interface/editor.dart';
@@ -30,7 +30,7 @@ class SelectionObserver {
 	bool _isMoving;
 	double _clientWidth;
 	double _clientHeight;
-	Rectangle<num>? _containerRect;
+	DOMRect? _containerRect;
 
 	void dispose() {
 		_stopMove();
@@ -49,21 +49,21 @@ class SelectionObserver {
 	}
 
 	Stream<MouseEvent> _mouseDownStream() {
-		if (_selectionContainer is Document) {
+		if (_selectionContainer.isA<Document>()) {
 			return document.onMouseDown;
 		}
 		return (_selectionContainer as Element).onMouseDown;
 	}
 
 	Stream<MouseEvent> _mouseMoveStream() {
-		if (_selectionContainer is Document) {
+		if (_selectionContainer.isA<Document>()) {
 			return document.onMouseMove;
 		}
 		return (_selectionContainer as Element).onMouseMove;
 	}
 
 	Stream<MouseEvent> _mouseUpStream() {
-		if (_selectionContainer is Document) {
+		if (_selectionContainer.isA<Document>()) {
 			return document.onMouseUp;
 		}
 		return (_selectionContainer as Element).onMouseUp;
@@ -71,7 +71,7 @@ class SelectionObserver {
 
 	void _mousedown(MouseEvent _) {
 		_isMousedown = true;
-		if (_selectionContainer is Document) {
+		if (_selectionContainer.isA<Document>()) {
 			_clientWidth = document.documentElement?.clientWidth.toDouble() ?? window.innerWidth?.toDouble() ?? 0;
 			_clientHeight = document.documentElement?.clientHeight.toDouble() ?? window.innerHeight?.toDouble() ?? 0;
 			_containerRect = null;
@@ -92,8 +92,8 @@ class SelectionObserver {
 		if (!_isMousedown || _rangeManager.getIsCollapsed()) {
 			return;
 		}
-		double x = evt.client.x.toDouble();
-		double y = evt.client.y.toDouble();
+		double x = evt.clientX.toDouble();
+		double y = evt.clientY.toDouble();
 		if (_containerRect != null) {
 			x -= _containerRect!.left.toDouble();
 			y -= _containerRect!.top.toDouble();
@@ -112,22 +112,22 @@ class SelectionObserver {
 	}
 
 	void _move(MoveDirection direction) {
-		if (_selectionContainer is Document) {
+		if (_selectionContainer.isA<Document>()) {
 			final double x = window.scrollX.toDouble();
 			final double y = window.scrollY.toDouble();
 			if (direction == MoveDirection.down) {
-				window.scrollTo(x, y + _step);
+				window.scrollTo(ScrollToOptions(left: x, top: y + _step));
 			} else if (direction == MoveDirection.up) {
-				window.scrollTo(x, y - _step);
+				window.scrollTo(ScrollToOptions(left: x, top: y - _step));
 			} else if (direction == MoveDirection.left) {
-				window.scrollTo(x - _step, y);
+				window.scrollTo(ScrollToOptions(left: x - _step, top: y));
 			} else {
-				window.scrollTo(x + _step, y);
+				window.scrollTo(ScrollToOptions(left: x + _step, top: y));
 			}
 		} else {
 			final Element container = _selectionContainer as Element;
-			final int x = container.scrollLeft;
-			final int y = container.scrollTop;
+			final double x = container.scrollLeft.toDouble();
+			final double y = container.scrollTop.toDouble();
 			if (direction == MoveDirection.down) {
 				container.scrollTop = (y + _step).round();
 			} else if (direction == MoveDirection.up) {
@@ -138,7 +138,7 @@ class SelectionObserver {
 				container.scrollLeft = (x + _step).round();
 			}
 		}
-		_requestAnimationFrameId = window.requestAnimationFrame((_) => _move(direction));
+		_requestAnimationFrameId = raf((_) => _move(direction));
 	}
 
 	void _startMove(MoveDirection direction) {

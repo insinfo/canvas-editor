@@ -1,5 +1,5 @@
 import 'dart:async';
-import 'dart:html';
+import 'package:canvas_text_editor/src/dom/dom.dart';
 
 import '../../../../interface/element.dart';
 import '../image_particle.dart';
@@ -36,14 +36,14 @@ class LaTexParticle extends ImageParticle {
 		}
 
 		final String cacheKey = element.value;
-		final ImageElement? cached = imageCache[cacheKey];
+		final HTMLImageElement? cached = imageCache[cacheKey];
 		if (cached != null) {
 			ctx.drawImageScaled(cached, x, y, width, height);
 			return;
 		}
 
 		final Completer<IElement> completer = Completer<IElement>();
-		final ImageElement img = ImageElement()..src = svgData;
+		final HTMLImageElement img = HTMLImageElement()..src = svgData;
 
 		img.onLoad.first.then((_) {
 			imageCache[cacheKey] = img;

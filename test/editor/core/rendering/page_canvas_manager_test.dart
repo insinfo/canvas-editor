@@ -1,22 +1,20 @@
 @TestOn('browser')
 library;
 
-import 'dart:html';
-import 'dart:js_util' as js_util;
-
+import 'package:canvas_text_editor/src/dom/dom.dart';
 import 'package:canvas_text_editor/src/editor/core/rendering/page_canvas_manager.dart';
 import 'package:test/test.dart';
 
 void main() {
   group('PageCanvasManager', () {
-    late DivElement host;
+    late HTMLDivElement host;
     late PageCanvasManager manager;
     var width = 120.0;
     var height = 80.0;
     var gap = 12.0;
 
     setUp(() {
-      host = DivElement();
+      host = HTMLDivElement();
       document.body!.append(host);
       manager = PageCanvasManager(
         pageContainer: host,
@@ -38,26 +36,26 @@ void main() {
       expect(currentPage, 0);
       expect(manager.pageList, hasLength(3));
       expect(manager.contextList, hasLength(3));
-      expect(host.children, hasLength(3));
+      expect(host.children.length, 3);
       expect(
-        manager.pageList.map((CanvasElement page) => page.dataset['index']),
+        manager.pageList.map((HTMLCanvasElement page) => page.data('index')),
         <String?>['0', '1', '2'],
       );
 
-      final CanvasElement retainedFirstPage = manager.pageList.first;
+      final HTMLCanvasElement retainedFirstPage = manager.pageList.first;
       currentPage = manager.syncPageCount(1, 2);
 
       expect(currentPage, 0);
       expect(manager.pageList, hasLength(1));
       expect(manager.contextList, hasLength(1));
-      expect(host.children, hasLength(1));
+      expect(host.children.length, 1);
       expect(manager.pageList.single, same(retainedFirstPage));
     });
 
     test('paginas novas nascem dormentes com footprint CSS completo', () {
       manager.syncPageCount(2, 0);
 
-      for (final CanvasElement page in manager.pageList) {
+      for (final HTMLCanvasElement page in manager.pageList) {
         expect(page.width, 1);
         expect(page.height, 1);
         expect(page.style.width, '120px');
@@ -73,19 +71,15 @@ void main() {
         ..setPagePixelRatio(2)
         ..setPageLive(0, true);
 
-      final CanvasElement page = manager.pageList.single;
+      final HTMLCanvasElement page = manager.pageList.single;
       expect(page.width, 240);
       expect(page.height, 160);
       expect(page.style.width, '120px');
       expect(page.style.height, '80px');
 
-      final Object transform = js_util.callMethod<Object>(
-        manager.contextList.single,
-        'getTransform',
-        const <Object>[],
-      );
-      expect(js_util.getProperty<num>(transform, 'a'), 2);
-      expect(js_util.getProperty<num>(transform, 'd'), 2);
+      final DOMMatrix transform = manager.contextList.single.getTransform();
+      expect(transform.a, 2);
+      expect(transform.d, 2);
     });
 
     test('dormancy libera bitmap sem alterar CSS', () {
@@ -93,7 +87,7 @@ void main() {
         ..syncPageCount(1, 0)
         ..setPagePixelRatio(2)
         ..setPageLive(0, true);
-      final CanvasElement page = manager.pageList.single;
+      final HTMLCanvasElement page = manager.pageList.single;
       final String cssWidth = page.style.width;
       final String cssHeight = page.style.height;
       final String cssGap = page.style.marginBottom;

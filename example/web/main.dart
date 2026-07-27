@@ -1,33 +1,33 @@
-import 'dart:html';
-
 import 'package:canvas_text_editor/canvas_text_editor.dart';
+import 'package:canvas_text_editor/src/dom/dom.dart';
 
 void main() {
-  final DivElement host = document.querySelector('#editor-host') as DivElement;
-  final ButtonElement modeButton =
-      document.querySelector('#mode-toggle') as ButtonElement;
-  final ButtonElement settingsToggle =
-      document.querySelector('#settings-toggle') as ButtonElement;
-  final ButtonElement settingsClose =
-      document.querySelector('#settings-close') as ButtonElement;
+  final HTMLDivElement host =
+      document.querySelector('#editor-host') as HTMLDivElement;
+  final HTMLButtonElement modeButton =
+      document.querySelector('#mode-toggle') as HTMLButtonElement;
+  final HTMLButtonElement settingsToggle =
+      document.querySelector('#settings-toggle') as HTMLButtonElement;
+  final HTMLButtonElement settingsClose =
+      document.querySelector('#settings-close') as HTMLButtonElement;
   final Element settingsPanel =
       document.querySelector('#settings-panel') as Element;
 
   // ── Settings checkboxes ──
-  final InputElement optWordMode =
-      document.querySelector('#opt-word-mode') as InputElement;
-  final InputElement optToolbar =
-      document.querySelector('#opt-toolbar') as InputElement;
-  final InputElement optTitlebar =
-      document.querySelector('#opt-titlebar') as InputElement;
-  final InputElement optCatalog =
-      document.querySelector('#opt-catalog') as InputElement;
-  final InputElement optStatusbar =
-      document.querySelector('#opt-statusbar') as InputElement;
-  final InputElement optPageMode =
-      document.querySelector('#opt-page-mode') as InputElement;
-  final InputElement optReadonly =
-      document.querySelector('#opt-readonly') as InputElement;
+  final HTMLInputElement optWordMode =
+      document.querySelector('#opt-word-mode') as HTMLInputElement;
+  final HTMLInputElement optToolbar =
+      document.querySelector('#opt-toolbar') as HTMLInputElement;
+  final HTMLInputElement optTitlebar =
+      document.querySelector('#opt-titlebar') as HTMLInputElement;
+  final HTMLInputElement optCatalog =
+      document.querySelector('#opt-catalog') as HTMLInputElement;
+  final HTMLInputElement optStatusbar =
+      document.querySelector('#opt-statusbar') as HTMLInputElement;
+  final HTMLInputElement optPageMode =
+      document.querySelector('#opt-page-mode') as HTMLInputElement;
+  final HTMLInputElement optReadonly =
+      document.querySelector('#opt-readonly') as HTMLInputElement;
 
   // ── Current state ──
   String currentHeight = 'calc(100vh - 230px)';
@@ -35,14 +35,13 @@ void main() {
   late CanvasEditorWidget widget;
 
   CanvasEditorWidget createWidget() {
-    final CanvasEditorAppearance appearance = optWordMode.checked == true
+    final CanvasEditorAppearance appearance = optWordMode.checked
         ? CanvasEditorAppearance.word
         : CanvasEditorAppearance.compact;
 
-    final CanvasEditorWidgetMode mode =
-        (optReadonly.checked == true || isViewer)
-            ? CanvasEditorWidgetMode.viewer
-            : CanvasEditorWidgetMode.editor;
+    final CanvasEditorWidgetMode mode = (optReadonly.checked || isViewer)
+        ? CanvasEditorWidgetMode.viewer
+        : CanvasEditorWidgetMode.editor;
 
     return CanvasEditorWidget(
       host,
@@ -50,7 +49,7 @@ void main() {
         height: currentHeight,
         mode: mode,
         appearance: appearance,
-        showToolbar: optToolbar.checked ?? true,
+        showToolbar: optToolbar.checked,
         documentTitle: 'Document — Canvas Editor',
         data: IEditorData(main: _sampleDocument()),
         editorOptions: IEditorOption(
@@ -72,10 +71,10 @@ void main() {
 
   // ── Settings panel toggle ──
   settingsToggle.onClick.listen((_) {
-    settingsPanel.classes.toggle('settings-panel--hidden');
+    settingsPanel.classList.toggle('settings-panel--hidden');
   });
   settingsClose.onClick.listen((_) {
-    settingsPanel.classes.add('settings-panel--hidden');
+    settingsPanel.classList.add('settings-panel--hidden');
   });
 
   // ── Mode toggle ──
@@ -84,7 +83,7 @@ void main() {
     widget.setMode(
       isViewer ? CanvasEditorWidgetMode.viewer : CanvasEditorWidgetMode.editor,
     );
-    modeButton.text = isViewer ? 'Back to Editor' : 'Open as Viewer';
+    modeButton.textContent = isViewer ? 'Back to Editor' : 'Open as Viewer';
   });
 
   // ── Settings that require full rebuild ──
@@ -93,43 +92,45 @@ void main() {
 
   // ── Settings that can be applied at runtime ──
   optTitlebar.onChange.listen((_) {
-    _toggleTitlebar(widget, optTitlebar.checked == true);
+    _toggleTitlebar(widget, optTitlebar.checked);
   });
 
   optCatalog.onChange.listen((_) {
-    final bool show = optCatalog.checked == true;
+    final bool show = optCatalog.checked;
     if (show != widget.catalogPanel.isVisible) {
       widget.toggleCatalog();
     }
   });
 
   optStatusbar.onChange.listen((_) {
-    _toggleStatusbar(widget, optStatusbar.checked == true);
+    _toggleStatusbar(widget, optStatusbar.checked);
   });
 
   optPageMode.onChange.listen((_) {
-    _togglePageMode(widget, optPageMode.checked == true);
+    _togglePageMode(widget, optPageMode.checked);
   });
 
   optReadonly.onChange.listen((_) {
-    final bool ro = optReadonly.checked == true;
+    final bool ro = optReadonly.checked;
     widget.setMode(
       ro ? CanvasEditorWidgetMode.viewer : CanvasEditorWidgetMode.editor,
     );
   });
 
   // ── Height buttons ──
-  for (final ButtonElement btn
-      in document.querySelectorAll('[data-height]').cast<ButtonElement>()) {
+  for (final HTMLButtonElement btn in document
+      .querySelectorAll('[data-height]')
+      .toElements()
+      .whereType<HTMLButtonElement>()) {
     btn.onClick.listen((_) {
-      currentHeight = btn.dataset['height'] ?? currentHeight;
+      currentHeight = btn.data('height') ?? currentHeight;
       widget.root.querySelector('.ce-embed__scroll')?.style.height =
           currentHeight;
       // Update active state
       for (final Element sibling
-          in document.querySelectorAll('[data-height]')) {
-        sibling.classes.toggle(
-            'demo-btn--active', sibling.dataset['height'] == currentHeight);
+          in document.querySelectorAll('[data-height]').toElements()) {
+        sibling.classList.toggle(
+            'demo-btn--active', sibling.data('height') == currentHeight);
       }
     });
   }
@@ -140,13 +141,13 @@ void main() {
 
 void _applyRuntimeToggles(
   CanvasEditorWidget widget,
-  InputElement optTitlebar,
-  InputElement optStatusbar,
-  InputElement optPageMode,
+  HTMLInputElement optTitlebar,
+  HTMLInputElement optStatusbar,
+  HTMLInputElement optPageMode,
 ) {
-  _toggleTitlebar(widget, optTitlebar.checked == true);
-  _toggleStatusbar(widget, optStatusbar.checked == true);
-  _togglePageMode(widget, optPageMode.checked == true);
+  _toggleTitlebar(widget, optTitlebar.checked);
+  _toggleStatusbar(widget, optStatusbar.checked);
+  _togglePageMode(widget, optPageMode.checked);
 }
 
 void _toggleTitlebar(CanvasEditorWidget widget, bool show) {

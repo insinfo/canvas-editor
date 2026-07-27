@@ -1,7 +1,6 @@
 import 'dart:async';
 import 'dart:convert';
-import 'dart:html';
-import 'dart:js_util' as js_util;
+import 'package:canvas_text_editor/src/dom/dom.dart';
 import 'dart:typed_data';
 
 import 'package:canvas_text_editor/ce_docx.dart';
@@ -86,7 +85,7 @@ class CanvasEditorConfig {
 /// um [UiScheduler], que coalesce as atualizações em um flush por frame.
 class CanvasEditorWidget
     implements CanvasEditorShellActions, CanvasViewerActions {
-  CanvasEditorWidget(HtmlElement host, {CanvasEditorConfig? config})
+  CanvasEditorWidget(HTMLElement host, {CanvasEditorConfig? config})
       : _host = host,
         config = config ?? CanvasEditorConfig() {
     _mount();
@@ -99,14 +98,14 @@ class CanvasEditorWidget
 
   static int _nextId = 0;
 
-  final HtmlElement _host;
+  final HTMLElement _host;
   final CanvasEditorConfig config;
-  late final DivElement root;
-  late final DivElement body;
-  late final DivElement scrollContainer;
-  late final DivElement editorSurface;
+  late final HTMLDivElement root;
+  late final HTMLDivElement body;
+  late final HTMLDivElement scrollContainer;
+  late final HTMLDivElement editorSurface;
   late final Editor editor;
-  late final FileUploadInputElement fileInput;
+  late final HTMLInputElement fileInput;
 
   late final UiScheduler _scheduler;
   late final WidgetLoadingOverlay loading;
@@ -143,42 +142,42 @@ class CanvasEditorWidget
 
     _scheduler = UiScheduler();
 
-    root = DivElement()
-      ..classes.add('ce-embed')
+    root = HTMLDivElement()
+      ..classList.add('ce-embed')
       // GlobalEvent usa este marcador para distinguir o chrome interno de um
       // clique realmente externo. Sem ele, mousedown na ribbon/mini-toolbar
       // emitia recoveryRangeStyle (size padrão 16) antes do estilo real.
       ..setAttribute(editorComponent, EditorComponent.component.name);
     if (config.mode == CanvasEditorWidgetMode.viewer) {
-      root.classes.add('ce-embed--viewer');
+      root.classList.add('ce-embed--viewer');
     }
     if (config.appearance == CanvasEditorAppearance.word &&
         config.mode == CanvasEditorWidgetMode.editor) {
-      root.classes.add('ce-embed--word');
+      root.classList.add('ce-embed--word');
       root.append(_buildWordTitlebar());
     }
 
-    fileInput = FileUploadInputElement()
+    fileInput = (HTMLInputElement()..type = 'file')
       ..accept =
           '.docx,application/vnd.openxmlformats-officedocument.wordprocessingml.document'
-      ..classes.add('ce-embed__file-input')
+      ..classList.add('ce-embed__file-input')
       ..setAttribute('aria-hidden', 'true');
     _fileInputSubscription = fileInput.onChange.listen(_handleFileSelection);
 
-    scrollContainer = DivElement()
+    scrollContainer = HTMLDivElement()
       ..id = scrollId
-      ..classes.add('ce-embed__scroll')
+      ..classList.add('ce-embed__scroll')
       // Focável por clique (tabindex -1): garante que Ctrl+F/Ctrl+H cheguem
       // ao root também no modo viewer, onde a inputarea do editor fica oculta.
       ..tabIndex = -1
       ..style.height = config.height;
-    editorSurface = DivElement()..classes.add('ce-embed__surface');
+    editorSurface = HTMLDivElement()..classList.add('ce-embed__surface');
     scrollContainer.append(editorSurface);
-    body = DivElement()
-      ..classes.add('ce-embed__body')
+    body = HTMLDivElement()
+      ..classList.add('ce-embed__body')
       ..append(scrollContainer);
 
-    _host.children.clear();
+    _host.clearChildren();
 
     final IEditorOption options = config.editorOptions ?? IEditorOption();
     options
@@ -403,13 +402,13 @@ class CanvasEditorWidget
   void toggleRulers() {
     _rulersVisible = !_rulersVisible;
     _ruler?.setVisible(_rulersVisible &&
-        !root.classes.contains('ce-embed--viewer') &&
-        !root.classes.contains('ce-view-draft'));
+        !root.classList.contains('ce-embed--viewer') &&
+        !root.classList.contains('ce-view-draft'));
   }
 
   @override
   void setDocumentViewMode(CanvasDocumentViewMode mode) {
-    root.classes
+    root.classList
       ..toggle('ce-view-web', mode == CanvasDocumentViewMode.webLayout)
       ..toggle('ce-view-draft', mode == CanvasDocumentViewMode.draft);
     command.executePageMode(mode == CanvasDocumentViewMode.printLayout
@@ -421,17 +420,17 @@ class CanvasEditorWidget
   /// Reavalia a mini-toolbar após uma seleção criada programaticamente.
   void refreshFloatingToolbar() => _floatingToolbar?.refresh();
 
-  DivElement _buildWordTitlebar() => DivElement()
-    ..classes.add('ce-word-titlebar')
-    ..children.addAll(<Element>[
-      SpanElement()
-        ..classes.addAll(<String>['ti', 'ti-file-type-docx'])
+  HTMLDivElement _buildWordTitlebar() => HTMLDivElement()
+    ..classList.add('ce-word-titlebar')
+    ..appendAll(<Element>[
+      HTMLSpanElement()
+        ..classList.addAll(<String>['ti', 'ti-file-type-docx'])
         ..setAttribute('aria-hidden', 'true'),
-      SpanElement()
-        ..classes.add('ce-word-titlebar__title')
+      HTMLSpanElement()
+        ..classList.add('ce-word-titlebar__title')
         ..text = config.documentTitle,
-      SpanElement()
-        ..classes.add('ce-word-titlebar__mode')
+      HTMLSpanElement()
+        ..classList.add('ce-word-titlebar__mode')
         ..text = config.mode == CanvasEditorWidgetMode.viewer
             ? 'Somente leitura'
             : 'Editando',
@@ -450,8 +449,8 @@ class CanvasEditorWidget
   }
 
   Future<void> _handleFileSelection(Event _) async {
-    final List<File>? files = fileInput.files;
-    if (files == null || files.isEmpty) return;
+    final List<File> files = filesOf(fileInput.files);
+    if (files.isEmpty) return;
     final File file = files.first;
     try {
       await loadDocx(await _readFileBytes(file), fileName: file.name);
@@ -660,14 +659,14 @@ class CanvasEditorWidget
     final String name = fileName ?? _openedDocxName ?? 'documento.docx';
     await loading.show('Salvando $name…');
     try {
-      final Blob blob = Blob(<Object>[
-        saveDocx()
-      ], 'application/vnd.openxmlformats-officedocument.wordprocessingml.document');
-      final String url = Url.createObjectUrlFromBlob(blob);
-      AnchorElement(href: url)
+      final Blob blob = blobFromBytes(saveDocx(),
+          type:
+              'application/vnd.openxmlformats-officedocument.wordprocessingml.document');
+      final String url = URL.createObjectURL(blob);
+      (HTMLAnchorElement()..href = url)
         ..download = name
         ..click();
-      Timer.run(() => Url.revokeObjectUrl(url));
+      Timer.run(() => URL.revokeObjectURL(url));
     } catch (error) {
       config.onError?.call(error);
     } finally {
@@ -683,7 +682,7 @@ class CanvasEditorWidget
       final List<String> images = await command.getImage();
       if (images.isEmpty) return;
       final int index = statusBar.currentPageIndex.clamp(0, images.length - 1);
-      AnchorElement(href: images[index])
+      (HTMLAnchorElement()..href = images[index])
         ..download = 'pagina-${index + 1}.png'
         ..click();
     } catch (error) {
@@ -713,13 +712,13 @@ class CanvasEditorWidget
       } catch (_) {
         bytes = await _exportRasterPdfFallback();
       }
-      final String url = Url.createObjectUrlFromBlob(
-        Blob(<Object>[bytes], 'application/pdf'),
+      final String url = URL.createObjectURL(
+        blobFromBytes(bytes, type: 'application/pdf'),
       );
-      AnchorElement(href: url)
+      (HTMLAnchorElement()..href = url)
         ..download = name
         ..click();
-      Timer.run(() => Url.revokeObjectUrl(url));
+      Timer.run(() => URL.revokeObjectURL(url));
     } catch (error) {
       config.onError?.call(error);
     } finally {
@@ -783,7 +782,7 @@ class CanvasEditorWidget
   }
 
   void setMode(CanvasEditorWidgetMode mode) {
-    root.classes
+    root.classList
         .toggle('ce-embed--viewer', mode == CanvasEditorWidgetMode.viewer);
     root.querySelector('.ce-word-titlebar__mode')?.text =
         mode == CanvasEditorWidgetMode.viewer ? 'Somente leitura' : 'Editando';
@@ -826,7 +825,7 @@ class CanvasEditorWidget
   @override
   void viewerDownload() => unawaited(downloadDocx());
 
-  IFrameElement? _printFrame;
+  HTMLIFrameElement? _printFrame;
   String? _printObjectUrl;
   StreamSubscription<Event>? _afterPrintSubscription;
 
@@ -834,7 +833,7 @@ class CanvasEditorWidget
     _printFrame?.remove();
     _printFrame = null;
     if (_printObjectUrl != null) {
-      Url.revokeObjectUrl(_printObjectUrl!);
+      URL.revokeObjectURL(_printObjectUrl!);
       _printObjectUrl = null;
     }
     _afterPrintSubscription?.cancel();
@@ -842,9 +841,8 @@ class CanvasEditorWidget
   }
 
   /// Imprime via PDF VETORIAL num iframe nomeado sem exibição — o print é
-  /// invocado em `window.frames['ce-printf']` via js_util (objeto JS cru;
-  /// o `contentWindow` do dart:html é um wrapper Dart e o callMethod nele
-  /// falha). Padrão comprovado no new_sali/frontend.
+  /// invocado em `window.frames['ce-printf']` via js_interop_unsafe (objeto
+  /// JS cru do frame). Padrão comprovado no new_sali/frontend.
   @override
   Future<void> printDocument() async {
     await loading.show('Preparando impressão…');
@@ -858,28 +856,33 @@ class CanvasEditorWidget
       }
 
       _disposePrintArtifacts();
-      _printObjectUrl = Url.createObjectUrlFromBlob(
-        Blob(<Object>[bytes], 'application/pdf'),
+      final String printUrl = URL.createObjectURL(
+        blobFromBytes(bytes, type: 'application/pdf'),
       );
-      final IFrameElement frame = IFrameElement()
+      _printObjectUrl = printUrl;
+      final HTMLIFrameElement frame = HTMLIFrameElement()
         ..id = 'ce-printf'
         ..name = 'ce-printf'
-        ..src = _printObjectUrl
+        ..src = printUrl
         ..style.display = 'none';
       _printFrame = frame;
       document.body?.append(frame);
 
-      _afterPrintSubscription = window.on['afterprint'].listen((_) {
+      _afterPrintSubscription = window.afterPrint.listen((_) {
         _disposePrintArtifacts();
       });
 
       await frame.onLoad.first;
       try {
-        final dynamic frames = js_util.getProperty(window, 'frames');
-        final dynamic namedFrame = js_util.getProperty(frames, 'ce-printf');
-        js_util.callMethod(namedFrame, 'print', <Object>[]);
+        // `window.frames['ce-printf'].print()` — objeto JS cru via
+        // js_interop (o wrapper Dart do contentWindow não expõe print).
+        final JSObject? frames =
+            (window as JSObject).getProperty('frames'.toJS) as JSObject?;
+        final JSObject? namedFrame =
+            frames?.getProperty('ce-printf'.toJS) as JSObject?;
+        namedFrame?.callMethod('print'.toJS);
       } catch (error) {
-        window.console.warn('printDocument: print via iframe falhou ($error). '
+        consoleWarn('printDocument: print via iframe falhou ($error). '
             'Use Ctrl+P.');
       }
     } catch (error) {
@@ -912,7 +915,7 @@ class CanvasEditorWidget
       return;
     }
     document.head?.append(
-      LinkElement()
+      (document.createElement('link') as HTMLLinkElement)
         ..rel = 'stylesheet'
         ..href = href
         ..dataset['ceStyle'] = marker,

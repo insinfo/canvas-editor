@@ -1,5 +1,5 @@
 import 'dart:async';
-import 'dart:html';
+import 'package:canvas_text_editor/src/dom/dom.dart';
 
 import '../../dataset/constant/context_menu.dart';
 import '../../dataset/constant/editor.dart';
@@ -33,7 +33,7 @@ class _RenderPayload {
 	final List<IRegisterContextMenu> contextMenuList;
 	final double left;
 	final double top;
-	final DivElement? parentMenuContainer;
+	final HTMLDivElement? parentMenuContainer;
 }
 
 class ContextMenu {
@@ -52,8 +52,8 @@ class ContextMenu {
 				...controlMenus,
 				...hyperlinkMenus,
 			],
-			_contextMenuContainerList = <DivElement>[],
-			_contextMenuRelationShip = <DivElement, DivElement>{},
+			_contextMenuContainerList = <HTMLDivElement>[],
+			_contextMenuRelationShip = <HTMLDivElement, HTMLDivElement>{},
 			_context = null {
 		_addEvent();
 	}
@@ -64,10 +64,10 @@ class ContextMenu {
 	final RangeManager _range;
 	final Position _position;
 	final I18n _i18n;
-	final DivElement _container;
+	final HTMLDivElement _container;
 	final List<IRegisterContextMenu> _contextMenuList;
-	final List<DivElement> _contextMenuContainerList;
-	final Map<DivElement, DivElement> _contextMenuRelationShip;
+	final List<HTMLDivElement> _contextMenuContainerList;
+	final Map<HTMLDivElement, HTMLDivElement> _contextMenuRelationShip;
 	IContextMenuContext? _context;
 
 	StreamSubscription<MouseEvent>? _contextMenuSubscription;
@@ -87,7 +87,7 @@ class ContextMenu {
 	}
 
 	void dispose() {
-		for (final DivElement container in _contextMenuContainerList) {
+		for (final HTMLDivElement container in _contextMenuContainerList) {
 			container.remove();
 		}
 		_contextMenuContainerList.clear();
@@ -108,8 +108,8 @@ class ContextMenu {
 			_render(
 				_RenderPayload(
 					contextMenuList: renderList,
-					left: evt.client.x.toDouble(),
-					top: evt.client.y.toDouble(),
+					left: evt.clientX.toDouble(),
+					top: evt.clientY.toDouble(),
 				),
 			);
 		}
@@ -120,14 +120,14 @@ class ContextMenu {
 		if (_contextMenuContainerList.isEmpty) {
 			return;
 		}
-		final List<EventTarget> path = evt.composedPath();
+		final List<EventTarget> path = evt.composedPath().toDart;
 		final EventTarget? target = path.isNotEmpty ? path.first : evt.target;
-		if (target is! Element) {
+		if (target == null || !target.isA<Element>()) {
 			dispose();
 			return;
 		}
 		final Element? contextMenuDom = findParent(
-			target,
+			target as Element,
 			(Element element) => element.getAttribute(editorComponent) == EditorComponent.contextmenu.name,
 			true,
 		);
@@ -218,25 +218,25 @@ class ContextMenu {
 		);
 	}
 
-	DivElement _createContextMenuContainer() {
-		final DivElement container = DivElement()
-			..classes.add('$editorPrefix-contextmenu-container')
+	HTMLDivElement _createContextMenuContainer() {
+		final HTMLDivElement container = HTMLDivElement()
+			..classList.add('$editorPrefix-contextmenu-container')
 			..setAttribute(editorComponent, EditorComponent.contextmenu.name);
 		_container.append(container);
 		return container;
 	}
 
-	DivElement _render(_RenderPayload payload) {
-		final DivElement container = _createContextMenuContainer();
-		final DivElement content = DivElement()
-			..classes.add('$editorPrefix-contextmenu-content');
+	HTMLDivElement _render(_RenderPayload payload) {
+		final HTMLDivElement container = _createContextMenuContainer();
+		final HTMLDivElement content = HTMLDivElement()
+			..classList.add('$editorPrefix-contextmenu-content');
 		container.append(content);
 
 		if (payload.parentMenuContainer != null) {
 			_contextMenuRelationShip[payload.parentMenuContainer!] = container;
 		}
 
-		DivElement? childMenuContainer;
+		HTMLDivElement? childMenuContainer;
 
 		for (int index = 0; index < payload.contextMenuList.length; index++) {
 			final IRegisterContextMenu menu = payload.contextMenuList[index];
@@ -246,23 +246,23 @@ class ContextMenu {
 				final bool prevIsDivider =
 					index > 0 && payload.contextMenuList[index - 1].isDivider == true;
 				if (!isFirst && !isLast && !prevIsDivider) {
-					content.append(DivElement()..classes.add('$editorPrefix-contextmenu-divider'));
+					content.append(HTMLDivElement()..classList.add('$editorPrefix-contextmenu-divider'));
 				}
 				continue;
 			}
 
-			final DivElement menuItem = DivElement()
-				..classes.add('$editorPrefix-contextmenu-item');
+			final HTMLDivElement menuItem = HTMLDivElement()
+				..classList.add('$editorPrefix-contextmenu-item');
 
 			if (menu.childMenus != null && menu.childMenus!.isNotEmpty) {
 				final List<IRegisterContextMenu> childMenus = _filterMenuList(menu.childMenus!);
 				final bool hasRenderableChild = childMenus.any((IRegisterContextMenu child) => child.isDivider != true);
 				if (hasRenderableChild) {
-					menuItem.classes.add('$editorPrefix-contextmenu-sub-item');
+					menuItem.classList.add('$editorPrefix-contextmenu-sub-item');
 					menuItem.onMouseEnter.listen((_) {
 						_setHoverStatus(menuItem, true);
 						_removeSubMenu(container);
-						final Rectangle<num> rect = menuItem.getBoundingClientRect();
+						final DOMRect rect = menuItem.getBoundingClientRect();
 						childMenuContainer = _render(
 							_RenderPayload(
 								contextMenuList: childMenus,
@@ -295,13 +295,13 @@ class ContextMenu {
 				});
 			}
 
-			final Element icon = Element.tag('i');
+			final Element icon = document.createElement('i');
 			if (menu.icon != null && menu.icon!.isNotEmpty) {
-				icon.classes.add('$editorPrefix-contextmenu-${menu.icon}');
+				icon.classList.add('$editorPrefix-contextmenu-${menu.icon}');
 			}
 			menuItem.append(icon);
 
-			final SpanElement label = SpanElement();
+			final HTMLSpanElement label = HTMLSpanElement();
 			final String labelText;
 			if (menu.i18nPath != null) {
 				final dynamic translation = _i18n.t(menu.i18nPath!);
@@ -313,8 +313,8 @@ class ContextMenu {
 			menuItem.append(label);
 
 			if (menu.shortCut != null && menu.shortCut!.isNotEmpty) {
-				final SpanElement shortcut = SpanElement()
-					..classes.add('$editorPrefix-shortcut')
+				final HTMLSpanElement shortcut = HTMLSpanElement()
+					..classList.add('$editorPrefix-shortcut')
 					..text = menu.shortCut;
 				menuItem.append(shortcut);
 			}
@@ -332,8 +332,8 @@ class ContextMenu {
 		return container;
 	}
 
-	void _adjustPosition(DivElement container, double left, double top) {
-		final Rectangle<num> rect = container.getBoundingClientRect();
+	void _adjustPosition(HTMLDivElement container, double left, double top) {
+		final DOMRect rect = container.getBoundingClientRect();
 		final double width = rect.width.toDouble();
 		final double height = rect.height.toDouble();
 		final double viewportWidth = window.innerWidth?.toDouble() ?? width;
@@ -345,25 +345,25 @@ class ContextMenu {
 			..top = '${adjustedTop}px';
 	}
 
-	void _removeSubMenu(DivElement parent) {
-		final DivElement? child = _contextMenuRelationShip.remove(parent);
+	void _removeSubMenu(HTMLDivElement parent) {
+		final HTMLDivElement? child = _contextMenuRelationShip.remove(parent);
 		if (child != null) {
 			_removeSubMenu(child);
 			child.remove();
 		}
 	}
 
-	void _setHoverStatus(DivElement target, bool status) {
+	void _setHoverStatus(HTMLDivElement target, bool status) {
 		final Element? parent = target.parent;
 		if (parent != null) {
-			for (final Element element in parent.children.whereType<Element>()) {
-				element.classes.remove('hover');
+			for (final Element element in parent.children.toElements()) {
+				element.classList.remove('hover');
 			}
 		}
 		if (status) {
-			target.classes.add('hover');
+			target.classList.add('hover');
 		} else {
-			target.classes.remove('hover');
+			target.classList.remove('hover');
 		}
 	}
 

@@ -1,5 +1,5 @@
 import 'dart:async';
-import 'dart:html';
+import 'package:canvas_text_editor/src/dom/dom.dart';
 
 import '../../interface/event_bus.dart';
 import '../draw/draw.dart';
@@ -14,7 +14,7 @@ class MouseObserver {
 	}
 
 	final EventBus<EventBusMap> _eventBus;
-	final DivElement _pageContainer;
+	final HTMLDivElement _pageContainer;
 	final List<StreamSubscription<dynamic>> _subscriptions = <StreamSubscription<dynamic>>[];
 
 	void dispose() {

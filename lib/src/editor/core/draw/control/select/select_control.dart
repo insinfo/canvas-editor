@@ -1,4 +1,4 @@
-import 'dart:html';
+import 'package:canvas_text_editor/src/dom/dom.dart';
 
 import '../../../../dataset/constant/editor.dart' as editor_constants;
 import '../../../../dataset/enum/control.dart';
@@ -26,7 +26,7 @@ class SelectControl implements IControlInstance {
 	final Draw _draw;
 	final IEditorOption _options;
 	bool _isPopup = false;
-	DivElement? _selectDom;
+	HTMLDivElement? _selectDom;
 
 	Control get control => _control;
 	Draw get draw => _draw;
@@ -518,19 +518,19 @@ class SelectControl implements IControlInstance {
 			return;
 		}
 
-		final DivElement selectPopupContainer = DivElement()
-			..classes.add('${editor_constants.editorPrefix}-select-control-popup')
+		final HTMLDivElement selectPopupContainer = HTMLDivElement()
+			..classList.add('${editor_constants.editorPrefix}-select-control-popup')
 			..setAttribute(
 				editor_constants.editorComponent,
 				EditorComponent.popup.name,
 			);
 
-		final UListElement ul = UListElement();
+		final HTMLUListElement ul = HTMLUListElement();
 		for (final IValueSet valueSet in controlData.valueSets) {
-			final LIElement li = LIElement();
+			final HTMLLIElement li = HTMLLIElement();
 			final List<String> currentCodes = getCodes();
 			if (currentCodes.contains(valueSet.code)) {
-				li.classes.add('active');
+				li.classList.add('active');
 			}
 			li.onClick.listen((MouseEvent event) {
 				event.stopPropagation();

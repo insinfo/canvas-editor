@@ -1,4 +1,4 @@
-import 'dart:html';
+import 'package:canvas_text_editor/src/dom/dom.dart';
 import 'dart:math' as math;
 
 import '../../../dataset/enum/text.dart';
@@ -21,13 +21,13 @@ class Underline extends AbstractRichText {
 	]) {
 		switch (dashType) {
 			case DashType.dashed:
-				ctx.setLineDash(<double>[3, 1]);
+				ctx.setDash(<double>[3, 1]);
 				break;
 			case DashType.dotted:
-				ctx.setLineDash(<double>[1, 1]);
+				ctx.setDash(<double>[1, 1]);
 				break;
 			default:
-				ctx.setLineDash(<double>[]);
+				ctx.setDash(<double>[]);
 				break;
 		}
 		ctx
@@ -48,7 +48,7 @@ class Underline extends AbstractRichText {
 		final double endX = startX + width;
 		final double endY = startY + spacing * scale;
 		ctx
-			..setLineDash(<double>[])
+			..setDash(<double>[])
 			..beginPath()
 			..moveTo(startX, startY)
 			..lineTo(endX, startY)
@@ -70,7 +70,7 @@ class Underline extends AbstractRichText {
 		final double frequency = scale == 0 ? 0 : 1 / scale;
 		final double adjustY = startY + 2 * amplitude;
 		ctx
-			..setLineDash(<double>[])
+			..setDash(<double>[])
 			..beginPath();
 			for (double dx = 0; dx < width; dx += 1) {
 				final double dy = amplitude * math.sin(frequency * dx);
@@ -90,7 +90,7 @@ class Underline extends AbstractRichText {
 		final double adjustY = (fillRect.y + 2 * lineWidth).floorToDouble() + 0.5;
 		ctx.save();
 		ctx
-			..strokeStyle = strokeColor
+			..strokeColor = strokeColor
 			..lineWidth = lineWidth;
 		switch (fillDecorationStyle) {
 			case TextDecorationStyle.wavy:

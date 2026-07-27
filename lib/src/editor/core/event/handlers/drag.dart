@@ -1,4 +1,4 @@
-import 'dart:html' as html;
+import 'package:canvas_text_editor/src/dom/dom.dart' as html;
 
 import '../../../dataset/enum/common.dart';
 import '../../../dataset/enum/element.dart';
@@ -17,19 +17,13 @@ void dragover(dynamic evt, dynamic host) {
     return;
   }
 
-  if (evt is html.Event) {
-    evt.preventDefault();
-  } else {
-    try {
-      evt?.preventDefault();
-    } catch (_) {
-      // ignore non-standard preventDefault access
-    }
+  if (html.jsIsEvent(evt)) {
+    (evt as html.Event).preventDefault();
   }
 
-  final html.Element? target = evt is html.Event
-      ? evt.target as html.Element?
-      : evt?.target as html.Element?;
+  final html.Element? target = html.jsIsEvent(evt)
+      ? html.asElement((evt as html.Event).target)
+      : null;
   if (target == null) {
     return;
   }
@@ -48,7 +42,7 @@ void dragover(dynamic evt, dynamic host) {
     return;
   }
 
-  final String? pageIndexValue = target.dataset['index'];
+  final String? pageIndexValue = target.data('index');
   if (pageIndexValue != null) {
     final int? pageIndex = int.tryParse(pageIndexValue);
     if (pageIndex != null) {

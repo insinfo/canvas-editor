@@ -1,5 +1,7 @@
 import 'dart:async';
 
+import 'package:canvas_text_editor/src/dom/dom.dart' as html;
+
 import '../../../interface/draw.dart';
 import '../../../interface/range.dart';
 import '../../../utils/ua.dart';
@@ -12,7 +14,15 @@ void compositionstart(dynamic host) {
 void compositionend(dynamic host, dynamic evt) {
   host.isComposing = false;
   final dynamic draw = host.getDraw();
-  final String data = evt?.data as String? ?? '';
+  // CompositionEvent.data lido tipado (dispatch dinâmico em JS falha).
+  String data = '';
+  if (html.jsIsJSObject(evt)) {
+    final html.JSAny? dataProp =
+        (evt as html.JSObject).getProperty('data'.toJS);
+    if (dataProp.isA<html.JSString>()) {
+      data = (dataProp! as html.JSString).toDart;
+    }
+  }
 
   if (data.isEmpty) {
     removeComposingInput(host, restoreOriginalSelection: true);

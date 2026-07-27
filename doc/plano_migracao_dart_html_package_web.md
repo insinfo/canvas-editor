@@ -1,6 +1,22 @@
 # Plano de migração: `dart:html` → `package:web ^1.1.1`
 
-Data: 2026-07-27 · Status: **em execução**
+Data: 2026-07-27 · Status: **CONCLUÍDA** (etapas A–D executadas em 2026-07-27)
+
+Resultado: `lib/`, `example/web/`, `tool/` (incl. harnesses embutidos) e
+`test/` sem `dart:html`/`dart:js_util`/`dart:js`; `example2/` (AngularDart 8)
+fora do escopo e excluído da análise. Verificação: `dart analyze` sem erros,
+77 testes VM DOCX + 4 testes Chrome verdes, dart2js -O2 + smoke puppeteer com
+zero erros JS. Aprendizados que viraram regra na camada `dom.dart`:
+
+- `isA<T>()` recusa variável de tipo no CFE → probes monomórficos
+  (`jsIsEvent`, `jsIsHTMLDivElement`, …) em vez do genérico `jsIsA<T>`.
+- Dispatch dinâmico em objeto JS falha no dart2js → handlers com parâmetro
+  `dynamic` precisam de vista tipada (`jsIsMouseEvent` + cast) antes de ler
+  `button`/`shiftKey`/`preventDefault`.
+- Tear-off de membro interop é proibido (`classList.add` como função,
+  `newDom.setAttribute` em `forEach`) → embrulhar em closure/`toggle(force)`.
+- `dataset['x']` do package:web declara `String` não-nulo e deixa `undefined`
+  vazar → LEITURA sempre via `element.data('x')` (getAttribute, null-safe).
 
 ## 1. Por quê
 

@@ -1,4 +1,4 @@
-import 'dart:html';
+import 'package:canvas_text_editor/src/dom/dom.dart';
 import 'dart:math' as math;
 
 import '../../editor/dataset/constant/editor.dart';
@@ -45,9 +45,9 @@ class Signature {
       ..lineCap = 'round';
     _bindEvent();
     _clearUndoFn();
-    document.documentElement?.classes.add('overflow-hidden');
-    document.body?.classes.add('overflow-hidden');
-    _container.classes.add('overflow-hidden');
+    document.documentElement?.classList.add('overflow-hidden');
+    document.body?.classList.add('overflow-hidden');
+    _container.classList.add('overflow-hidden');
   }
 
   static const int _maxRecordCount = 1000;
@@ -65,11 +65,11 @@ class Signature {
   double _preTimeStamp = 0;
   bool _isDrawing = false;
   bool _isDrawn = false;
-  late final DivElement _mask;
-  late final DivElement _container;
-  late final DivElement _trashContainer;
-  late final DivElement _undoContainer;
-  late final CanvasElement _canvas;
+  late final HTMLDivElement _mask;
+  late final HTMLDivElement _container;
+  late final HTMLDivElement _trashContainer;
+  late final HTMLDivElement _undoContainer;
+  late final HTMLCanvasElement _canvas;
   late final CanvasRenderingContext2D _ctx;
 
   _RenderResult _render() {
@@ -77,18 +77,18 @@ class Signature {
     if (body == null) {
       throw StateError('Document body is not available.');
     }
-    final mask = DivElement()
-      ..classes.add('signature-mask')
+    final mask = HTMLDivElement()
+      ..classList.add('signature-mask')
       ..setAttribute(editorComponent, EditorComponent.component.name);
     body.append(mask);
-    final container = DivElement()
-      ..classes.add('signature-container')
+    final container = HTMLDivElement()
+      ..classList.add('signature-container')
       ..setAttribute(editorComponent, EditorComponent.component.name);
-    final signatureContainer = DivElement()..classes.add('signature');
+    final signatureContainer = HTMLDivElement()..classList.add('signature');
     container.append(signatureContainer);
-    final titleContainer = DivElement()..classes.add('signature-title');
-    final titleSpan = SpanElement()..text = 'Inserir assinatura';
-    final titleClose = Element.tag('i');
+    final titleContainer = HTMLDivElement()..classList.add('signature-title');
+    final titleSpan = HTMLSpanElement()..text = 'Inserir assinatura';
+    final titleClose = document.createElement('i');
     titleClose.onClick.listen((_) {
       _options.onClose?.call();
       _dispose();
@@ -97,26 +97,26 @@ class Signature {
       ..append(titleSpan)
       ..append(titleClose);
     signatureContainer.append(titleContainer);
-    final operationContainer = DivElement()..classes.add('signature-operation');
-    final undoContainer = DivElement()
-      ..classes.add('signature-operation__undo');
-    final undoIcon = Element.tag('i');
-    final undoLabel = SpanElement()..text = 'Desfazer';
+    final operationContainer = HTMLDivElement()..classList.add('signature-operation');
+    final undoContainer = HTMLDivElement()
+      ..classList.add('signature-operation__undo');
+    final undoIcon = document.createElement('i');
+    final undoLabel = HTMLSpanElement()..text = 'Desfazer';
     undoContainer
       ..append(undoIcon)
       ..append(undoLabel);
     operationContainer.append(undoContainer);
-    final trashContainer = DivElement()
-      ..classes.add('signature-operation__trash');
-    final trashIcon = Element.tag('i');
-    final trashLabel = SpanElement()..text = 'Limpar';
+    final trashContainer = HTMLDivElement()
+      ..classList.add('signature-operation__trash');
+    final trashIcon = document.createElement('i');
+    final trashLabel = HTMLSpanElement()..text = 'Limpar';
     trashContainer
       ..append(trashIcon)
       ..append(trashLabel);
     operationContainer.append(trashContainer);
     signatureContainer.append(operationContainer);
-    final canvasContainer = DivElement()..classes.add('signature-canvas');
-    final canvas = CanvasElement()
+    final canvasContainer = HTMLDivElement()..classList.add('signature-canvas');
+    final canvas = HTMLCanvasElement()
       ..width = _canvasWidth.round()
       ..height = _canvasHeight.round();
     canvas.style
@@ -124,9 +124,9 @@ class Signature {
       ..height = '${_canvasHeight / _dpr}px';
     canvasContainer.append(canvas);
     signatureContainer.append(canvasContainer);
-    final menuContainer = DivElement()..classes.add('signature-menu');
-    final cancelButton = ButtonElement()
-      ..classes.add('signature-menu__cancel')
+    final menuContainer = HTMLDivElement()..classList.add('signature-menu');
+    final cancelButton = HTMLButtonElement()
+      ..classList.add('signature-menu__cancel')
       ..text = 'Cancelar'
       ..type = 'button';
     cancelButton.onClick.listen((_) {
@@ -134,7 +134,7 @@ class Signature {
       _dispose();
     });
     menuContainer.append(cancelButton);
-    final confirmButton = ButtonElement()
+    final confirmButton = HTMLButtonElement()
       ..text = 'Confirmar'
       ..type = 'submit';
     confirmButton.onClick.listen((_) {
@@ -280,7 +280,7 @@ class Signature {
       (sw * _dpr).round(),
       (sh * _dpr).round(),
     );
-    final CanvasElement canvas = CanvasElement()
+    final HTMLCanvasElement canvas = HTMLCanvasElement()
       ..style.width = '${sw}px'
       ..style.height = '${sh}px'
       ..width = (sw * _dpr).round()
@@ -291,7 +291,7 @@ class Signature {
       return null;
     }
     context.putImageData(imageData, 0, 0);
-    final String value = canvas.toDataUrl();
+    final String value = canvas.toDataURL();
     return SignatureResult(value: value, width: sw, height: sh);
   }
 
@@ -309,19 +309,20 @@ class Signature {
   }
 
   void _registerTouchEvent(TouchEvent event, String eventName) {
-    final TouchList? touches = event.touches;
-    if (touches == null || touches.isEmpty) {
+    final TouchList touches = event.touches;
+    if (touches.isEmpty) {
       return;
     }
     final Touch? touch = touches.item(0);
     if (touch == null) {
       return;
     }
-    final Point<num> client = touch.client;
     final MouseEvent mouseEvent = MouseEvent(
       eventName,
-      clientX: client.x.toInt(),
-      clientY: client.y.toInt(),
+      MouseEventInit(
+        clientX: touch.clientX.toInt(),
+        clientY: touch.clientY.toInt(),
+      ),
     );
     _canvas.dispatchEvent(mouseEvent);
   }
@@ -329,8 +330,8 @@ class Signature {
   void _dispose() {
     _mask.remove();
     _container.remove();
-    document.documentElement?.classes.remove('overflow-hidden');
-    document.body?.classes.remove('overflow-hidden');
+    document.documentElement?.classList.remove('overflow-hidden');
+    document.body?.classList.remove('overflow-hidden');
   }
 }
 
@@ -342,9 +343,9 @@ class _RenderResult {
       required this.undoContainer,
       required this.canvas});
 
-  final DivElement mask;
-  final DivElement container;
-  final DivElement trashContainer;
-  final DivElement undoContainer;
-  final CanvasElement canvas;
+  final HTMLDivElement mask;
+  final HTMLDivElement container;
+  final HTMLDivElement trashContainer;
+  final HTMLDivElement undoContainer;
+  final HTMLCanvasElement canvas;
 }

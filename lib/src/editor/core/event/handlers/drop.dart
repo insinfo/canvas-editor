@@ -1,5 +1,4 @@
-import 'dart:html' as html;
-import 'dart:js_util' as js_util;
+import 'package:canvas_text_editor/src/dom/dom.dart' as html;
 
 import "./paste.dart" show pasteImage;
 
@@ -14,7 +13,8 @@ void drop(dynamic evt, dynamic host) {
     }
   }
 
-  final html.Event? event = evt is html.Event ? evt : null;
+  final html.Event? event =
+      html.jsIsEvent(evt) ? evt as html.Event : null;
   if (event == null) {
     return;
   }
@@ -27,10 +27,7 @@ void drop(dynamic evt, dynamic host) {
     return;
   }
 
-  final List<html.File>? files = dataTransfer?.files;
-  if (files == null) {
-    return;
-  }
+  final List<html.File> files = html.filesOf(dataTransfer?.files);
   for (var i = 0; i < files.length; i++) {
     final html.File file = files[i];
     if (file.type.startsWith("image")) {
@@ -41,9 +38,10 @@ void drop(dynamic evt, dynamic host) {
 
 html.DataTransfer? _getDataTransfer(html.Event event) {
   try {
-    final dynamic value = js_util.getProperty(event, 'dataTransfer');
-    if (value is html.DataTransfer) {
-      return value;
+    final html.JSAny? value =
+        (event as html.JSObject).getProperty('dataTransfer'.toJS);
+    if (value != null && value.isA<html.DataTransfer>()) {
+      return value as html.DataTransfer;
     }
     return null;
   } catch (_) {
@@ -59,16 +57,13 @@ bool _shouldPreventDefault(dynamic overrideResult) {
     final dynamic value = overrideResult['preventDefault'];
     return value != null && value != false;
   }
-  try {
-    if (js_util.hasProperty(overrideResult, 'preventDefault')) {
-      final dynamic value =
-          js_util.getProperty(overrideResult, 'preventDefault');
-      if (value != null && value != false) {
-        return true;
-      }
+  if (html.jsIsJSObject(overrideResult)) {
+    final html.JSObject jsResult = overrideResult as html.JSObject;
+    if (jsResult.hasProperty('preventDefault'.toJS).toDart) {
+      final html.JSAny? value = jsResult.getProperty('preventDefault'.toJS);
+      return value != null && value != false.toJS;
     }
-  } catch (_) {
-    // ignore interop read failure
+    return false;
   }
   try {
     final dynamic value = overrideResult.preventDefault;

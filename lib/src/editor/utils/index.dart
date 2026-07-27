@@ -1,9 +1,8 @@
 import 'dart:async';
 import 'dart:convert';
-import 'dart:html';
+import 'package:canvas_text_editor/src/dom/dom.dart';
 import 'dart:math';
 
-import 'dart:js_util' as js_util;
 
 import '../dataset/constant/regular.dart';
 import '../interface/element.dart';
@@ -154,40 +153,51 @@ String getUUID() {
 	return '${s4()}${s4()}-${s4()}-${s4()}-${s4()}-${s4()}${s4()}${s4()}';
 }
 
+// Segmenter cacheado: splitText roda no caminho quente (formatElementList
+// deszipa cada run ao abrir DOCX) — construir o Intl.Segmenter por chamada
+// custava interop à toa.
+JSObject? _cachedGraphemeSegmenter;
+bool _graphemeSegmenterProbed = false;
+
+JSObject? _graphemeSegmenter() {
+	if (_graphemeSegmenterProbed) return _cachedGraphemeSegmenter;
+	_graphemeSegmenterProbed = true;
+	if (!globalContext.hasProperty('Intl'.toJS).toDart) return null;
+	final JSObject? intl = globalContext.getProperty('Intl'.toJS) as JSObject?;
+	if (intl == null || !intl.hasProperty('Segmenter'.toJS).toDart) return null;
+	final JSFunction? constructor =
+			intl.getProperty('Segmenter'.toJS) as JSFunction?;
+	if (constructor == null) return null;
+	_cachedGraphemeSegmenter = constructor.callAsConstructor<JSObject>();
+	return _cachedGraphemeSegmenter;
+}
+
 List<String> splitText(String text) {
 	final data = <String>[];
-	final intl = js_util.hasProperty(js_util.globalThis, 'Intl')
-			? js_util.getProperty(js_util.globalThis, 'Intl')
-			: null;
-		if (intl != null && js_util.hasProperty(intl, 'Segmenter')) {
-		final segmenterConstructor = js_util.getProperty(intl, 'Segmenter');
-		final segmenter = js_util.callConstructor(segmenterConstructor, const []);
-		final segments = js_util.callMethod(segmenter, 'segment', [text]);
-			final dartifiedSegments = js_util.dartify(segments);
-			if (dartifiedSegments is Iterable) {
-				for (final entry in dartifiedSegments) {
-					if (entry is Map && entry['segment'] is String) {
-						data.add(entry['segment'] as String);
-					}
+	final JSObject? segmenter = _graphemeSegmenter();
+	if (segmenter != null) {
+		final JSObject segments =
+				segmenter.callMethod<JSObject>('segment'.toJS, text.toJS);
+		if (segments.hasProperty('values'.toJS).toDart) {
+			final JSObject iterator = segments.callMethod<JSObject>('values'.toJS);
+			while (true) {
+				final JSObject result = iterator.callMethod<JSObject>('next'.toJS);
+				final JSAny? done = result.getProperty('done'.toJS);
+				if (done != null &&
+						done.isA<JSBoolean>() &&
+						(done as JSBoolean).toDart) {
+					break;
 				}
-				return data;
-			}
-
-			if (js_util.hasProperty(segments, 'values')) {
-				final iterator = js_util.callMethod(segments, 'values', const []);
-				while (true) {
-					final result = js_util.callMethod(iterator, 'next', const []);
-					if (result == null || js_util.getProperty(result, 'done') == true) {
-						break;
-					}
-					final segment = js_util.getProperty(result, 'value');
-					final value = js_util.getProperty(segment, 'segment');
-					if (value is String) {
-						data.add(value);
-					}
+				final JSAny? segment = result.getProperty('value'.toJS);
+				if (segment == null || !segment.isA<JSObject>()) continue;
+				final JSAny? value =
+						(segment as JSObject).getProperty('segment'.toJS);
+				if (value != null && value.isA<JSString>()) {
+					data.add((value as JSString).toDart);
 				}
-				return data;
 			}
+			return data;
+		}
 	}
 
 		final symbolMap = <int, String>{};
@@ -209,7 +219,7 @@ List<String> splitText(String text) {
 }
 
 void downloadFile(String href, String fileName) {
-		final anchor = AnchorElement()
+		final anchor = HTMLAnchorElement()
 			..href = href
 			..download = fileName;
 		anchor.click();
@@ -352,7 +362,7 @@ String convertStringToBase64(String input) {
 Element findScrollContainer(Element element) {
 	Element? parent = element.parent;
 		while (parent != null) {
-			final CssStyleDeclaration style = parent.getComputedStyle();
+			final CSSStyleDeclaration style = parent.getComputedStyle();
 			final String overflowY = style.getPropertyValue('overflow-y');
 		final bool canScroll = parent.scrollHeight > parent.clientHeight;
 		if (canScroll && (overflowY == 'auto' || overflowY == 'scroll')) {

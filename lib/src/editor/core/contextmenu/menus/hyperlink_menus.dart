@@ -1,5 +1,4 @@
-import 'dart:html' as html;
-import 'dart:js_util' as js_util;
+import 'package:canvas_text_editor/src/dom/dom.dart' as html;
 
 import '../../../dataset/constant/context_menu.dart';
 import '../../../dataset/enum/element.dart';
@@ -33,13 +32,9 @@ List<IRegisterContextMenu> get hyperlinkMenus => <IRegisterContextMenu>[
             payload.startElement?.type == ElementType.hyperlink,
         callback: (command, context) {
           final currentUrl = context.startElement?.url;
-          final newUrl = js_util.callMethod<String?>(
-            html.window,
-            'prompt',
-            <Object?>[
-              command.executeTranslate('contextmenu.hyperlink.edit'),
-              currentUrl ?? '',
-            ],
+          final String? newUrl = html.window.prompt(
+            command.executeTranslate('contextmenu.hyperlink.edit'),
+            currentUrl ?? '',
           );
           if (newUrl != null && newUrl.isNotEmpty) {
             command.executeEditHyperlink(newUrl);

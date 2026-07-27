@@ -1,5 +1,4 @@
-import 'dart:html';
-import 'dart:js_util' as js_util;
+import 'package:canvas_text_editor/src/dom/dom.dart';
 
 import '../../../dataset/constant/common.dart';
 import '../../../dataset/enum/editor.dart';
@@ -213,7 +212,7 @@ class TextParticle {
 		}
 		context.save();
 		context.font = curStyle;
-		context.fillStyle = curColor ?? _defaultColor;
+		context.fillColor = curColor ?? _defaultColor;
 		// Casa a largura renderizada (métrica do canvas) com a largura do layout
 		// (TTF), escalando o batch horizontalmente. Sem isso o texto deriva e
 		// batches consecutivos (quebrados na pontuação) se sobrepõem.
@@ -245,8 +244,7 @@ class TextParticle {
 		}
 		try {
 			final TextMetrics m = context.measureText(value);
-			final dynamic w = js_util.getProperty(m, 'width');
-			final double result = w is num ? w.toDouble() : 0;
+			final double result = m.width.toDouble();
 			if (_scaleWidthCache.length > 4000) {
 				_scaleWidthCache.clear();
 			}
@@ -258,9 +256,11 @@ class TextParticle {
 	}
 
 	ITextMetrics _createMetrics(TextMetrics metrics, {double? widthOverride}) {
+		// Leitura defensiva: actualBoundingBox*/fontBoundingBox* podem faltar em
+		// browsers antigos; getProperty devolve undefined em vez de lançar.
 		double metricProperty(String name) {
-			final dynamic value = js_util.getProperty(metrics, name);
-			return value is num ? value.toDouble() : 0;
+			final JSAny? value = (metrics as JSObject).getProperty(name.toJS);
+			return value.isA<JSNumber>() ? (value! as JSNumber).toDartDouble : 0;
 		}
 
 		final double resolvedWidth = widthOverride ?? metricProperty('width');

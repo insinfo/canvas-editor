@@ -1,4 +1,4 @@
-import 'dart:html';
+import 'package:canvas_text_editor/src/dom/dom.dart';
 import 'dart:math' as math;
 
 import '../../../dataset/constant/common.dart';
@@ -382,11 +382,11 @@ class Header {
       ctx.save();
       if (tb.fillColor != null) {
         ctx
-          ..fillStyle = tb.fillColor!
+          ..fillColor = tb.fillColor!
           ..fillRect(left, top, w, h);
       }
       ctx
-        ..strokeStyle = tb.borderColor ?? '#000000'
+        ..strokeColor = tb.borderColor ?? '#000000'
         ..lineWidth = tb.borderWidthPx * scale
         ..strokeRect(left, top, w, h);
       ctx.restore();

@@ -1,5 +1,5 @@
 import 'dart:async';
-import 'dart:html';
+import 'package:canvas_text_editor/src/dom/dom.dart';
 
 import '../../editor/index.dart';
 import '../core/ui_component.dart';
@@ -46,21 +46,21 @@ class WidgetRibbon extends UiComponent {
   final Element _menuHost;
 
   @override
-  late final DivElement root;
+  late final HTMLDivElement root;
 
   Command get _command => _actions.command;
 
-  final Map<String, ButtonElement> _commandButtons = <String, ButtonElement>{};
-  final Map<String, ButtonElement> _tabButtons = <String, ButtonElement>{};
-  final Map<TitleLevel?, ButtonElement> _styleButtons =
-      <TitleLevel?, ButtonElement>{};
-  late DivElement _shell;
+  final Map<String, HTMLButtonElement> _commandButtons = <String, HTMLButtonElement>{};
+  final Map<String, HTMLButtonElement> _tabButtons = <String, HTMLButtonElement>{};
+  final Map<TitleLevel?, HTMLButtonElement> _styleButtons =
+      <TitleLevel?, HTMLButtonElement>{};
+  late HTMLDivElement _shell;
   String _activeTabId = 'home';
   FloatingToolbarMode _contextMode = FloatingToolbarMode.hidden;
-  late final SelectElement _fontSelect;
-  late final SelectElement _sizeSelect;
+  late final HTMLSelectElement _fontSelect;
+  late final HTMLSelectElement _sizeSelect;
 
-  DivElement? _openMenu;
+  HTMLDivElement? _openMenu;
   Element? _openMenuOwner;
 
   // -----------------------------------------------------------------------
@@ -100,8 +100,8 @@ class WidgetRibbon extends UiComponent {
     _selectValueEnsuring(_fontSelect, style.font);
     _selectValueEnsuring(_sizeSelect, '${style.size.round()}');
 
-    _styleButtons.forEach((TitleLevel? level, ButtonElement button) {
-      button.classes.toggle('active', style.level == level);
+    _styleButtons.forEach((TitleLevel? level, HTMLButtonElement button) {
+      button.classList.toggle('active', style.level == level);
     });
     _setActive(
       'styles-more',
@@ -118,29 +118,26 @@ class WidgetRibbon extends UiComponent {
   }
 
   void _setActive(String commandName, bool active) {
-    _commandButtons[commandName]?.classes.toggle('active', active);
+    _commandButtons[commandName]?.classList.toggle('active', active);
   }
 
   void _setDisabled(String commandName, bool disabled) {
-    _commandButtons[commandName]?.classes.toggle('disabled', disabled);
+    _commandButtons[commandName]?.classList.toggle('disabled', disabled);
   }
 
-  bool _optionExists(SelectElement select, String value) =>
-      select.options.any((OptionElement option) => option.value == value);
+  bool _optionExists(HTMLSelectElement select, String value) =>
+      select.options.any((HTMLOptionElement option) => option.value == value);
 
   /// Seta o valor do select criando uma opção dinâmica quando o valor do
   /// contexto não está na lista fixa (fonte/tamanho fora do catálogo).
-  void _selectValueEnsuring(SelectElement select, String value) {
+  void _selectValueEnsuring(HTMLSelectElement select, String value) {
     if (value.isEmpty || value == '0') return;
     if (!_optionExists(select, value)) {
       // Remove a opção dinâmica anterior (mantém a lista fixa enxuta).
-      for (final OptionElement option in select.options.toList()) {
-        if (option.dataset['dynamic'] == '1') option.remove();
+      for (final HTMLOptionElement option in select.options.toList()) {
+        if (option.data('dynamic') == '1') option.remove();
       }
-      final OptionElement dynamicOption = OptionElement(
-        data: value,
-        value: value,
-      )..dataset['dynamic'] = '1';
+      final HTMLOptionElement dynamicOption = (HTMLOptionElement()..text = value..value = value)..dataset['dynamic'] = '1';
       select.append(dynamicOption);
     }
     select.value = value;
@@ -150,33 +147,33 @@ class WidgetRibbon extends UiComponent {
   // Construção
   // -----------------------------------------------------------------------
 
-  DivElement _build() {
-    final DivElement shell = DivElement()..classes.add('ce-word-ribbon');
+  HTMLDivElement _build() {
+    final HTMLDivElement shell = HTMLDivElement()..classList.add('ce-word-ribbon');
     _shell = shell;
-    final DivElement tabs = DivElement()
-      ..classes.add('ce-word-tabs')
+    final HTMLDivElement tabs = HTMLDivElement()
+      ..classList.add('ce-word-tabs')
       ..setAttribute('role', 'tablist');
-    final DivElement panels = DivElement()..classes.add('ce-word-panels');
+    final HTMLDivElement panels = HTMLDivElement()..classList.add('ce-word-panels');
 
     void addTab(String id, String label, List<Element> groups,
         {bool contextual = false}) {
-      final ButtonElement tab = ButtonElement()
+      final HTMLButtonElement tab = HTMLButtonElement()
         ..type = 'button'
         ..text = label
         ..dataset['ceTab'] = id
-        ..classes.toggle('active', id == 'home')
-        ..classes.toggle('ce-word-tab--contextual', contextual)
+        ..classList.toggle('active', id == 'home')
+        ..classList.toggle('ce-word-tab--contextual', contextual)
         ..onClick.listen((_) => _activateTab(shell, id));
       if (contextual) {
         tab.style.display = 'none';
       }
       _tabButtons[id] = tab;
       tabs.append(tab);
-      final DivElement panel = DivElement()
-        ..classes.add('ce-word-panel')
-        ..classes.toggle('active', id == 'home')
+      final HTMLDivElement panel = HTMLDivElement()
+        ..classList.add('ce-word-panel')
+        ..classList.toggle('active', id == 'home')
         ..dataset['cePanel'] = id
-        ..children.addAll(groups);
+        ..appendAll(groups);
       panels.append(panel);
     }
 
@@ -442,7 +439,7 @@ class WidgetRibbon extends UiComponent {
           ]),
         ],
         contextual: true);
-    shell.children.addAll(<Element>[tabs, panels]);
+    shell.appendAll(<Element>[tabs, panels]);
     return shell;
   }
 
@@ -621,12 +618,12 @@ class WidgetRibbon extends UiComponent {
 
   /// Galeria de estilos de tabela (Word): miniaturas clicáveis que aplicam
   /// bordas + preenchimentos do estilo na tabela sob o cursor.
-  DivElement _tableStyleGallery() {
-    final DivElement gallery = DivElement()
-      ..classes.add('ce-table-style-gallery');
+  HTMLDivElement _tableStyleGallery() {
+    final HTMLDivElement gallery = HTMLDivElement()
+      ..classList.add('ce-table-style-gallery');
     for (final ITableStyle style in defaultTableStyleGallery) {
-      final DivElement preview = DivElement()
-        ..classes.add('ce-table-style')
+      final HTMLDivElement preview = HTMLDivElement()
+        ..classList.add('ce-table-style')
         ..title = style.label
         ..setAttribute('role', 'button')
         ..setAttribute('aria-label', 'Estilo de tabela: ${style.label}');
@@ -635,8 +632,8 @@ class WidgetRibbon extends UiComponent {
           : (style.borderColor ?? '#000000');
       // Miniatura 3×3: faixa de cabeçalho + linhas (com faixa alternada).
       for (int row = 0; row < 3; row++) {
-        final DivElement line = DivElement()
-          ..classes.add('ce-table-style__row');
+        final HTMLDivElement line = HTMLDivElement()
+          ..classList.add('ce-table-style__row');
         final String? fill = row == 0
             ? style.headerFill
             : (row == 2 ? style.bandFill : style.cellFill);
@@ -646,11 +643,11 @@ class WidgetRibbon extends UiComponent {
               ? 'none'
               : '1px solid $borderColor';
         if (row == 0 && style.headerBold) {
-          line.classes.add('ce-table-style__row--header');
+          line.classList.add('ce-table-style__row--header');
         }
         for (int col = 0; col < 3; col++) {
-          line.append(DivElement()
-            ..classes.add('ce-table-style__cell')
+          line.append(HTMLDivElement()
+            ..classList.add('ce-table-style__cell')
             ..style.borderRight = style.borderType == TableBorder.all ||
                     style.borderType == TableBorder.external
                 ? '1px solid $borderColor'
@@ -669,7 +666,7 @@ class WidgetRibbon extends UiComponent {
     return gallery;
   }
 
-  ButtonElement _imageAlignButton(
+  HTMLButtonElement _imageAlignButton(
       String id, String icon, String label, String align) {
     return _button(id, icon, label, () {
       final RangeContext? context = _command.getRangeContext();
@@ -679,7 +676,7 @@ class WidgetRibbon extends UiComponent {
     });
   }
 
-  ButtonElement _imageWrapButton(
+  HTMLButtonElement _imageWrapButton(
       String id, String icon, String label, ImageDisplay display) {
     return _button(id, icon, label, () {
       final RangeContext? context = _command.getRangeContext();
@@ -714,25 +711,25 @@ class WidgetRibbon extends UiComponent {
     }
   }
 
-  DivElement _fontGroup() {
-    _fontSelect = SelectElement()
+  HTMLDivElement _fontGroup() {
+    _fontSelect = HTMLSelectElement()
       ..title = 'Fonte'
-      ..classes.add('ce-word-select');
+      ..classList.add('ce-word-select');
     for (final String font in <String>[
       'Arial',
       'Calibri',
       'Cambria',
       'Times New Roman'
     ]) {
-      _fontSelect.append(OptionElement(data: font, value: font));
+      _fontSelect.append((HTMLOptionElement()..text = font..value = font));
     }
     _fontSelect.onChange
         .listen((_) => _command.executeFont(_fontSelect.value ?? 'Arial'));
-    _sizeSelect = SelectElement()
+    _sizeSelect = HTMLSelectElement()
       ..title = 'Tamanho'
-      ..classes.add('ce-word-select');
+      ..classList.add('ce-word-select');
     for (final int size in <int>[8, 10, 12, 14, 16, 18, 24, 32, 48]) {
-      _sizeSelect.append(OptionElement(data: '$size', value: '$size'));
+      _sizeSelect.append((HTMLOptionElement()..text = '$size'..value = '$size'));
     }
     _sizeSelect.value = '16';
     _sizeSelect.onChange
@@ -766,13 +763,13 @@ class WidgetRibbon extends UiComponent {
     ]);
   }
 
-  ButtonElement _colorDropdownCommand(
+  HTMLButtonElement _colorDropdownCommand(
     String commandName,
     String iconClass,
     String label, {
     required bool isHighlight,
   }) {
-    late ButtonElement button;
+    late HTMLButtonElement button;
     button = _button(commandName, iconClass, label, () {
       if (_openMenuOwner == button) {
         _closeMenu();
@@ -780,19 +777,19 @@ class WidgetRibbon extends UiComponent {
         _openMenuFor(button, _buildColorPalette(isHighlight: isHighlight));
       }
     })
-      ..classes.add('ce-word-command--dropdown')
+      ..classList.add('ce-word-command--dropdown')
       ..append(
-          SpanElement()..classes.addAll(<String>['ti', 'ti-chevron-down']));
+          HTMLSpanElement()..classList.addAll(<String>['ti', 'ti-chevron-down']));
     return button;
   }
 
-  ButtonElement _smallDropdownCommand(
+  HTMLButtonElement _smallDropdownCommand(
     String commandName,
     String iconClass,
     String label,
-    DivElement Function() buildMenu,
+    HTMLDivElement Function() buildMenu,
   ) {
-    late ButtonElement button;
+    late HTMLButtonElement button;
     button = _button(commandName, iconClass, label, () {
       if (_openMenuOwner == button) {
         _closeMenu();
@@ -800,14 +797,14 @@ class WidgetRibbon extends UiComponent {
         _openMenuFor(button, buildMenu());
       }
     })
-      ..classes.add('ce-word-command--dropdown')
+      ..classList.add('ce-word-command--dropdown')
       ..append(
-          SpanElement()..classes.addAll(<String>['ti', 'ti-chevron-down']));
+          HTMLSpanElement()..classList.addAll(<String>['ti', 'ti-chevron-down']));
     return button;
   }
 
-  DivElement _buildParagraphSpacingMenu() {
-    final DivElement menu = DivElement();
+  HTMLDivElement _buildParagraphSpacingMenu() {
+    final HTMLDivElement menu = HTMLDivElement();
     for (final double value in <double>[1, 1.08, 1.15, 1.5, 2, 2.5, 3]) {
       menu.append(_menuItem(
         value.toStringAsFixed(value % 1 == 0 ? 1 : 2),
@@ -815,21 +812,21 @@ class WidgetRibbon extends UiComponent {
         () => _command.executeParagraphSpacing('auto', value),
       ));
     }
-    menu.append(DivElement()..classes.add('ce-word-menu__divider'));
+    menu.append(HTMLDivElement()..classList.add('ce-word-menu__divider'));
 
-    final NumberInputElement before = NumberInputElement()
+    final HTMLInputElement before = (HTMLInputElement()..type = 'number')
       ..min = '0'
       ..step = '1'
       ..value = '0'
       ..title = 'Espaçamento antes (pt)';
-    final NumberInputElement after = NumberInputElement()
+    final HTMLInputElement after = (HTMLInputElement()..type = 'number')
       ..min = '0'
       ..step = '1'
       ..value = '8'
       ..title = 'Espaçamento depois (pt)';
-    final ButtonElement apply = ButtonElement()
+    final HTMLButtonElement apply = HTMLButtonElement()
       ..type = 'button'
-      ..classes.add('ce-word-menu__apply')
+      ..classList.add('ce-word-menu__apply')
       ..text = 'Aplicar espaçamento'
       ..onClick.listen((_) {
         const double ptToPx = 96 / 72;
@@ -841,15 +838,15 @@ class WidgetRibbon extends UiComponent {
         );
         _closeMenu();
       });
-    menu.append(DivElement()
-      ..classes.add('ce-word-menu__form')
-      ..children.addAll(<Element>[
-        SpanElement()
-          ..classes.add('ce-word-menu__form-title')
+    menu.append(HTMLDivElement()
+      ..classList.add('ce-word-menu__form')
+      ..appendAll(<Element>[
+        HTMLSpanElement()
+          ..classList.add('ce-word-menu__form-title')
           ..text = 'Espaçamento de parágrafo (pt)',
-        DivElement()
-          ..classes.add('ce-word-menu__fields')
-          ..children.addAll(<Element>[
+        HTMLDivElement()
+          ..classList.add('ce-word-menu__fields')
+          ..appendAll(<Element>[
             _numberField('Antes', before),
             _numberField('Depois', after),
           ]),
@@ -858,12 +855,12 @@ class WidgetRibbon extends UiComponent {
     return menu;
   }
 
-  DivElement _numberField(String label, NumberInputElement input) =>
-      DivElement()
-        ..classes.add('ce-word-menu__field')
-        ..children.addAll(<Element>[SpanElement()..text = label, input]);
+  HTMLDivElement _numberField(String label, HTMLInputElement input) =>
+      HTMLDivElement()
+        ..classList.add('ce-word-menu__field')
+        ..appendAll(<Element>[HTMLSpanElement()..text = label, input]);
 
-  DivElement _buildColorPalette({required bool isHighlight}) {
+  HTMLDivElement _buildColorPalette({required bool isHighlight}) {
     const List<String> colors = <String>[
       '#000000',
       '#404040',
@@ -891,11 +888,11 @@ class WidgetRibbon extends UiComponent {
       '#ead1dc',
       '#6aa84f',
     ];
-    final DivElement grid = DivElement()..classes.add('ce-color-palette__grid');
+    final HTMLDivElement grid = HTMLDivElement()..classList.add('ce-color-palette__grid');
     for (final String color in colors) {
-      grid.append(ButtonElement()
+      grid.append(HTMLButtonElement()
         ..type = 'button'
-        ..classes.add('ce-color-palette__swatch')
+        ..classList.add('ce-color-palette__swatch')
         ..dataset['color'] = color
         ..title = color
         ..style.backgroundColor = color
@@ -909,8 +906,8 @@ class WidgetRibbon extends UiComponent {
         }));
     }
 
-    final InputElement custom = InputElement(type: 'color')
-      ..classes.add('ce-color-palette__custom')
+    final HTMLInputElement custom = (HTMLInputElement()..type = 'color')
+      ..classList.add('ce-color-palette__custom')
       ..title = 'Cor personalizada';
     custom.onChange.listen((_) {
       final String? color = custom.value;
@@ -923,9 +920,9 @@ class WidgetRibbon extends UiComponent {
       _closeMenu();
     });
 
-    final ButtonElement clear = ButtonElement()
+    final HTMLButtonElement clear = HTMLButtonElement()
       ..type = 'button'
-      ..classes.add('ce-color-palette__clear')
+      ..classList.add('ce-color-palette__clear')
       ..text = isHighlight ? 'Sem realce' : 'Cor automática'
       ..onClick.listen((_) {
         if (isHighlight) {
@@ -936,56 +933,56 @@ class WidgetRibbon extends UiComponent {
         _closeMenu();
       });
 
-    return DivElement()
-      ..classes.add('ce-color-palette')
+    return HTMLDivElement()
+      ..classList.add('ce-color-palette')
       ..setAttribute('role', 'dialog')
       ..setAttribute(
           'aria-label', isHighlight ? 'Cor de fundo do texto' : 'Cor do texto')
-      ..children.addAll(<Element>[
-        SpanElement()
-          ..classes.add('ce-color-palette__title')
+      ..appendAll(<Element>[
+        HTMLSpanElement()
+          ..classList.add('ce-color-palette__title')
           ..text = isHighlight ? 'Realce' : 'Cor da fonte',
         grid,
-        DivElement()
-          ..classes.add('ce-color-palette__footer')
-          ..children.addAll(<Element>[custom, clear]),
+        HTMLDivElement()
+          ..classList.add('ce-color-palette__footer')
+          ..appendAll(<Element>[custom, clear]),
       ]);
   }
 
-  DivElement _group(String label, List<Element> children) => DivElement()
-    ..classes.add('ce-word-group')
-    ..children.addAll(<Element>[
-      DivElement()
-        ..classes.add('ce-word-group__commands')
-        ..children.addAll(children),
-      SpanElement()
-        ..classes.add('ce-word-group__label')
+  HTMLDivElement _group(String label, List<Element> children) => HTMLDivElement()
+    ..classList.add('ce-word-group')
+    ..appendAll(<Element>[
+      HTMLDivElement()
+        ..classList.add('ce-word-group__commands')
+        ..appendAll(children),
+      HTMLSpanElement()
+        ..classList.add('ce-word-group__label')
         ..text = label,
     ]);
 
-  DivElement _twoRowGroup(
+  HTMLDivElement _twoRowGroup(
     String label,
     List<Element> firstRow,
     List<Element> secondRow,
   ) {
-    final DivElement group = _group(label, <Element>[
-      DivElement()
-        ..classes.add('ce-word-command-rows')
-        ..children.addAll(<Element>[
-          DivElement()
-            ..classes.add('ce-word-command-row')
-            ..children.addAll(firstRow),
-          DivElement()
-            ..classes.add('ce-word-command-row')
-            ..children.addAll(secondRow),
+    final HTMLDivElement group = _group(label, <Element>[
+      HTMLDivElement()
+        ..classList.add('ce-word-command-rows')
+        ..appendAll(<Element>[
+          HTMLDivElement()
+            ..classList.add('ce-word-command-row')
+            ..appendAll(firstRow),
+          HTMLDivElement()
+            ..classList.add('ce-word-command-row')
+            ..appendAll(secondRow),
         ]),
     ]);
-    group.classes.add('ce-word-group--two-row');
+    group.classList.add('ce-word-group--two-row');
     return group;
   }
 
-  DivElement _styleGalleryGroup() {
-    final ButtonElement more = _button(
+  HTMLDivElement _styleGalleryGroup() {
+    final HTMLButtonElement more = _button(
       'styles-more',
       'ti-chevron-down',
       'Mais estilos',
@@ -996,7 +993,7 @@ class WidgetRibbon extends UiComponent {
         _closeMenu();
         return;
       }
-      final DivElement menu = DivElement();
+      final HTMLDivElement menu = HTMLDivElement();
       for (final (String label, TitleLevel level) in <(String, TitleLevel)>[
         ('Título 3', TitleLevel.third),
         ('Título 4', TitleLevel.fourth),
@@ -1013,24 +1010,24 @@ class WidgetRibbon extends UiComponent {
           'Alterar a aparência de um nível de título', _openTitleStyleDialog));
       _openMenuFor(more, menu);
     });
-    final DivElement group = _group('Estilos', <Element>[
-      DivElement()
-        ..classes.add('ce-word-style-gallery')
-        ..children.addAll(<Element>[
+    final HTMLDivElement group = _group('Estilos', <Element>[
+      HTMLDivElement()
+        ..classList.add('ce-word-style-gallery')
+        ..appendAll(<Element>[
           _styleCommand('Normal', null),
           _styleCommand('Título 1', TitleLevel.first),
           _styleCommand('Título 2', TitleLevel.second),
           more,
         ]),
     ]);
-    group.classes.add('ce-word-group--styles');
+    group.classList.add('ce-word-group--styles');
     return group;
   }
 
-  ButtonElement _styleCommand(String label, TitleLevel? level) {
-    final ButtonElement button = ButtonElement()
+  HTMLButtonElement _styleCommand(String label, TitleLevel? level) {
+    final HTMLButtonElement button = HTMLButtonElement()
       ..type = 'button'
-      ..classes.add('ce-word-style')
+      ..classList.add('ce-word-style')
       ..dataset['styleLevel'] = level?.value ?? 'normal'
       ..text = label
       ..onMouseDown.listen((event) => event.preventDefault())
@@ -1039,33 +1036,33 @@ class WidgetRibbon extends UiComponent {
     return button;
   }
 
-  void _activateTab(DivElement shell, String id) {
+  void _activateTab(HTMLDivElement shell, String id) {
     _activeTabId = id;
-    for (final Element tab in shell.querySelectorAll('[data-ce-tab]')) {
-      tab.classes.toggle('active', tab.dataset['ceTab'] == id);
+    for (final Element tab in shell.querySelectorAll('[data-ce-tab]').toElements()) {
+      tab.classList.toggle('active', tab.data('ceTab') == id);
     }
-    for (final Element panel in shell.querySelectorAll('[data-ce-panel]')) {
-      panel.classes.toggle('active', panel.dataset['cePanel'] == id);
+    for (final Element panel in shell.querySelectorAll('[data-ce-panel]').toElements()) {
+      panel.classList.toggle('active', panel.data('cePanel') == id);
     }
   }
 
-  ButtonElement _button(
+  HTMLButtonElement _button(
     String commandName,
     String iconClass,
     String label,
     void Function() action, {
     bool labeled = false,
   }) {
-    final ButtonElement button = ButtonElement()
+    final HTMLButtonElement button = HTMLButtonElement()
       ..type = 'button'
       ..title = label
       ..dataset['ceCommand'] = commandName
-      ..classes.toggle('ce-word-command--labeled', labeled)
+      ..classList.toggle('ce-word-command--labeled', labeled)
       ..setAttribute('aria-label', label)
-      ..append(SpanElement()..classes.addAll(<String>['ti', iconClass]));
+      ..append(HTMLSpanElement()..classList.addAll(<String>['ti', iconClass]));
     if (labeled) {
-      button.append(SpanElement()
-        ..classes.add('ce-word-command__label')
+      button.append(HTMLSpanElement()
+        ..classList.add('ce-word-command__label')
         ..text = label);
     }
     button.onMouseDown.listen((MouseEvent event) {
@@ -1081,13 +1078,13 @@ class WidgetRibbon extends UiComponent {
   // Menus suspensos
   // -----------------------------------------------------------------------
 
-  ButtonElement _dropdownButton(
+  HTMLButtonElement _dropdownButton(
     String commandName,
     String iconClass,
     String label,
-    DivElement Function() buildMenu,
+    HTMLDivElement Function() buildMenu,
   ) {
-    late ButtonElement button;
+    late HTMLButtonElement button;
     button = _button(commandName, iconClass, label, () {
       if (_openMenuOwner == button) {
         _closeMenu();
@@ -1096,18 +1093,18 @@ class WidgetRibbon extends UiComponent {
       _openMenuFor(button, buildMenu());
     }, labeled: true);
     button.append(
-        SpanElement()..classes.addAll(<String>['ti', 'ti-chevron-down']));
+        HTMLSpanElement()..classList.addAll(<String>['ti', 'ti-chevron-down']));
     return button;
   }
 
   StreamSubscription<MouseEvent>? _outsideClickSubscription;
 
-  void _openMenuFor(Element owner, DivElement menu) {
+  void _openMenuFor(Element owner, HTMLDivElement menu) {
     _closeMenu();
-    final Rectangle<num> ownerRect = owner.getBoundingClientRect();
-    final Rectangle<num> hostRect = _menuHost.getBoundingClientRect();
+    final DOMRect ownerRect = owner.getBoundingClientRect();
+    final DOMRect hostRect = _menuHost.getBoundingClientRect();
     menu
-      ..classes.add('ce-word-menu')
+      ..classList.add('ce-word-menu')
       ..style.left = '${ownerRect.left - hostRect.left}px'
       ..style.top = '${ownerRect.bottom - hostRect.top + 2}px';
     _menuHost.append(menu);
@@ -1130,15 +1127,15 @@ class WidgetRibbon extends UiComponent {
     _openMenuOwner = null;
   }
 
-  DivElement _menuItem(String title, String detail, void Function() action) {
-    return DivElement()
-      ..classes.add('ce-word-menu__item')
-      ..children.addAll(<Element>[
-        SpanElement()
-          ..classes.add('ce-word-menu__item-title')
+  HTMLDivElement _menuItem(String title, String detail, void Function() action) {
+    return HTMLDivElement()
+      ..classList.add('ce-word-menu__item')
+      ..appendAll(<Element>[
+        HTMLSpanElement()
+          ..classList.add('ce-word-menu__item-title')
           ..text = title,
-        SpanElement()
-          ..classes.add('ce-word-menu__item-detail')
+        HTMLSpanElement()
+          ..classList.add('ce-word-menu__item-detail')
           ..text = detail,
       ])
       ..onClick.listen((_) {
@@ -1147,17 +1144,17 @@ class WidgetRibbon extends UiComponent {
       });
   }
 
-  DivElement _buildMarginsMenu() {
+  HTMLDivElement _buildMarginsMenu() {
     // Presets do Word (cm): [superior, direita, inferior, esquerda].
-    DivElement preset(String name, String detail, List<double> cm) =>
+    HTMLDivElement preset(String name, String detail, List<double> cm) =>
         _menuItem(name, detail, () {
           _command.executeSetPaperMargin(<double>[
             for (final double value in cm) value * _pxPerCm,
           ]);
         });
 
-    final DivElement menu = DivElement()
-      ..children.addAll(<Element>[
+    final HTMLDivElement menu = HTMLDivElement()
+      ..appendAll(<Element>[
         preset('Normal', 'Sup/Inf 2,5 cm · Esq/Dir 3 cm',
             <double>[2.5, 3, 2.5, 3]),
         preset('Estreita', 'Todas 1,27 cm', <double>[1.27, 1.27, 1.27, 1.27]),
@@ -1165,41 +1162,41 @@ class WidgetRibbon extends UiComponent {
             <double>[2.54, 1.91, 2.54, 1.91]),
         preset('Larga', 'Sup/Inf 2,54 cm · Esq/Dir 5,08 cm',
             <double>[2.54, 5.08, 2.54, 5.08]),
-        DivElement()..classes.add('ce-word-menu__divider'),
+        HTMLDivElement()..classList.add('ce-word-menu__divider'),
       ]);
     menu.append(_buildCustomMarginsForm());
     return menu;
   }
 
-  DivElement _buildCustomMarginsForm() {
+  HTMLDivElement _buildCustomMarginsForm() {
     final List<double> current = _currentMarginsPx();
-    NumberInputElement marginInput(String label, double px) {
-      return NumberInputElement()
-        ..classes.add('ce-word-menu__number')
+    HTMLInputElement marginInput(String label, double px) {
+      return (HTMLInputElement()..type = 'number')
+        ..classList.add('ce-word-menu__number')
         ..title = label
         ..min = '0'
         ..step = '0.1'
         ..value = (px / _pxPerCm).toStringAsFixed(2);
     }
 
-    final NumberInputElement top = marginInput('Superior', current[0]);
-    final NumberInputElement right = marginInput('Direita', current[1]);
-    final NumberInputElement bottom = marginInput('Inferior', current[2]);
-    final NumberInputElement left = marginInput('Esquerda', current[3]);
+    final HTMLInputElement top = marginInput('Superior', current[0]);
+    final HTMLInputElement right = marginInput('Direita', current[1]);
+    final HTMLInputElement bottom = marginInput('Inferior', current[2]);
+    final HTMLInputElement left = marginInput('Esquerda', current[3]);
 
-    DivElement field(String label, NumberInputElement input) => DivElement()
-      ..classes.add('ce-word-menu__field')
-      ..children.addAll(<Element>[
-        SpanElement()..text = label,
+    HTMLDivElement field(String label, HTMLInputElement input) => HTMLDivElement()
+      ..classList.add('ce-word-menu__field')
+      ..appendAll(<Element>[
+        HTMLSpanElement()..text = label,
         input,
       ]);
 
-    final ButtonElement apply = ButtonElement()
+    final HTMLButtonElement apply = HTMLButtonElement()
       ..type = 'button'
-      ..classes.add('ce-word-menu__apply')
+      ..classList.add('ce-word-menu__apply')
       ..text = 'Aplicar'
       ..onClick.listen((_) {
-        double parse(NumberInputElement input, double fallbackPx) {
+        double parse(HTMLInputElement input, double fallbackPx) {
           final double? cm = double.tryParse(input.value ?? '');
           return cm == null ? fallbackPx : cm * _pxPerCm;
         }
@@ -1213,15 +1210,15 @@ class WidgetRibbon extends UiComponent {
         _closeMenu();
       });
 
-    return DivElement()
-      ..classes.add('ce-word-menu__form')
-      ..children.addAll(<Element>[
-        SpanElement()
-          ..classes.add('ce-word-menu__form-title')
+    return HTMLDivElement()
+      ..classList.add('ce-word-menu__form')
+      ..appendAll(<Element>[
+        HTMLSpanElement()
+          ..classList.add('ce-word-menu__form-title')
           ..text = 'Margens personalizadas (cm)',
-        DivElement()
-          ..classes.add('ce-word-menu__fields')
-          ..children.addAll(<Element>[
+        HTMLDivElement()
+          ..classList.add('ce-word-menu__fields')
+          ..appendAll(<Element>[
             field('Sup.', top),
             field('Dir.', right),
             field('Inf.', bottom),
@@ -1243,12 +1240,12 @@ class WidgetRibbon extends UiComponent {
     return <double>[96, 96, 96, 96];
   }
 
-  DivElement _buildPaperSizeMenu() {
-    DivElement size(String name, String detail, double width, double height) =>
+  HTMLDivElement _buildPaperSizeMenu() {
+    HTMLDivElement size(String name, String detail, double width, double height) =>
         _menuItem(name, detail, () => _command.executePaperSize(width, height));
 
-    return DivElement()
-      ..children.addAll(<Element>[
+    return HTMLDivElement()
+      ..appendAll(<Element>[
         size('A4', '21 × 29,7 cm', 794, 1123),
         size('Carta', '21,6 × 27,9 cm', 816, 1056),
         size('Ofício', '21,6 × 35,6 cm', 816, 1344),
@@ -1271,29 +1268,29 @@ class WidgetCompactToolbar extends UiComponent {
   final CanvasEditorShellActions _actions;
 
   @override
-  late final DivElement root;
+  late final HTMLDivElement root;
 
-  final Map<String, ButtonElement> _commandButtons = <String, ButtonElement>{};
+  final Map<String, HTMLButtonElement> _commandButtons = <String, HTMLButtonElement>{};
 
   Command get _command => _actions.command;
 
   void syncRangeStyle(IRangeStyle style) {
-    _commandButtons['undo']?.classes.toggle('disabled', !style.undo);
-    _commandButtons['redo']?.classes.toggle('disabled', !style.redo);
+    _commandButtons['undo']?.classList.toggle('disabled', !style.undo);
+    _commandButtons['redo']?.classList.toggle('disabled', !style.redo);
     if (style.type == null) {
       return;
     }
-    _commandButtons['bold']?.classes.toggle('active', style.bold);
-    _commandButtons['italic']?.classes.toggle('active', style.italic);
-    _commandButtons['underline']?.classes.toggle('active', style.underline);
+    _commandButtons['bold']?.classList.toggle('active', style.bold);
+    _commandButtons['italic']?.classList.toggle('active', style.italic);
+    _commandButtons['underline']?.classList.toggle('active', style.underline);
   }
 
-  DivElement _build() {
-    final DivElement toolbar = DivElement()
-      ..classes.add('ce-embed__toolbar')
+  HTMLDivElement _build() {
+    final HTMLDivElement toolbar = HTMLDivElement()
+      ..classList.add('ce-embed__toolbar')
       ..setAttribute('role', 'toolbar')
       ..setAttribute('aria-label', 'Formatação do documento');
-    toolbar.children.addAll(<Element>[
+    toolbar.appendAll(<Element>[
       _button('open', 'ti-folder-open', 'Abrir DOCX', _actions.openFilePicker),
       _button('save', 'ti-device-floppy', 'Baixar DOCX',
           () => _actions.downloadDocx()),
@@ -1319,18 +1316,18 @@ class WidgetCompactToolbar extends UiComponent {
     return toolbar;
   }
 
-  ButtonElement _button(
+  HTMLButtonElement _button(
     String commandName,
     String iconClass,
     String label,
     void Function() action,
   ) {
-    final ButtonElement button = ButtonElement()
+    final HTMLButtonElement button = HTMLButtonElement()
       ..type = 'button'
       ..title = label
       ..dataset['ceCommand'] = commandName
       ..setAttribute('aria-label', label)
-      ..append(SpanElement()..classes.addAll(<String>['ti', iconClass]));
+      ..append(HTMLSpanElement()..classList.addAll(<String>['ti', iconClass]));
     button.onMouseDown.listen((MouseEvent event) => event.preventDefault());
     button.onClick.listen((_) => action());
     _commandButtons[commandName] = button;

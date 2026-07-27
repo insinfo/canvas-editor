@@ -1,4 +1,4 @@
-import 'dart:html';
+import 'package:canvas_text_editor/src/dom/dom.dart';
 
 import '../../../interface/editor.dart';
 import '../../../interface/row.dart';
@@ -18,13 +18,13 @@ class SeparatorParticle {
 		ctx.save();
 		final double scale = (_options.scale ?? 1).toDouble();
 		final double lineWidth = (_options.separator?.lineWidth ?? 1).toDouble();
-		final String strokeStyle =
+		final String strokeColor =
 			_options.separator?.strokeStyle ?? '#000000';
 		ctx.lineWidth = lineWidth * scale;
-		ctx.strokeStyle = element.color ?? strokeStyle;
+		ctx.strokeColor = element.color ?? strokeColor;
 		final List<double>? dashArray = element.dashArray;
 		if (dashArray != null && dashArray.isNotEmpty) {
-			ctx.setLineDash(dashArray);
+			ctx.setDash(dashArray);
 		}
 		final double offsetY = y.roundToDouble();
 		ctx.translate(0, ctx.lineWidth / 2);

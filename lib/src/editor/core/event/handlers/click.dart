@@ -1,4 +1,5 @@
-import 'dart:js_util' as js_util;
+import 'dart:js_interop';
+import 'dart:js_interop_unsafe';
 
 import '../../../dataset/constant/common.dart';
 import '../../../dataset/constant/element.dart' as element_constants;
@@ -87,80 +88,68 @@ int _computeCursorStartIndex(dynamic draw, IElementPosition cursorPosition) {
 }
 
 Iterable<_SegmentData> _segmentText(String text) sync* {
-  if (!js_util.hasProperty(js_util.globalThis, 'Intl')) {
+  // Intl.Segmenter via js_interop (indisponível em navegadores antigos).
+  if (!globalContext.hasProperty('Intl'.toJS).toDart) {
     return;
   }
-  final dynamic intl = js_util.getProperty(js_util.globalThis, 'Intl');
-  if (intl == null || !js_util.hasProperty(intl, 'Segmenter')) {
+  final JSObject? intl = globalContext.getProperty('Intl'.toJS) as JSObject?;
+  if (intl == null || !intl.hasProperty('Segmenter'.toJS).toDart) {
     return;
   }
 
-  final dynamic constructor = js_util.getProperty(intl, 'Segmenter');
-  final dynamic options = js_util.jsify(<String, Object?>{
-    'granularity': 'word',
-  });
-  final dynamic segmenter = js_util.callConstructor(
-    constructor,
-    <Object?>[js_util.jsify(const <Object?>[]), options],
+  final JSFunction? constructor =
+      intl.getProperty('Segmenter'.toJS) as JSFunction?;
+  if (constructor == null) {
+    return;
+  }
+  final JSObject options = JSObject()
+    ..setProperty('granularity'.toJS, 'word'.toJS);
+  final JSObject segmenter = constructor.callAsConstructor<JSObject>(
+    <JSAny?>[].toJS,
+    options,
   );
-  final dynamic segments =
-      js_util.callMethod(segmenter, 'segment', <Object?>[text]);
+  final JSObject segments =
+      segmenter.callMethod<JSObject>('segment'.toJS, text.toJS);
 
-  final dynamic dartified = js_util.dartify(segments);
-  if (dartified is Iterable) {
-    for (final dynamic entry in dartified) {
-      final _SegmentData? data = _segmentFromEntry(entry);
-      if (data != null) {
-        yield data;
-      }
-    }
+  if (!segments.hasProperty('values'.toJS).toDart) {
     return;
   }
-
-  if (js_util.hasProperty(segments, 'values')) {
-    final dynamic iterator =
-        js_util.callMethod(segments, 'values', const <Object?>[]);
-    while (true) {
-      final dynamic result =
-          js_util.callMethod(iterator, 'next', const <Object?>[]);
-      if (result == null || js_util.getProperty(result, 'done') == true) {
-        break;
-      }
-      final dynamic value = js_util.getProperty(result, 'value');
-      final _SegmentData? data = _segmentFromEntry(value);
-      if (data != null) {
-        yield data;
-      }
+  final JSObject iterator = segments.callMethod<JSObject>('values'.toJS);
+  while (true) {
+    final JSObject result = iterator.callMethod<JSObject>('next'.toJS);
+    final JSAny? done = result.getProperty('done'.toJS);
+    if (done != null && done.isA<JSBoolean>() && (done as JSBoolean).toDart) {
+      break;
+    }
+    final JSAny? value = result.getProperty('value'.toJS);
+    final _SegmentData? data = _segmentFromEntry(
+        value != null && value.isA<JSObject>() ? value as JSObject : null);
+    if (data != null) {
+      yield data;
     }
   }
 }
 
-_SegmentData? _segmentFromEntry(dynamic entry) {
+_SegmentData? _segmentFromEntry(JSObject? entry) {
   if (entry == null) {
     return null;
   }
-  try {
-    final String? segment = js_util.getProperty(entry, 'segment') as String?;
-    final int? index = (js_util.getProperty(entry, 'index') as num?)?.toInt();
-    final bool isWordLike = js_util.getProperty(entry, 'isWordLike') == true;
-    if (segment == null || index == null) {
-      return null;
-    }
-    return _SegmentData(segment: segment, index: index, isWordLike: isWordLike);
-  } catch (_) {
-    final dynamic dartified = js_util.dartify(entry);
-    if (dartified is Map) {
-      final String? segment = dartified['segment'] as String?;
-      final int? index = (dartified['index'] as num?)?.toInt();
-      final bool isWordLike = dartified['isWordLike'] == true;
-      if (segment == null || index == null) {
-        return null;
-      }
-      return _SegmentData(
-          segment: segment, index: index, isWordLike: isWordLike);
-    }
+  final JSAny? segment = entry.getProperty('segment'.toJS);
+  final JSAny? index = entry.getProperty('index'.toJS);
+  if (segment == null ||
+      !segment.isA<JSString>() ||
+      index == null ||
+      !index.isA<JSNumber>()) {
+    return null;
   }
-  return null;
+  final JSAny? wordLike = entry.getProperty('isWordLike'.toJS);
+  return _SegmentData(
+    segment: (segment as JSString).toDart,
+    index: (index as JSNumber).toDartInt,
+    isWordLike: wordLike != null &&
+        wordLike.isA<JSBoolean>() &&
+        (wordLike as JSBoolean).toDart,
+  );
 }
 
 IRange? _getWordRangeByCursor(dynamic host) {

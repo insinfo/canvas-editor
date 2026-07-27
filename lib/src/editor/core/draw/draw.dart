@@ -1,5 +1,5 @@
 import 'dart:async';
-import 'dart:html';
+import 'package:canvas_text_editor/src/dom/dom.dart' hide Highlight, Plugin;
 import 'package:canvas_text_editor/ce_fonts.dart' as ce_fonts;
 import '../../dataset/constant/common.dart';
 import '../../dataset/constant/editor.dart';
@@ -107,7 +107,7 @@ const String _packageVersion = String.fromEnvironment(
 
 class Draw {
   Draw(
-    HtmlElement rootContainer,
+    HTMLElement rootContainer,
     IEditorOption options,
     IEditorData data,
     dynamic listener,
@@ -124,8 +124,8 @@ class Draw {
             List<IElement>.from(data.header ?? const <IElement>[]),
         _footerElementList =
             List<IElement>.from(data.footer ?? const <IElement>[]),
-        _container = DivElement(),
-        _pageContainer = DivElement(),
+        _container = HTMLDivElement(),
+        _pageContainer = HTMLDivElement(),
         _pageNo = 0,
         _renderCount = 0,
         _visiblePageNoList = <int>[],
@@ -244,17 +244,17 @@ class Draw {
     );
   }
 
-  final HtmlElement _rootContainer;
+  final HTMLElement _rootContainer;
   final dynamic _listener;
   final dynamic _eventBus;
   final dynamic _override;
 
   late final Header _header;
   late final Footer _footer;
-  final DivElement _container;
-  final DivElement _pageContainer;
+  final HTMLDivElement _container;
+  final HTMLDivElement _pageContainer;
   late final PageCanvasManager _pageCanvasManager;
-  List<CanvasElement> get _pageList => _pageCanvasManager.pageList;
+  List<HTMLCanvasElement> get _pageList => _pageCanvasManager.pageList;
   List<CanvasRenderingContext2D> get _ctxList => _pageCanvasManager.contextList;
   final List<int> _visiblePageNoList;
   int _intersectionPageNo;
@@ -414,17 +414,17 @@ class Draw {
 
   I18n getI18n() => _i18n;
 
-  DivElement getContainer() {
+  HTMLDivElement getContainer() {
     ensureContainerMounted();
     return _container;
   }
 
-  DivElement getPageContainer() {
+  HTMLDivElement getPageContainer() {
     ensureContainerMounted();
     return _pageContainer;
   }
 
-  CanvasElement? getPage([int pageNo = -1]) {
+  HTMLCanvasElement? getPage([int pageNo = -1]) {
     ensureContainerMounted();
     if (_pageList.isEmpty) {
       return null;
@@ -827,7 +827,7 @@ class Draw {
   void setPainterStyle(IElementStyle? payload, [IPainterOption? options]) {
     _painterStyle = payload;
     _painterOptions = options;
-    for (final CanvasElement page in _pageList) {
+    for (final HTMLCanvasElement page in _pageList) {
       page.style.cursor = payload == null ? 'text' : 'copy';
     }
   }
@@ -1247,8 +1247,10 @@ class Draw {
       await imageObserver.allSettled();
     }
     final List<String> dataUrlList = _pageList
-        .map((CanvasElement canvas) =>
-            canvas.toDataUrl(mimeType, quality?.toDouble()))
+        .map((HTMLCanvasElement canvas) =>
+            quality == null
+                ? canvas.toDataURL(mimeType)
+                : canvas.toDataURL(mimeType, quality.toDouble().toJS))
         .toList();
     if (pixelRatio != null) {
       setPagePixelRatio(null);
@@ -1306,7 +1308,7 @@ class Draw {
       );
     }
     if (debugRenderTiming) {
-      window.console.log('[render] formatElementList(main): '
+      consoleLog('[render] formatElementList(main): '
           '${(window.performance.now() - tFmt).toStringAsFixed(0)}ms '
           'elems=${main?.length}');
     }
@@ -2006,7 +2008,7 @@ class Draw {
     // entire coalescing window before the next keyboard event is dispatched.
     _renewTextHistoryTimerAfterRender = true;
     if (debugRenderTiming) {
-      window.console.log(
+      consoleLog(
         '[mutation] prepare='
         '${(mutationPreparedAt - mutationStartedAt).toStringAsFixed(0)}ms '
         'splice=${(mutationSplicedAt - mutationPreparedAt).toStringAsFixed(0)}ms '
@@ -2713,7 +2715,7 @@ class Draw {
         ((tablePadding?.top ?? 0) + (tablePadding?.bottom ?? 0)).toDouble();
     final double defaultTrMinHeight =
         (tableOption?.defaultTrMinHeight ?? defaultSize).toDouble();
-    final CanvasRenderingContext2D ctx = CanvasElement().context2D;
+    final CanvasRenderingContext2D ctx = HTMLCanvasElement().context2D;
     final TextParticle? textParticle = _textParticle as TextParticle?;
     final ListParticle? listParticle = _listParticle as ListParticle?;
     final Position? position = _position as Position?;
@@ -3701,7 +3703,7 @@ class Draw {
       for (final IRow row in rowList) {
         pageHeight += row.height + (row.offsetY ?? 0);
       }
-      final CanvasElement? pageDom = _pageList.isNotEmpty ? _pageList[0] : null;
+      final HTMLCanvasElement? pageDom = _pageList.isNotEmpty ? _pageList[0] : null;
       if (pageDom != null) {
         final double targetHeight = pageHeight > height ? pageHeight : height;
         _pageCanvasManager.setPageHeight(0, targetHeight);
@@ -4678,15 +4680,15 @@ class Draw {
               leaderWidth > 4 * scale) {
             ctx.save();
             ctx.beginPath();
-            ctx.strokeStyle = element.color ?? '#000000';
+            ctx.strokeColor = element.color ?? '#000000';
             ctx.lineWidth = 1 * scale;
             switch (leader) {
               case 'hyphen' || 'middleDot':
-                ctx.setLineDash(<num>[3 * scale, 3 * scale]);
+                ctx.setDash(<num>[3 * scale, 3 * scale]);
               case 'underscore' || 'heavy':
-                ctx.setLineDash(<num>[]);
+                ctx.setDash(<num>[]);
               default: // 'dot'
-                ctx.setLineDash(<num>[1.5 * scale, 2 * scale]);
+                ctx.setDash(<num>[1.5 * scale, 2 * scale]);
             }
             final double leaderY = y + baselineOffset - 1 * scale;
             ctx.moveTo(x + 2 * scale, leaderY);
@@ -5086,7 +5088,7 @@ class Draw {
       return;
     }
     final CanvasRenderingContext2D ctx = _ctxList[pageNo];
-    final CanvasElement page = _pageList[pageNo];
+    final HTMLCanvasElement page = _pageList[pageNo];
     final double pageWidth = (page.width ?? 0).toDouble();
     final double pageHeight = (page.height ?? 0).toDouble();
     final double clearWidth = pageWidth > getWidth() ? pageWidth : getWidth();
@@ -5381,16 +5383,13 @@ class Draw {
     }
 
     final IntersectionObserver observer = IntersectionObserver(
-      (entries, observer) {
-        for (final IntersectionObserverEntry entry in entries) {
-          final double ratio = (entry.intersectionRatio ?? 0).toDouble();
-          final bool isIntersecting =
-              (entry as dynamic).isIntersecting == true || ratio > 0;
-          final Element? target = entry.target;
-          if (target == null) {
-            continue;
-          }
-          final String? indexAttr = target.dataset['index'];
+      ((JSArray<IntersectionObserverEntry> jsEntries,
+              IntersectionObserver observer) {
+        for (final IntersectionObserverEntry entry in jsEntries.toDart) {
+          final double ratio = entry.intersectionRatio;
+          final bool isIntersecting = entry.isIntersecting || ratio > 0;
+          final Element target = entry.target;
+          final String? indexAttr = dataAttr(target, 'index');
           final int? pageIndex =
               indexAttr != null ? int.tryParse(indexAttr) : null;
           if (pageIndex == null) {
@@ -5408,8 +5407,9 @@ class Draw {
             _setPageCanvasLive(pageIndex, false);
           }
         }
-      },
-      <String, dynamic>{'rootMargin': '${bufferPx}px 0px ${bufferPx}px 0px'},
+      }).toJS,
+      IntersectionObserverInit(
+          rootMargin: '${bufferPx}px 0px ${bufferPx}px 0px'),
     );
     _lazyRenderObserver = observer;
     // Estado inicial síncrono (F5.4a): desenha as páginas atualmente no
@@ -5420,8 +5420,8 @@ class Draw {
     final double viewportTop = -bufferPx.toDouble();
     _livePages.clear();
     for (int i = 0; i < _pageList.length; i++) {
-      final CanvasElement page = _pageList[i];
-      final Rectangle<num> rect = page.getBoundingClientRect();
+      final HTMLCanvasElement page = _pageList[i];
+      final DOMRect rect = page.getBoundingClientRect();
       final bool visible =
           rect.bottom > viewportTop && rect.top < viewportBottom;
       handlePage(i, visible);
@@ -5615,7 +5615,7 @@ class Draw {
         }
       }
       if (debugRenderTiming && !fastLayoutDone) {
-        window.console.log('[render] computeRowList: '
+        consoleLog('[render] computeRowList: '
             '${(window.performance.now() - _tPhase).toStringAsFixed(0)}ms '
             'rows=${_rowList.length}');
         _tPhase = window.performance.now();
@@ -5685,14 +5685,14 @@ class Draw {
       // uma edição durante a paginação cai no relayout completo (correto).
       _computedElementCount = _layoutScheduler.hasJob ? 0 : _elementList.length;
       if (debugRenderTiming) {
-        window.console.log('[render] computePageList: '
+        consoleLog('[render] computePageList: '
             '${(window.performance.now() - _tPhase).toStringAsFixed(0)}ms '
             'pages=${_pageRowList.length}');
         _tPhase = window.performance.now();
       }
       position?.computePositionList();
       if (debugRenderTiming) {
-        window.console.log('[render] computePositionList: '
+        consoleLog('[render] computePositionList: '
             '${(window.performance.now() - _tPhase).toStringAsFixed(0)}ms');
         _tPhase = window.performance.now();
       }
@@ -5723,13 +5723,13 @@ class Draw {
     cursor?.recoveryCursor();
 
     if (debugRenderTiming) {
-      window.console.log('[render] compute-tail(area/search/etc): '
+      consoleLog('[render] compute-tail(area/search/etc): '
           '${(window.performance.now() - _tPhase).toStringAsFixed(0)}ms');
       _tPhase = window.performance.now();
     }
     _syncPageCanvases();
     if (debugRenderTiming) {
-      window.console.log('[render] syncPageCanvases: '
+      consoleLog('[render] syncPageCanvases: '
           '${(window.performance.now() - _tPhase).toStringAsFixed(0)}ms');
       _tPhase = window.performance.now();
     }
@@ -5741,7 +5741,7 @@ class Draw {
       _immediateRender();
     }
     if (debugRenderTiming) {
-      window.console.log('[render] draw(lazy/immediate): '
+      consoleLog('[render] draw(lazy/immediate): '
           '${(window.performance.now() - _tPhase).toStringAsFixed(0)}ms');
       _tPhase = window.performance.now();
     }
@@ -5807,7 +5807,7 @@ class Draw {
     });
 
     if (debugRenderTiming) {
-      window.console.log('[render] post(cursor/história): '
+      consoleLog('[render] post(cursor/história): '
           '${(window.performance.now() - _tPhase).toStringAsFixed(0)}ms');
     }
 
@@ -5885,7 +5885,7 @@ class Draw {
       step: _runProgressiveLayoutSlice,
       onComplete: _completeProgressiveLayout,
       onError: (Object error, StackTrace stackTrace) {
-        window.console.error(
+        consoleError(
           '[layout] progressive job failed: $error\n$stackTrace',
         );
       },
@@ -6435,7 +6435,7 @@ class Draw {
 
   void _ensurePageContainer() {
     if (_pageContainer.isConnected != true) {
-      _pageContainer.classes.add('$EDITOR_PREFIX-page-container');
+      _pageContainer.classList.add('$EDITOR_PREFIX-page-container');
       _container.append(_pageContainer);
     }
   }

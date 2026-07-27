@@ -1,4 +1,4 @@
-import 'dart:html';
+import 'package:canvas_text_editor/src/dom/dom.dart';
 import 'dart:math' as math;
 
 import '../../dataset/constant/common.dart';
@@ -30,11 +30,11 @@ class Zone {
 
   final Draw _draw;
   final IEditorOption _options;
-  final DivElement _container;
+  final HTMLDivElement _container;
   final I18n _i18n;
 
   EditorZone _currentZone;
-  DivElement? _indicatorContainer;
+  HTMLDivElement? _indicatorContainer;
 
   bool isHeaderActive() => _currentZone == EditorZone.header;
 
@@ -139,8 +139,8 @@ class Zone {
         ? _getHeaderTop()
         : pageHeight - _getFooterBottom() - indicatorHeight;
 
-    _indicatorContainer = DivElement()
-      ..classes.add('${editor_constants.editorPrefix}-zone-indicator');
+    _indicatorContainer = HTMLDivElement()
+      ..classList.add('${editor_constants.editorPrefix}-zone-indicator');
 
     // Como no Word: UMA linha tracejada na LARGURA TOTAL da página, na
     // fronteira entre a zona e o corpo, com o rótulo na borda esquerda.
@@ -151,15 +151,15 @@ class Zone {
           ? startY + indicatorHeight + _indicatorPadding
           : startY - _indicatorPadding;
 
-      final SpanElement boundaryLine = SpanElement()
-        ..classes.add(
+      final HTMLSpanElement boundaryLine = HTMLSpanElement()
+        ..classList.add(
             '${editor_constants.editorPrefix}-zone-indicator-border__bottom')
         ..style.top = '${boundaryY}px'
         ..style.width = '${pageWidth}px'
         ..style.marginLeft = '0';
       _indicatorContainer!.append(boundaryLine);
 
-      final DivElement indicatorTitle = DivElement()
+      final HTMLDivElement indicatorTitle = HTMLDivElement()
         ..text = _i18n.t('frame.${isHeaderZone ? 'header' : 'footer'}')
         ..style.top = '${boundaryY}px'
         ..style.transform =

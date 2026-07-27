@@ -16,31 +16,40 @@ import 'package:shelf/shelf_io.dart' as io;
 import 'package:shelf_static/shelf_static.dart';
 
 const _mainSource = r'''
-import 'dart:html' as html;
-import 'dart:js_util' as js_util;
+import 'dart:js_interop';
+import 'dart:js_interop_unsafe';
 import 'dart:typed_data';
+
+import 'package:web/web.dart' as html;
 
 import 'package:canvas_text_editor/src/editor.dart';
 
 Future<int> _open(EditorApp app, String url) async {
-  final req = await html.HttpRequest.request(url, responseType: 'arraybuffer');
-  final bytes = (req.response as ByteBuffer).asUint8List();
+  final resp = await html.window.fetch(url.toJS).toDart;
+  final JSAny? raw = await resp.arrayBuffer().toDart;
+  final Uint8List bytes = (raw! as JSArrayBuffer).toDart.asUint8List();
   await app.openDocxBytes(url, bytes);
   return app.editor.getDraw().getPageList().length;
 }
 
 void main() {
-  html.window.onLoad.listen((_) async {
+  html.window.addEventListener('load', ((html.Event _) {
+    _boot();
+  }).toJS);
+}
+
+void _boot() async {
     final app = EditorApp(isApple: false);
     await app.initialize();
-    js_util.setProperty(html.window, '__shot', js_util.jsify({
-      'open': js_util.allowInterop((String url, Object cb) {
-        _open(app, url).then((n) =>
-            js_util.callMethod(cb, 'call', <Object?>[null, n]));
-      }),
-      'pageCount': js_util.allowInterop(
-          () => app.editor.getDraw().getPageList().length),
-      'pageYRange': js_util.allowInterop((num pageIndex) {
+    final JSObject shot = JSObject();
+    void expose(String name, JSFunction fn) =>
+        shot.setProperty(name.toJS, fn);
+    expose('open', ((String url, JSFunction cb) {
+        _open(app, url).then((n) => cb.callAsFunction(null, n.toJS));
+    }).toJS);
+    expose('pageCount',
+        (() => app.editor.getDraw().getPageList().length).toJS);
+    expose('pageYRange', ((num pageIndex) {
         final d = app.editor.getDraw();
         final pageRows = d.getPageRowList();
         final i = pageIndex.toInt();
@@ -62,8 +71,8 @@ void main() {
         }
         return 'page $i: rows=${rows.length} yMin=${minY?.toStringAsFixed(1)} '
             'yMax=${maxY?.toStringAsFixed(1)} firstIdx=$firstIdx lastIdx=$lastIdx';
-      }),
-      'elemSize': js_util.allowInterop((String needle) {
+    }).toJS);
+    expose('elemSize', ((String needle) {
         final d = app.editor.getDraw();
         final els = d.getOriginalMainElementList() as List;
         final buf = StringBuffer();
@@ -81,8 +90,8 @@ void main() {
           }
         }
         return '(não achado)';
-      }),
-      'findPage': js_util.allowInterop((String needle) {
+    }).toJS);
+    expose('findPage', ((String needle) {
         final d = app.editor.getDraw();
         final pageRows = d.getPageRowList();
         final posList = d.getPosition().getOriginalMainPositionList() as List;
@@ -99,8 +108,8 @@ void main() {
           if (buf.toString().contains(needle)) return p + 1;
         }
         return -1;
-      }),
-      'itemHeader': js_util.allowInterop(() {
+    }).toJS);
+    expose('itemHeader', (() {
         final d = app.editor.getDraw();
         final els = d.getOriginalMainElementList() as List;
         final buf = StringBuffer();
@@ -135,8 +144,8 @@ void main() {
           }
         }
         return buf.isEmpty ? '(nenhum Item 2/3)' : buf.toString();
-      }),
-      'rowYList': js_util.allowInterop((num pageIndex) {
+    }).toJS);
+    expose('rowYList', ((num pageIndex) {
         final d = app.editor.getDraw();
         final pageRows = d.getPageRowList();
         final i = pageIndex.toInt();
@@ -156,8 +165,8 @@ void main() {
           buf.write('y=${y?.toStringAsFixed(0) ?? "?"}h=${h.toStringAsFixed(0)}oy=${oy.toStringAsFixed(0)} ');
         }
         return buf.toString();
-      }),
-      'cellSpacing': js_util.allowInterop(() {
+    }).toJS);
+    expose('cellSpacing', (() {
         final d = app.editor.getDraw();
         final els = d.getOriginalMainElementList() as List;
         final buf = StringBuffer();
@@ -178,8 +187,8 @@ void main() {
           return buf.toString();
         }
         return '(sem tabela)';
-      }),
-      'footerInfo': js_util.allowInterop(() {
+    }).toJS);
+    expose('footerInfo', (() {
         final d = app.editor.getDraw();
         final f = d.getFooter();
         final els = f.getElementList() as List;
@@ -192,15 +201,15 @@ void main() {
         }).join('|');
         return 'footerEls=${els.length} h=${f.getHeight().toStringAsFixed(0)} '
             'rows=${(f.getRowList() as List).length} [$types]';
-      }),
-      'geom': js_util.allowInterop(() {
+    }).toJS);
+    expose('geom', (() {
         final d = app.editor.getDraw();
         final m = d.getMargins();
         return 'width=${d.getWidth()} height=${d.getHeight()} '
             'dpr=${d.getPagePixelRatio()} '
             'margins=[${m.map((v) => (v as num).toStringAsFixed(1)).join(",")}]';
-      }),
-      'headerInfo': js_util.allowInterop(() {
+    }).toJS);
+    expose('headerInfo', (() {
         final d = app.editor.getDraw();
         final h = d.getHeader();
         final els = h.getElementList()
@@ -223,10 +232,9 @@ void main() {
             'extraHeight=${h.getExtraHeight().toStringAsFixed(1)} '
             'headerTop=${h.getHeaderTop().toStringAsFixed(1)} '
             'rows=[$rows] elems=[$els]';
-      }),
-    }));
-    js_util.setProperty(html.window, '__shotReady', true);
-  });
+    }).toJS);
+    html.window.setProperty('__shot'.toJS, shot);
+    html.window.setProperty('__shotReady'.toJS, true.toJS);
 }
 ''';
 

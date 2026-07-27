@@ -1,4 +1,4 @@
-import 'dart:html';
+import 'package:canvas_text_editor/src/dom/dom.dart';
 
 import '../../../dataset/constant/group.dart';
 import '../../../dataset/enum/editor.dart';
@@ -249,7 +249,7 @@ class Group {
 		_fillRectMap.forEach((String groupId, IElementFillRect rect) {
 			final bool isActive = anchorGroupIds?.contains(groupId) == true;
 			ctx.globalAlpha = isActive ? activeOpacity : inactiveOpacity;
-				ctx.fillStyle = isActive ? activeColor : inactiveColor;
+				ctx.fillColor = isActive ? activeColor : inactiveColor;
 			ctx.fillRect(rect.x, rect.y, rect.width, rect.height);
 		});
 		ctx.restore();

@@ -1,6 +1,6 @@
 // ignore_for_file: avoid_dynamic_calls
 
-import 'dart:html';
+import 'package:canvas_text_editor/src/dom/dom.dart';
 
 import 'package:canvas_text_editor/ce_fonts.dart' as ce_fonts;
 
@@ -3905,9 +3905,11 @@ class CommandAdapt {
     draw.insertElementList(<IElement>[cloneElement]);
   }
 
-  DivElement getContainer() {
+  HTMLDivElement getContainer() {
     final dynamic container = draw.getContainer();
-    return container is DivElement ? container : DivElement();
+    return jsIsHTMLDivElement(container)
+        ? container as HTMLDivElement
+        : HTMLDivElement();
   }
 
   List<ITitleValueItem<IElement>> getTitleValue(IGetTitleValueOption payload) {
@@ -3984,7 +3986,7 @@ class CommandAdapt {
     IPositionContextByEventOption? options,
   ]) {
     final Element? target = evt.target as Element?;
-    final String? indexValue = target?.dataset['index'];
+    final String? indexValue = target?.data('index');
     if (indexValue == null) {
       return null;
     }

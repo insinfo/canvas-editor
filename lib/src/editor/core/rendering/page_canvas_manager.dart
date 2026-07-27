@@ -1,4 +1,4 @@
-import 'dart:html';
+import 'package:canvas_text_editor/src/dom/dom.dart';
 
 typedef PageCanvasMetricResolver = double Function();
 
@@ -8,7 +8,7 @@ typedef PageCanvasMetricResolver = double Function();
 /// CSS/backing-store metrics, live/dormant state and the DPR transform.
 class PageCanvasManager {
   PageCanvasManager({
-    required HtmlElement pageContainer,
+    required HTMLElement pageContainer,
     required PageCanvasMetricResolver width,
     required PageCanvasMetricResolver height,
     required PageCanvasMetricResolver pageGap,
@@ -19,13 +19,13 @@ class PageCanvasManager {
         _pageGap = pageGap,
         _devicePixelRatio = devicePixelRatio ?? _resolveWindowDevicePixelRatio;
 
-  final HtmlElement _pageContainer;
+  final HTMLElement _pageContainer;
   final PageCanvasMetricResolver _width;
   final PageCanvasMetricResolver _height;
   final PageCanvasMetricResolver _pageGap;
   final PageCanvasMetricResolver _devicePixelRatio;
 
-  final List<CanvasElement> pageList = <CanvasElement>[];
+  final List<HTMLCanvasElement> pageList = <HTMLCanvasElement>[];
   final List<CanvasRenderingContext2D> contextList =
       <CanvasRenderingContext2D>[];
 
@@ -54,8 +54,8 @@ class PageCanvasManager {
     return true;
   }
 
-  CanvasElement createPage(int index) {
-    final CanvasElement canvas = CanvasElement()
+  HTMLCanvasElement createPage(int index) {
+    final HTMLCanvasElement canvas = HTMLCanvasElement()
       // New pages start dormant. CSS keeps their document footprint while the
       // 1x1 backing store avoids allocating a full bitmap offscreen.
       ..width = 1
@@ -81,7 +81,7 @@ class PageCanvasManager {
       createPage(pageList.length);
     }
     while (pageList.length > desiredPageCount) {
-      final CanvasElement removedCanvas = pageList.removeLast();
+      final HTMLCanvasElement removedCanvas = pageList.removeLast();
       removedCanvas.remove();
       if (contextList.isNotEmpty) {
         contextList.removeLast();
@@ -102,7 +102,7 @@ class PageCanvasManager {
   void initializeContext(CanvasRenderingContext2D context) {
     final double dpr = pagePixelRatio;
     context
-      ..setTransform(1, 0, 0, 1, 0, 0)
+      ..resetTransform()
       ..scale(dpr, dpr);
   }
 
@@ -119,7 +119,7 @@ class PageCanvasManager {
     final int pixelHeight = (height * ratio).round();
 
     for (var i = 0; i < pageList.length; i++) {
-      final CanvasElement page = pageList[i];
+      final HTMLCanvasElement page = pageList[i];
       final bool isDormant = (page.width ?? 0) <= 1 && (page.height ?? 0) <= 1;
       final bool metricsChanged =
           page.width != pixelWidth || page.height != pixelHeight;
@@ -143,7 +143,7 @@ class PageCanvasManager {
     if (index < 0 || index >= pageList.length) {
       return;
     }
-    final CanvasElement canvas = pageList[index];
+    final HTMLCanvasElement canvas = pageList[index];
     if (live) {
       final double dpr = pagePixelRatio;
       final int fullWidth = (_width() * dpr).round();
@@ -186,7 +186,7 @@ class PageCanvasManager {
     if (pageList.isEmpty) {
       return fallback;
     }
-    final CanvasElement page = pageList[_clampPageIndex(pageNo)];
+    final HTMLCanvasElement page = pageList[_clampPageIndex(pageNo)];
     final double ratio = pagePixelRatio;
     final int rawWidth = page.width ?? 0;
     return ratio <= 0 ? rawWidth.toDouble() : rawWidth.toDouble() / ratio;
@@ -196,7 +196,7 @@ class PageCanvasManager {
     if (pageList.isEmpty) {
       return fallback;
     }
-    final CanvasElement page = pageList[_clampPageIndex(pageNo)];
+    final HTMLCanvasElement page = pageList[_clampPageIndex(pageNo)];
     final double ratio = pagePixelRatio;
     final int rawHeight = page.height ?? 0;
     return ratio <= 0 ? rawHeight.toDouble() : rawHeight.toDouble() / ratio;
@@ -213,7 +213,7 @@ class PageCanvasManager {
   }
 
   void dispose() {
-    _pageContainer.children.clear();
+    _pageContainer.clearChildren();
     pageList.clear();
     contextList.clear();
   }

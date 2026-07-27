@@ -1,4 +1,4 @@
-import 'dart:html';
+import 'package:canvas_text_editor/src/dom/dom.dart';
 
 import '../../../interface/row.dart';
 
@@ -16,7 +16,7 @@ class SubscriptParticle {
 		ctx.save();
 		ctx.font = element.style;
 		if (element.color != null) {
-			ctx.fillStyle = element.color!;
+			ctx.fillColor = element.color!;
 		}
 		ctx.fillText(element.value, x, y + getOffsetY(element));
 		ctx.restore();

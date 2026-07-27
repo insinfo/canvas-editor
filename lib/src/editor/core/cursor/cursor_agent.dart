@@ -1,17 +1,16 @@
-import 'dart:html';
-import 'dart:js_util' as js_util;
+import 'package:canvas_text_editor/src/dom/dom.dart';
 
 import '../../dataset/constant/editor.dart';
 import '../event/handlers/paste.dart';
 
 class CursorAgent {
   CursorAgent(this.draw, this.canvasEvent)
-      : container = draw.getContainer() as DivElement,
+      : container = draw.getContainer() as HTMLDivElement,
         eventBus = draw.getEventBus() {
-    final TextAreaElement element = TextAreaElement()
+    final HTMLTextAreaElement element = HTMLTextAreaElement()
       ..setAttribute('autocomplete', 'off')
       ..setAttribute('spellcheck', 'false')
-      ..classes.add('$editorPrefix-inputarea')
+      ..classList.add('$editorPrefix-inputarea')
       ..style.position = 'absolute'
       ..style.left = '0'
       ..style.top = '0'
@@ -37,17 +36,21 @@ class CursorAgent {
     agentCursorDom.onKeyDown.listen(_handleKeyDown);
     agentCursorDom.onInput.listen(_handleInput);
     agentCursorDom.onPaste.listen(_handlePaste);
-    agentCursorDom.on['compositionstart'].listen(_handleCompositionStart);
-    agentCursorDom.on['compositionend'].listen(_handleCompositionEnd);
+    const EventStreamProvider<Event>('compositionstart')
+        .forTarget(agentCursorDom)
+        .listen(_handleCompositionStart);
+    const EventStreamProvider<Event>('compositionend')
+        .forTarget(agentCursorDom)
+        .listen(_handleCompositionEnd);
   }
 
   final dynamic draw;
   final dynamic canvasEvent;
-  final DivElement container;
+  final HTMLDivElement container;
   final dynamic eventBus;
-  late final TextAreaElement agentCursorDom;
+  late final HTMLTextAreaElement agentCursorDom;
 
-  TextAreaElement getAgentCursorDom() {
+  HTMLTextAreaElement getAgentCursorDom() {
     return agentCursorDom;
   }
 
@@ -56,9 +59,10 @@ class CursorAgent {
   }
 
   void _handleInput(Event event) {
-    final dynamic data = js_util.getProperty(event, 'data');
-    if (data != null) {
-      canvasEvent.input(data);
+    // InputEvent.data (null em deleções/composition — só repassa texto real).
+    final JSAny? dataProp = (event as JSObject).getProperty('data'.toJS);
+    if (dataProp.isA<JSString>()) {
+      canvasEvent.input((dataProp! as JSString).toDart);
     }
     if (eventBus.isSubscribe('input') == true) {
       eventBus.emit('input', event);

@@ -1,4 +1,4 @@
-import 'dart:html';
+import 'package:canvas_text_editor/src/dom/dom.dart';
 
 import '../../dataset/enum/common.dart';
 import '../../dataset/enum/editor.dart';
@@ -520,7 +520,7 @@ class Command {
 
   List<IElement> getControlList() => _adapt.getControlList();
 
-  DivElement getContainer() => _adapt.getContainer();
+  HTMLDivElement getContainer() => _adapt.getContainer();
 
   List<ITitleValueItem<IElement>>? getTitleValue(
     IGetTitleValueOption payload,

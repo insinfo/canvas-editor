@@ -1,6 +1,6 @@
 import 'dart:async';
-import 'dart:html';
-import 'dart:js_util' as js_util;
+
+import 'package:canvas_text_editor/src/dom/dom.dart';
 
 import '../dataset/enum/editor.dart';
 
@@ -43,7 +43,7 @@ void printImageBase64(
     return;
   }
 
-  final IFrameElement iframe = IFrameElement()
+  final HTMLIFrameElement iframe = HTMLIFrameElement()
     ..style.visibility = 'hidden'
     ..style.position = 'absolute'
     ..style.left = '0'
@@ -53,22 +53,25 @@ void printImageBase64(
     ..style.border = 'none';
 
   document.body?.append(iframe);
-  final dynamic contentWindow = js_util.getProperty(iframe, 'contentWindow');
+  // Objeto JS cru do frame (o wrapper tipado não expõe write/print cross-doc).
+  final JSObject? contentWindow =
+      (iframe as JSObject).getProperty('contentWindow'.toJS) as JSObject?;
   if (contentWindow == null) {
     iframe.remove();
     return;
   }
 
-  final dynamic doc = js_util.getProperty(contentWindow, 'document');
+  final JSObject? doc =
+      contentWindow.getProperty('document'.toJS) as JSObject?;
   if (doc == null) {
     iframe.remove();
     return;
   }
 
   final _PaperSize paperSize = _convertPxToPaperSize(width, height);
-  final DivElement container = DivElement();
+  final HTMLDivElement container = HTMLDivElement();
   for (final String base64 in base64List) {
-    final ImageElement image = ImageElement()
+    final HTMLImageElement image = HTMLImageElement()
       ..style.width = direction == PaperDirection.horizontal
           ? paperSize.height
           : paperSize.width
@@ -79,7 +82,7 @@ void printImageBase64(
     container.append(image);
   }
 
-  final StyleElement style = StyleElement()
+  final HTMLStyleElement style = HTMLStyleElement()
     ..appendText('''
   * {
     margin: 0;
@@ -91,20 +94,19 @@ void printImageBase64(
   }
 ''');
 
-  js_util.callMethod<void>(doc, 'open', const <dynamic>[]);
+  doc.callMethod('open'.toJS);
 
   scheduleMicrotask(() {
-    js_util.callMethod<void>(
-      doc,
-      'write',
-      <dynamic>['${style.outerHtml}${container.innerHtml}'],
+    doc.callMethod(
+      'write'.toJS,
+      '${style.outerHtml}${container.innerHtml}'.toJS,
     );
     Future<void>.delayed(Duration.zero, () {
       try {
-        js_util.callMethod<void>(contentWindow, 'focus', const <dynamic>[]);
+        contentWindow.callMethod('focus'.toJS);
       } catch (_) {}
-      js_util.callMethod<void>(contentWindow, 'print', const <dynamic>[]);
-      js_util.callMethod<void>(doc, 'close', const <dynamic>[]);
+      contentWindow.callMethod('print'.toJS);
+      doc.callMethod('close'.toJS);
       window.onMouseOver.first.then((_) => iframe.remove());
     });
   });

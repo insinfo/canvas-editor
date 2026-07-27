@@ -1,4 +1,4 @@
-import 'dart:html' as html;
+import 'package:canvas_text_editor/src/dom/dom.dart' as html;
 
 import '../../../dataset/constant/common.dart';
 import '../../../dataset/constant/element.dart' as element_constants;
@@ -171,7 +171,7 @@ void input(String data, CanvasEvent host) {
     }
     if (timing) {
       final double end = html.window.performance.now().toDouble();
-      html.window.console.log('[input] pre='
+      html.consoleLog('[input] pre='
           '${(preRenderT - inputT0).toStringAsFixed(0)}ms '
           'render=${(end - preRenderT).toStringAsFixed(0)}ms '
           'total=${(end - inputT0).toStringAsFixed(0)}ms');

@@ -1,4 +1,4 @@
-import 'dart:html';
+import 'package:canvas_text_editor/src/dom/dom.dart';
 
 import '../../../interface/editor.dart';
 import '../draw.dart';
@@ -22,7 +22,7 @@ class Strikeout extends AbstractRichText {
 		ctx.save();
 		ctx
 			..lineWidth = lineWidth
-			..strokeStyle = strokeColor
+			..strokeColor = strokeColor
 			..beginPath()
 			..moveTo(fillRect.x, adjustY)
 			..lineTo(fillRect.x + fillRect.width, adjustY)

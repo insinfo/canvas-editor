@@ -1,19 +1,20 @@
-import 'dart:html' as html;
 import 'dart:math';
 
+import 'package:canvas_text_editor/src/dom/dom.dart' as html;
+
 Point<double> getMouseOffset(dynamic evt) {
-  if (evt is html.MouseEvent) {
-    final Point<num> offset = evt.offset;
+  if (html.jsIsMouseEvent(evt)) {
+    final Point<num> offset = (evt as html.MouseEvent).offset;
     return Point<double>(offset.x.toDouble(), offset.y.toDouble());
   }
 
-  final html.MouseEvent? mouseEvent = evt is html.MouseEvent ? evt : null;
   final html.Element? element = _resolveTargetElement(evt);
-  if (mouseEvent != null && element != null) {
-    final Rectangle<num> rect = element.getBoundingClientRect();
+  if (element != null && html.jsIsMouseEvent(evt)) {
+    final html.MouseEvent mouseEvent = evt as html.MouseEvent;
+    final html.DOMRect rect = element.getBoundingClientRect();
     return Point<double>(
-      mouseEvent.client.x.toDouble() - rect.left.toDouble(),
-      mouseEvent.client.y.toDouble() - rect.top.toDouble(),
+      mouseEvent.clientX.toDouble() - rect.left.toDouble(),
+      mouseEvent.clientY.toDouble() - rect.top.toDouble(),
     );
   }
 
@@ -21,16 +22,13 @@ Point<double> getMouseOffset(dynamic evt) {
 }
 
 html.Element? _resolveTargetElement(dynamic evt) {
-  if (evt is! html.Event) {
+  if (!html.jsIsEvent(evt)) {
     return null;
   }
-  final dynamic target = evt.target;
-  if (target is html.Element) {
+  final html.Event event = evt as html.Event;
+  final html.Element? target = html.asElement(event.target);
+  if (target != null) {
     return target;
   }
-  final dynamic currentTarget = evt.currentTarget;
-  if (currentTarget is html.Element) {
-    return currentTarget;
-  }
-  return null;
+  return html.asElement(event.currentTarget);
 }

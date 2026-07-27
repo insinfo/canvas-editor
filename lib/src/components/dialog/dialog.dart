@@ -1,4 +1,4 @@
-import 'dart:html';
+import 'package:canvas_text_editor/src/dom/dom.dart';
 
 import '../../editor/dataset/constant/editor.dart';
 import '../../editor/dataset/enum/editor.dart';
@@ -65,8 +65,8 @@ class Dialog {
   final DialogOptions _options;
   final List<dynamic> _inputs = <dynamic>[];
 
-  DivElement? _mask;
-  DivElement? _container;
+  HTMLDivElement? _mask;
+  HTMLDivElement? _container;
 
   void _render() {
     final body = document.body;
@@ -74,21 +74,21 @@ class Dialog {
       return;
     }
 
-    final mask = DivElement()
-      ..classes.add('dialog-mask')
+    final mask = HTMLDivElement()
+      ..classList.add('dialog-mask')
       ..setAttribute(editorComponent, EditorComponent.component.name);
     body.append(mask);
 
-    final container = DivElement()
-      ..classes.add('dialog-container')
+    final container = HTMLDivElement()
+      ..classList.add('dialog-container')
       ..setAttribute(editorComponent, EditorComponent.component.name);
 
-    final dialog = DivElement()..classes.add('dialog');
+    final dialog = HTMLDivElement()..classList.add('dialog');
     container.append(dialog);
 
-    final titleContainer = DivElement()..classes.add('dialog-title');
-    final titleSpan = SpanElement()..text = _options.title;
-    final closeIcon = Element.tag('i');
+    final titleContainer = HTMLDivElement()..classList.add('dialog-title');
+    final titleSpan = HTMLSpanElement()..text = _options.title;
+    final closeIcon = document.createElement('i');
     closeIcon.onClick.listen((_) {
       _options.onClose?.call();
       _dispose();
@@ -98,29 +98,29 @@ class Dialog {
       ..append(closeIcon);
     dialog.append(titleContainer);
 
-    final optionContainer = DivElement()..classes.add('dialog-option');
+    final optionContainer = HTMLDivElement()..classList.add('dialog-option');
     for (final data in _options.data) {
-      final optionItem = DivElement()..classes.add('dialog-option__item');
+      final optionItem = HTMLDivElement()..classList.add('dialog-option__item');
 
       if (data.label != null) {
-        final label = SpanElement()
+        final label = HTMLSpanElement()
           ..text = data.label!
-          ..classes.toggle('dialog-option__item--require', data.required);
+          ..classList.toggle('dialog-option__item--require', data.required ?? false);
         optionItem.append(label);
       }
 
       Element input;
       if (data.type == 'select') {
-        final select = SelectElement();
+        final select = HTMLSelectElement();
         for (final option in data.options ?? const <DialogOptionItem>[]) {
           select.children
-              .add(OptionElement(data: option.label, value: option.value));
+              .add((HTMLOptionElement()..text = option.label..value = option.value));
         }
         input = select;
       } else if (data.type == 'textarea') {
-        input = TextAreaElement()..placeholder = data.placeholder ?? '';
+        input = HTMLTextAreaElement()..placeholder = data.placeholder ?? '';
       } else {
-        input = InputElement()
+        input = HTMLInputElement()
           ..type = data.type
           ..placeholder = data.placeholder ?? '';
       }
@@ -129,12 +129,13 @@ class Dialog {
         ..attributes['name'] = data.name
         ..attributes['value'] = data.value ?? '';
 
-      if (input is SelectElement) {
-        input.value = data.value ?? input.value;
-      } else if (input is InputElement) {
-        input.value = data.value ?? '';
-      } else if (input is TextAreaElement) {
-        input.value = data.value ?? '';
+      if (jsIsHTMLSelectElement(input)) {
+        final HTMLSelectElement select = input as HTMLSelectElement;
+        select.value = data.value ?? select.value;
+      } else if (jsIsHTMLInputElement(input)) {
+        (input as HTMLInputElement).value = data.value ?? '';
+      } else if (jsIsHTMLTextAreaElement(input)) {
+        (input as HTMLTextAreaElement).value = data.value ?? '';
       }
 
       if (data.width != null) {
@@ -150,10 +151,10 @@ class Dialog {
     }
     dialog.append(optionContainer);
 
-    final menuContainer = DivElement()..classes.add('dialog-menu');
+    final menuContainer = HTMLDivElement()..classList.add('dialog-menu');
 
-    final cancelButton = ButtonElement()
-      ..classes.add('dialog-menu__cancel')
+    final cancelButton = HTMLButtonElement()
+      ..classList.add('dialog-menu__cancel')
       ..text = 'Cancelar'
       ..type = 'button';
     cancelButton.onClick.listen((_) {
@@ -162,26 +163,23 @@ class Dialog {
     });
     menuContainer.append(cancelButton);
 
-    final confirmButton = ButtonElement()
+    final confirmButton = HTMLButtonElement()
       ..text = 'Confirmar'
       ..type = 'submit';
     confirmButton.onClick.listen((_) {
       if (_options.onConfirm != null) {
         final payload = _inputs.map<DialogConfirm>((dynamic element) {
-          if (element is InputElement) {
-            final String? name = element.name;
-            final String? value = element.value;
-            return DialogConfirm(name: name ?? '', value: value ?? '');
+          if (jsIsHTMLInputElement(element)) {
+            final HTMLInputElement input = element as HTMLInputElement;
+            return DialogConfirm(name: input.name, value: input.value);
           }
-          if (element is TextAreaElement) {
-            final String name = element.name;
-            final String? value = element.value;
-            return DialogConfirm(name: name, value: value ?? '');
+          if (jsIsHTMLTextAreaElement(element)) {
+            final HTMLTextAreaElement area = element as HTMLTextAreaElement;
+            return DialogConfirm(name: area.name, value: area.value);
           }
-          if (element is SelectElement) {
-            final String? name = element.name;
-            final String? value = element.value;
-            return DialogConfirm(name: name ?? '', value: value ?? '');
+          if (jsIsHTMLSelectElement(element)) {
+            final HTMLSelectElement select = element as HTMLSelectElement;
+            return DialogConfirm(name: select.name, value: select.value);
           }
           return DialogConfirm(name: '', value: '');
         }).toList(growable: false);

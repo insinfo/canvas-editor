@@ -1,4 +1,4 @@
-import 'dart:html';
+import 'package:canvas_text_editor/src/dom/dom.dart';
 import 'dart:math' as math;
 
 import '../../../dataset/constant/page_number.dart';
@@ -14,11 +14,11 @@ import 'page_number.dart';
 class Watermark {
   Watermark(this._draw)
       : _options = _draw.getOptions(),
-        _imageCache = <String, ImageElement>{};
+        _imageCache = <String, HTMLImageElement>{};
 
   final Draw _draw;
   final IEditorOption _options;
-  final Map<String, ImageElement> _imageCache;
+  final Map<String, HTMLImageElement> _imageCache;
 
   IWatermark get _watermarkConfig =>
       _options.watermark ?? defaultWatermarkOption;
@@ -96,7 +96,7 @@ class Watermark {
       final double patternHeight = diagonalLength + 2 * scaledGapY;
       final double dpr = _draw.getPagePixelRatio();
 
-      final CanvasElement tempCanvas = CanvasElement()
+      final HTMLCanvasElement tempCanvas = HTMLCanvasElement()
         ..width = math.max(1, (patternWidth * dpr).ceil())
         ..height = math.max(1, (patternHeight * dpr).ceil());
       tempCanvas.style
@@ -104,13 +104,13 @@ class Watermark {
         ..height = '${patternHeight}px';
       final CanvasRenderingContext2D tempCtx = tempCanvas.context2D;
       tempCtx
-        ..setTransform(1, 0, 0, 1, 0, 0)
+        ..resetTransform()
         ..scale(dpr, dpr)
         ..translate(patternWidth / 2, patternHeight / 2)
         ..rotate(-45 * math.pi / 180)
         ..translate(-patternWidth / 2, -patternHeight / 2)
         ..font = '${fontSize * scale}px $fontFamily'
-        ..fillStyle = color
+        ..fillColor = color
         ..fillText(
           text,
           (patternWidth - textWidth) / 2,
@@ -124,7 +124,7 @@ class Watermark {
       }
     } else {
       ctx
-        ..fillStyle = color
+        ..fillColor = color
         ..translate(docWidth / 2, docHeight / 2)
         ..rotate(-45 * math.pi / 180)
         ..fillText(
@@ -151,7 +151,7 @@ class Watermark {
     final String data = config.data;
 
     if (!_imageCache.containsKey(data)) {
-      final ImageElement img = ImageElement()
+      final HTMLImageElement img = HTMLImageElement()
         ..crossOrigin = 'Anonymous'
         ..src = data;
       img.onLoad.listen((_) {
@@ -164,7 +164,7 @@ class Watermark {
     ctx.save();
     ctx.globalAlpha = opacity;
 
-    final ImageElement cachedImage = _imageCache[data]!;
+    final HTMLImageElement cachedImage = _imageCache[data]!;
 
     if (repeat) {
       final double scaledGapX = gap.isNotEmpty ? gap[0] * scale : 0;
@@ -175,7 +175,7 @@ class Watermark {
       final double patternHeight = diagonalLength + 2 * scaledGapY;
       final double dpr = _draw.getPagePixelRatio();
 
-      final CanvasElement tempCanvas = CanvasElement()
+      final HTMLCanvasElement tempCanvas = HTMLCanvasElement()
         ..width = math.max(1, (patternWidth * dpr).ceil())
         ..height = math.max(1, (patternHeight * dpr).ceil());
       tempCanvas.style
@@ -183,7 +183,7 @@ class Watermark {
         ..height = '${patternHeight}px';
       final CanvasRenderingContext2D tempCtx = tempCanvas.context2D;
       tempCtx
-        ..setTransform(1, 0, 0, 1, 0, 0)
+        ..resetTransform()
         ..scale(dpr, dpr)
         ..translate(patternWidth / 2, patternHeight / 2)
         ..rotate(-45 * math.pi / 180)

@@ -1,4 +1,4 @@
-import 'dart:html';
+import 'package:canvas_text_editor/src/dom/dom.dart';
 
 import '../../../../dataset/constant/element.dart' as element_constants;
 import '../../../../dataset/enum/element.dart';

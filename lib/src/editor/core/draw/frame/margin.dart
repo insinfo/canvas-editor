@@ -1,4 +1,4 @@
-import 'dart:html';
+import 'package:canvas_text_editor/src/dom/dom.dart';
 
 import '../../../dataset/enum/editor.dart';
 import '../../../interface/editor.dart';
@@ -28,7 +28,7 @@ class Margin {
 
     ctx.save();
     ctx.translate(0.5, 0.5);
-    ctx.strokeStyle = strokeColor;
+    ctx.strokeColor = strokeColor;
     ctx.beginPath();
 
     final double left = margins[3];

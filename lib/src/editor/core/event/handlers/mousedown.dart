@@ -1,5 +1,4 @@
-import 'dart:html' as html;
-import 'dart:js_util' as js_util;
+import 'package:canvas_text_editor/src/dom/dom.dart' as html;
 
 import '../../../dataset/enum/common.dart';
 import '../../../dataset/enum/control.dart';
@@ -91,8 +90,10 @@ void mousedown(dynamic evt, dynamic host) {
   final dynamic position = draw.getPosition();
 
   final IRange range = rangeManager.getRange() as IRange;
-  final int button =
-      (evt?.button as num?)?.toInt() ?? MouseEventButton.left.value;
+  // Vista tipada do evento: dispatch dinâmico em objeto JS falha no dart2js.
+  final html.MouseEvent? mouseEvt =
+      html.jsIsMouseEvent(evt) ? evt as html.MouseEvent : null;
+  final int button = mouseEvt?.button ?? MouseEventButton.left.value;
   if (button == MouseEventButton.right.value &&
       (range.isCrossRowCol == true || rangeManager.getIsCollapsed() != true)) {
     return;
@@ -113,8 +114,8 @@ void mousedown(dynamic evt, dynamic host) {
     }
   }
 
-  final html.Element? target = evt?.target as html.Element?;
-  final String? pageIndex = target?.dataset['index'];
+  final html.Element? target = html.asElement(mouseEvt?.target);
+  final String? pageIndex = target?.data('index');
   if (pageIndex != null) {
     final int? parsed = int.tryParse(pageIndex);
     if (parsed != null) {
@@ -127,7 +128,7 @@ void mousedown(dynamic evt, dynamic host) {
   final dynamic textBoxTool = draw.getTextBoxTool();
   if (textBoxTool != null &&
       textBoxTool.handleMousedown(offsetX, offsetY) == true) {
-    if (evt is html.Event) evt.preventDefault();
+    if (html.jsIsEvent(evt)) (evt as html.Event).preventDefault();
     return;
   }
 
@@ -143,7 +144,7 @@ void mousedown(dynamic evt, dynamic host) {
 
   if (positionResult.index < 0 && positionResult.zone != null) {
     if (draw.getMode() == EditorMode.readonly) {
-      if (evt is html.Event) evt.preventDefault();
+      if (html.jsIsEvent(evt)) (evt as html.Event).preventDefault();
       return;
     }
     final dynamic zoneManager = draw.getZone();
@@ -153,8 +154,8 @@ void mousedown(dynamic evt, dynamic host) {
     positionResult =
         position.adjustPositionContext(payload) as ICurrentPosition?;
     if (positionResult == null || positionResult.index < 0) {
-      if (evt is html.Event) {
-        evt.preventDefault();
+      if (html.jsIsEvent(evt)) {
+        (evt as html.Event).preventDefault();
       }
       return;
     }
@@ -195,7 +196,7 @@ void mousedown(dynamic evt, dynamic host) {
   if (index >= 0) {
     int startIndex = curIndex;
     int endIndex = curIndex;
-    if (evt?.shiftKey == true) {
+    if (mouseEvt?.shiftKey == true) {
       final IRange currentRange = rangeManager.getRange() as IRange;
       final int oldStartIndex = currentRange.startIndex;
       if (oldStartIndex >= 0) {
@@ -311,7 +312,7 @@ void mousedown(dynamic evt, dynamic host) {
     if (curElement.type == ElementType.hyperlink &&
         curIndex >= 0 &&
         curIndex < positionList.length) {
-      final bool modPressed = evt is html.Event && isMod(evt);
+      final bool modPressed = html.jsIsEvent(evt) && isMod(evt);
       if (modPressed) {
         hyperlinkParticle.openHyperlink(curElement);
       } else {
@@ -397,11 +398,15 @@ void _invokeControlSetSelect(dynamic control, List<String> codes) {
   if (control == null) {
     return;
   }
-  try {
-    js_util.callMethod(control, 'setSelect', <Object?>[codes]);
-    return;
-  } catch (_) {
-    // Fallback for pure Dart control implementations.
+  if (html.jsIsJSObject(control)) {
+    final html.JSObject jsControl = control as html.JSObject;
+    if (jsControl.hasProperty('setSelect'.toJS).toDart) {
+      jsControl.callMethod(
+        'setSelect'.toJS,
+        codes.map((String code) => code.toJS).toList().toJS,
+      );
+      return;
+    }
   }
   try {
     // ignore: avoid_dynamic_calls

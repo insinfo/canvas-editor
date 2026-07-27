@@ -17,9 +17,11 @@ import 'package:shelf/shelf_io.dart' as io;
 import 'package:shelf_static/shelf_static.dart';
 
 const String _benchMainSource = r'''
-import 'dart:html' as html;
-import 'dart:js_util' as js_util;
+import 'dart:js_interop';
+import 'dart:js_interop_unsafe';
 import 'dart:typed_data';
+
+import 'package:web/web.dart' as html;
 
 import 'package:canvas_text_editor/src/editor.dart';
 import 'package:canvas_text_editor/src/editor/core/draw/draw.dart' as draw_lib;
@@ -29,8 +31,9 @@ import 'package:canvas_text_editor/src/editor/interface/range.dart';
 const String zero = '​';
 
 Future<double> openFromUrl(EditorApp app, String url) async {
-  final request = await html.HttpRequest.request(url, responseType: 'arraybuffer');
-  final bytes = (request.response as ByteBuffer).asUint8List();
+  final resp = await html.window.fetch(url.toJS).toDart;
+  final JSAny? raw = await resp.arrayBuffer().toDart;
+  final Uint8List bytes = (raw! as JSArrayBuffer).toDart.asUint8List();
   final start = html.window.performance.now();
   await app.openDocxBytes(url, bytes);
   return (html.window.performance.now() - start).toDouble();
@@ -70,7 +73,9 @@ List<int> findPlainBlock(dynamic draw) {
 
 void focusInput() {
   final input = html.document.querySelector('.ce-inputarea');
-  if (input is html.TextAreaElement) input.focus();
+  if (input != null && input.isA<html.HTMLTextAreaElement>()) {
+    (input as html.HTMLTextAreaElement).focus();
+  }
 }
 
 void setRange(EditorApp app, int start, int end) {
@@ -81,27 +86,31 @@ void setRange(EditorApp app, int start, int end) {
 }
 
 void main() {
-  html.window.onLoad.listen((_) async {
+  html.window.addEventListener('load', ((html.Event _) {
+    _boot();
+  }).toJS);
+}
+
+void _boot() async {
     draw_lib.Draw.debugRenderTiming = true;
     final app = EditorApp(isApple: false);
     await app.initialize();
     var cursorIndex = 0;
 
-    js_util.setProperty(html.window, '__mutationPerf', js_util.jsify({
-      'open': js_util.allowInterop((String url, Object callback) {
+    final JSObject perf = JSObject();
+    void expose(String name, JSFunction fn) =>
+        perf.setProperty(name.toJS, fn);
+    expose('open', ((String url, JSFunction callback) {
         openFromUrl(app, url).then(
-          (value) => js_util.callMethod(callback, 'call', <Object?>[null, value]),
-          onError: (Object error) => js_util.callMethod(
-            callback,
-            'call',
-            <Object?>[null, -1, '$error'],
-          ),
+          (value) => callback.callAsFunction(null, value.toJS),
+          onError: (Object error) =>
+              callback.callAsFunction(null, (-1).toJS, '$error'.toJS),
         );
-      }),
-      'finishLayout': js_util.allowInterop(() {
+    }).toJS);
+    expose('finishLayout', (() {
         app.editor.getDraw().finishProgressiveLayout();
-      }),
-      'preparePlainText': js_util.allowInterop(() {
+    }).toJS);
+    expose('preparePlainText', (() {
         final block = findPlainBlock(app.editor.getDraw());
         if (block.isEmpty) return -1;
         final elements = app.editor.getDraw().getOriginalMainElementList();
@@ -110,13 +119,13 @@ void main() {
           cursorIndex += 1;
         }
         return cursorIndex;
-      }),
-      'focusPreparedText': js_util.allowInterop(() {
+    }).toJS);
+    expose('focusPreparedText', (() {
         final start = html.window.performance.now();
         setRange(app, cursorIndex, cursorIndex);
         return (html.window.performance.now() - start).toDouble();
-      }),
-      'focusPlainText': js_util.allowInterop(() {
+    }).toJS);
+    expose('focusPlainText', (() {
         final draw = app.editor.getDraw();
         final block = findPlainBlock(draw);
         if (block.isEmpty) return -1;
@@ -127,31 +136,31 @@ void main() {
         }
         setRange(app, cursorIndex, cursorIndex);
         return cursorIndex;
-      }),
-      'selectPlainBlock': js_util.allowInterop(() {
+    }).toJS);
+    expose('selectPlainBlock', (() {
         final draw = app.editor.getDraw();
         final block = findPlainBlock(draw);
         if (block.isEmpty) return '';
         cursorIndex = block.first;
         setRange(app, block.first, block.last);
         return '${block.first}:${block.last}';
-      }),
-      'elementCount': js_util.allowInterop(() {
+    }).toJS);
+    expose('elementCount', (() {
         return app.editor.getDraw().getOriginalMainElementList().length;
-      }),
-      'resetLayoutDiagnostics': js_util.allowInterop(() {
+    }).toJS);
+    expose('resetLayoutDiagnostics', (() {
         app.editor.getDraw().resetLayoutDiagnostics();
-      }),
-      'deepHistorySnapshots': js_util.allowInterop(() {
+    }).toJS);
+    expose('deepHistorySnapshots', (() {
         return app.editor.getDraw().getHistoryDiagnostics()['deepSnapshots'] ?? 0;
-      }),
-      'layoutDiagnostics': js_util.allowInterop(() {
+    }).toJS);
+    expose('layoutDiagnostics', (() {
         final draw = app.editor.getDraw();
         final stats = draw.getLayoutDiagnostics();
         return 'mode=${draw.getLastLayoutMode()},' +
             stats.entries.map((entry) => '${entry.key}=${entry.value}').join(',');
-      }),
-      'layoutStats': js_util.allowInterop(() {
+    }).toJS);
+    expose('layoutStats', (() {
         final draw = app.editor.getDraw();
         final rows = draw.getRowList();
         final pages = draw.getPageRowList();
@@ -162,18 +171,17 @@ void main() {
         return 'elements=${draw.getOriginalMainElementList().length},' +
             'rows=${rows.length},pages=${pages.length},' +
             'height=${height.toStringAsFixed(3)}';
-      }),
-      'fullRender': js_util.allowInterop(() {
+    }).toJS);
+    expose('fullRender', (() {
         final start = html.window.performance.now();
         app.editor.getDraw().render(IDrawOption(
           curIndex: cursorIndex,
           isSubmitHistory: false,
         ));
         return (html.window.performance.now() - start).toDouble();
-      }),
-    }));
-    js_util.setProperty(html.window, '__mutationPerfReady', true);
-  });
+    }).toJS);
+    html.window.setProperty('__mutationPerf'.toJS, perf);
+    html.window.setProperty('__mutationPerfReady'.toJS, true.toJS);
 }
 ''';
 

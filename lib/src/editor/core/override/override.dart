@@ -1,4 +1,4 @@
-import 'dart:html';
+import 'package:canvas_text_editor/src/dom/dom.dart';
 
 /// Provides hook points that allow consumers to override default behaviours
 /// like paste, copy, or drag-and-drop.

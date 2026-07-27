@@ -18,9 +18,11 @@ import 'package:shelf/shelf_io.dart' as io;
 import 'package:shelf_static/shelf_static.dart';
 
 const _benchMainSource = r'''
-import 'dart:html' as html;
-import 'dart:js_util' as js_util;
+import 'dart:js_interop';
+import 'dart:js_interop_unsafe';
 import 'dart:typed_data';
+
+import 'package:web/web.dart' as html;
 
 import 'package:canvas_text_editor/src/editor.dart';
 import 'package:canvas_text_editor/src/editor/index.dart' as editor_core;
@@ -32,12 +34,9 @@ import 'package:canvas_text_editor/src/editor/interface/range.dart'
     as range_model;
 
 Future<double> _openFromUrl(EditorApp app, String url) async {
-  final request = await html.HttpRequest.request(
-    url,
-    responseType: 'arraybuffer',
-  );
-  final buffer = request.response as ByteBuffer;
-  final bytes = buffer.asUint8List();
+  final resp = await html.window.fetch(url.toJS).toDart;
+  final JSAny? raw = await resp.arrayBuffer().toDart;
+  final Uint8List bytes = (raw! as JSArrayBuffer).toDart.asUint8List();
   final start = html.window.performance.now();
   await app.openDocxBytes(url, bytes);
   return (html.window.performance.now() - start).toDouble();
@@ -334,55 +333,57 @@ double _redoMany(EditorApp app, int count) {
 }
 
 void main() {
-  html.window.onLoad.listen((_) async {
+  html.window.addEventListener('load', ((html.Event _) {
+    _boot();
+  }).toJS);
+}
+
+void _boot() async {
     final app = EditorApp(isApple: false);
     await app.initialize();
 
-    js_util.setProperty(
-      html.window,
-      '__cmdPerf',
-      js_util.jsify({
-        'openDocxFromUrl': js_util.allowInterop((String url, Object cb) {
+    final JSObject perf = JSObject();
+    void expose(String name, JSFunction fn) =>
+        perf.setProperty(name.toJS, fn);
+    expose('openDocxFromUrl', ((String url, JSFunction cb) {
           _openFromUrl(app, url).then(
-            (ms) => js_util.callMethod(cb, 'call', <Object?>[null, ms]),
-            onError: (Object error) => js_util
-                .callMethod(cb, 'call', <Object?>[null, -1, '$error']),
+            (ms) => cb.callAsFunction(null, ms.toJS),
+            onError: (Object error) =>
+                cb.callAsFunction(null, (-1).toJS, '$error'.toJS),
           );
-        }),
-        'pageCount': js_util.allowInterop(() {
+    }).toJS);
+    expose('pageCount', (() {
           return app.editor.getDraw().getPageList().length;
-        }),
-        'finishProgressiveLayout': js_util.allowInterop(() {
+    }).toJS);
+    expose('finishProgressiveLayout', (() {
           app.editor.getDraw().finishProgressiveLayout();
-        }),
-        'selectMode': js_util.allowInterop((String mode) {
+    }).toJS);
+    expose('selectMode', ((String mode) {
           return _selectMode(app, mode);
-        }),
-        'selectionInfo': js_util.allowInterop(() {
+    }).toJS);
+    expose('selectionInfo', (() {
           return _selectionInfo(app);
-        }),
-        'formatCommand': js_util.allowInterop((String command, String mode) {
+    }).toJS);
+    expose('formatCommand', ((String command, String mode) {
           return _measureFormatCommand(app, command, mode);
-        }),
-        'inlineInsert': js_util.allowInterop((bool fastLayout, int count) {
+    }).toJS);
+    expose('inlineInsert', ((bool fastLayout, int count) {
           return _measureInlineInsert(app, fastLayout, count);
-        }),
-        'backspace': js_util.allowInterop((String mode) {
+    }).toJS);
+    expose('backspace', ((String mode) {
           return _measureBackspace(app, mode);
-        }),
-        'tableCommand': js_util.allowInterop((String command) {
+    }).toJS);
+    expose('tableCommand', ((String command) {
           return _measureTableCommand(app, command);
-        }),
-        'undoMany': js_util.allowInterop((int count) {
+    }).toJS);
+    expose('undoMany', ((int count) {
           return _undoMany(app, count);
-        }),
-        'redoMany': js_util.allowInterop((int count) {
+    }).toJS);
+    expose('redoMany', ((int count) {
           return _redoMany(app, count);
-        }),
-      }),
-    );
-    js_util.setProperty(html.window, '__cmdPerfReady', true);
-  });
+    }).toJS);
+    html.window.setProperty('__cmdPerf'.toJS, perf);
+    html.window.setProperty('__cmdPerfReady'.toJS, true.toJS);
 }
 ''';
 

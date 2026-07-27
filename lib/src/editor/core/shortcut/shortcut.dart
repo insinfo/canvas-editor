@@ -1,5 +1,5 @@
 import 'dart:async';
-import 'dart:html' as html;
+import 'package:canvas_text_editor/src/dom/dom.dart' as html;
 
 import '../../interface/shortcut/shortcut.dart';
 import '../../utils/hotkey.dart';
@@ -43,7 +43,7 @@ class Shortcut {
     try {
       final dynamic cursor = _draw?.getCursor();
       final dynamic agentDom = cursor?.getAgentDom();
-      if (agentDom is html.Element) {
+      if (html.jsIsElement(agentDom)) {
         return agentDom;
       }
     } catch (_) {

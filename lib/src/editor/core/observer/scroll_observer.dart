@@ -1,5 +1,5 @@
 import 'dart:async';
-import 'dart:html';
+import 'package:canvas_text_editor/src/dom/dom.dart';
 import 'dart:math' as math;
 
 import '../../../utils/index.dart';
@@ -33,7 +33,7 @@ class ScrollObserver {
     _options = draw.getOptions();
     _scrollContainer = _resolveScrollContainer();
     _observer = debounce(_handleScroll, const Duration(milliseconds: 80));
-    _scrollListener = (Event _) => _observer();
+    _scrollListener = ((Event _) => _observer()).toJS;
     Timer(Duration.zero, () {
       if (window.scrollY == 0) {
         _observer();
@@ -56,19 +56,11 @@ class ScrollObserver {
   }
 
   void _addEvent() {
-    if (_scrollContainer is Document) {
-      _scrollContainer.addEventListener('scroll', _scrollListener);
-    } else if (_scrollContainer is Element) {
-      _scrollContainer.addEventListener('scroll', _scrollListener);
-    }
+    _scrollContainer.addEventListener('scroll', _scrollListener);
   }
 
   void removeEvent() {
-    if (_scrollContainer is Document) {
-      _scrollContainer.removeEventListener('scroll', _scrollListener);
-    } else if (_scrollContainer is Element) {
-      _scrollContainer.removeEventListener('scroll', _scrollListener);
-    }
+    _scrollContainer.removeEventListener('scroll', _scrollListener);
   }
 
   IElementVisibleInfo getElementVisibleInfo(Element element) {
@@ -82,7 +74,7 @@ class ScrollObserver {
       viewHeight = math.max(docClientHeight, windowHeight);
     } else {
       final container = _scrollContainer as Element;
-      final Rectangle<num> containerRect = container.getBoundingClientRect();
+      final DOMRect containerRect = container.getBoundingClientRect();
       final double visibleHeight =
           math.min(rect.bottom.toDouble(), containerRect.bottom.toDouble()) -
               math.max(rect.top.toDouble(), containerRect.top.toDouble());
@@ -145,7 +137,7 @@ class ScrollObserver {
       return null;
     }
 
-    final Rectangle<num> pageContainerRect =
+    final DOMRect pageContainerRect =
         draw.getPageContainer().getBoundingClientRect();
     final double viewportTop;
     final double viewportBottom;
@@ -155,9 +147,9 @@ class ScrollObserver {
       final windowHeight = (window.innerHeight ?? 0).toDouble();
       viewportTop = -pageContainerRect.top.toDouble();
       viewportBottom = viewportTop + math.max(docClientHeight, windowHeight);
-    } else if (_scrollContainer is Element) {
-      final Rectangle<num> containerRect =
-          _scrollContainer.getBoundingClientRect();
+    } else if (_scrollContainer.isA<Element>()) {
+      final DOMRect containerRect =
+          (_scrollContainer as Element).getBoundingClientRect();
       viewportTop =
           containerRect.top.toDouble() - pageContainerRect.top.toDouble();
       viewportBottom =

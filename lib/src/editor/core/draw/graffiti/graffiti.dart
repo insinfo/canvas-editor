@@ -1,5 +1,5 @@
 import 'dart:async';
-import 'dart:html';
+import 'package:canvas_text_editor/src/dom/dom.dart';
 
 import '../../../interface/draw.dart';
 import '../../../interface/editor.dart';
@@ -16,7 +16,7 @@ class Graffiti {
 
   final Draw _draw;
   final IEditorOption _options;
-  final DivElement _pageContainer;
+  final HTMLDivElement _pageContainer;
   List<IGraffitiData> _data;
   bool _isDrawing = false;
   IGraffitiStroke? _startStroke;
@@ -86,7 +86,7 @@ class Graffiti {
         continue;
       }
       ctx.beginPath();
-      ctx.strokeStyle = stroke.lineColor ?? defaultLineColor;
+      ctx.strokeColor = stroke.lineColor ?? defaultLineColor;
       ctx.lineWidth = (stroke.lineWidth ?? defaultLineWidth).toDouble() * scale;
       ctx.moveTo(stroke.points[0] * scale, stroke.points[1] * scale);
       for (int pointIndex = 2; pointIndex < stroke.points.length; pointIndex += 2) {
@@ -104,7 +104,7 @@ class Graffiti {
     if (!_draw.isGraffitiMode()) {
       return;
     }
-    final String? pageIndex = (event.target as Element?)?.dataset['index'];
+    final String? pageIndex = (event.target as Element?)?.data('index');
     final int? parsedPageIndex =
         pageIndex != null ? int.tryParse(pageIndex) : null;
     if (parsedPageIndex != null) {
@@ -176,10 +176,10 @@ class Graffiti {
   Point<double> _resolveOffset(MouseEvent event) {
     final Element? target = event.target as Element?;
     if (target != null) {
-      final Rectangle<num> rect = target.getBoundingClientRect();
+      final DOMRect rect = target.getBoundingClientRect();
       return Point<double>(
-        event.client.x.toDouble() - rect.left.toDouble(),
-        event.client.y.toDouble() - rect.top.toDouble(),
+        event.clientX.toDouble() - rect.left.toDouble(),
+        event.clientY.toDouble() - rect.top.toDouble(),
       );
     }
     final Point<num> offset = event.offset;

@@ -1,4 +1,4 @@
-import 'dart:html';
+import 'package:canvas_text_editor/src/dom/dom.dart';
 
 import '../../../dataset/constant/common.dart';
 import '../../../dataset/enum/common.dart';
@@ -785,7 +785,7 @@ class Control {
     return _controlSearch.getControlHighlight(elementList, index);
   }
 
-  DivElement getContainer() => _draw.getContainer();
+  HTMLDivElement getContainer() => _draw.getContainer();
 
   IElementPosition? getPosition() {
     final dynamic positionManager = _draw.getPosition();

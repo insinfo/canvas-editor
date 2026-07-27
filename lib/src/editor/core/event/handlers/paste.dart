@@ -1,6 +1,5 @@
 import 'dart:async';
-import 'dart:html';
-import 'dart:js_util' as js_util;
+import 'package:canvas_text_editor/src/dom/dom.dart';
 
 import '../../../dataset/constant/common.dart';
 import '../../../dataset/constant/element.dart';
@@ -126,22 +125,18 @@ void pasteImage(dynamic canvasEvent, Blob file) {
   final List<IElement> originalElementList =
       (draw.getElementList() as List).cast<IElement>();
   final FileReader fileReader = FileReader();
-  fileReader.readAsDataUrl(file);
+  fileReader.readAsDataURL(file);
   fileReader.onLoad.first.then((_) {
-    final String? value = fileReader.result?.toString();
+    final String? value = readerResultAsString(fileReader);
     if (value == null) {
       return;
     }
-    final ImageElement image = ImageElement()..src = value;
+    final HTMLImageElement image = HTMLImageElement()..src = value;
     image.onLoad.first.then((_) {
       final num widthValue =
-          js_util.getProperty(image, 'naturalWidth') as num? ??
-              js_util.getProperty(image, 'width') as num? ??
-              0;
+          image.naturalWidth != 0 ? image.naturalWidth : image.width;
       final num heightValue =
-          js_util.getProperty(image, 'naturalHeight') as num? ??
-              js_util.getProperty(image, 'height') as num? ??
-              0;
+          image.naturalHeight != 0 ? image.naturalHeight : image.height;
       final IElement imageElement = IElement(
         value: value,
         type: ElementType.image,
@@ -201,31 +196,10 @@ void pasteByEvent(dynamic canvasEvent, ClipboardEvent event) {
     canvasEvent.input(plainText);
     return;
   }
-  final dynamic files = clipboardData.files;
-  if (files == null) {
-    return;
-  }
-  final dynamic dartifiedFiles = js_util.dartify(files);
-  if (dartifiedFiles is Iterable) {
-    for (final dynamic file in dartifiedFiles) {
-      if (file is File && file.type.startsWith('image')) {
-        pasteImage(canvasEvent, file);
-      }
+  for (final File file in filesOf(clipboardData.files)) {
+    if (file.type.startsWith('image')) {
+      pasteImage(canvasEvent, file);
     }
-    return;
-  }
-  try {
-    final int length = js_util.getProperty(files, 'length') as int? ?? 0;
-    for (var i = 0; i < length; i++) {
-      final dynamic file = js_util.hasProperty(files, 'item')
-          ? js_util.callMethod(files, 'item', <dynamic>[i])
-          : js_util.getProperty(files, i);
-      if (file is File && file.type.startsWith('image')) {
-        pasteImage(canvasEvent, file);
-      }
-    }
-  } catch (_) {
-    // Ignore failures from non-standard FileList implementations.
   }
 }
 
@@ -242,15 +216,10 @@ Future<void> pasteByApi(dynamic canvasEvent, [IPasteOption? option]) async {
       return;
     }
   }
-  final dynamic clipboard = js_util.getProperty(window.navigator, 'clipboard');
-  if (clipboard == null) {
-    return;
-  }
+  final Clipboard clipboard = window.navigator.clipboard;
   String clipboardText = '';
   try {
-    clipboardText = await js_util.promiseToFuture<String>(
-      js_util.callMethod(clipboard, 'readText', const <dynamic>[]),
-    );
+    clipboardText = (await clipboard.readText().toDart).toDart;
   } catch (_) {
     clipboardText = '';
   }
@@ -268,26 +237,20 @@ Future<void> pasteByApi(dynamic canvasEvent, [IPasteOption? option]) async {
     }
     return;
   }
-  dynamic clipboardItemsRaw;
+  List<ClipboardItem> items;
   try {
-    clipboardItemsRaw = await js_util.promiseToFuture(
-      js_util.callMethod(clipboard, 'read', const <dynamic>[]),
-    );
+    final JSArray<ClipboardItem> raw = await clipboard.read().toDart;
+    items = raw.toDart;
   } catch (_) {
-    clipboardItemsRaw = null;
-  }
-  final dynamic clipboardItems = js_util.dartify(clipboardItemsRaw);
-  if (clipboardItems is! Iterable) {
     if (clipboardText.isNotEmpty) {
       canvasEvent.input(clipboardText);
     }
     return;
   }
-  final List<dynamic> items = clipboardItems.toList();
   final bool isHTML = items.any(
-    (dynamic item) => _extractTypes(item).contains('text/html'),
+    (ClipboardItem item) => _extractTypes(item).contains('text/html'),
   );
-  for (final dynamic item in items) {
+  for (final ClipboardItem item in items) {
     final List<String> types = _extractTypes(item);
     if (types.contains('text/plain') && !isHTML) {
       final Blob? textBlob = await _getItemBlob(item, 'text/plain');
@@ -320,39 +283,23 @@ Future<void> pasteByApi(dynamic canvasEvent, [IPasteOption? option]) async {
   }
 }
 
-List<String> _extractTypes(dynamic item) {
-  if (item == null) {
+List<String> _extractTypes(ClipboardItem item) {
+  try {
+    return item.types.toDart.map((JSString value) => value.toDart).toList();
+  } catch (_) {
     return <String>[];
   }
-  dynamic types;
-  try {
-    types = js_util.dartify(js_util.getProperty(item, 'types'));
-  } catch (_) {
-    types = null;
-  }
-  if (types is Iterable) {
-    return types.map((dynamic value) => value.toString()).toList();
-  }
-  if (types is String) {
-    return <String>[types];
-  }
-  return <String>[];
 }
 
-Future<Blob?> _getItemBlob(dynamic item, String type) async {
-  if (item == null || type.isEmpty) {
+Future<Blob?> _getItemBlob(ClipboardItem item, String type) async {
+  if (type.isEmpty) {
     return null;
   }
   try {
-    final dynamic result = js_util.callMethod(item, 'getType', <dynamic>[type]);
-    final dynamic blob = await js_util.promiseToFuture(result);
-    if (blob is Blob) {
-      return blob;
-    }
+    return await item.getType(type).toDart;
   } catch (_) {
     return null;
   }
-  return null;
 }
 
 Future<String> _blobToString(Blob blob) {
@@ -364,7 +311,7 @@ Future<String> _blobToString(Blob blob) {
   loadSub = reader.onLoad.listen((_) {
     loadSub?.cancel();
     errorSub?.cancel();
-    completer.complete(reader.result?.toString() ?? '');
+    completer.complete(readerResultAsString(reader) ?? '');
   });
   errorSub = reader.onError.listen((_) {
     loadSub?.cancel();
@@ -382,16 +329,13 @@ bool _shouldPreventDefault(dynamic overrideResult) {
     final dynamic value = overrideResult['preventDefault'];
     return value != null && value != false;
   }
-  try {
-    if (js_util.hasProperty(overrideResult, 'preventDefault')) {
-      final dynamic value =
-          js_util.getProperty(overrideResult, 'preventDefault');
-      if (value != null && value != false) {
-        return true;
-      }
+  if (jsIsJSObject(overrideResult)) {
+    final JSObject jsResult = overrideResult as JSObject;
+    if (jsResult.hasProperty('preventDefault'.toJS).toDart) {
+      final JSAny? value = jsResult.getProperty('preventDefault'.toJS);
+      return value != null && value != false.toJS;
     }
-  } catch (_) {
-    // ignore interop read failure
+    return false;
   }
   try {
     final dynamic value = overrideResult.preventDefault;

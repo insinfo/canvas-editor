@@ -1,5 +1,5 @@
 // Ported from C:\MyTsProjects\canvas-editor\src\editor\core\draw\particle\LineBreakParticle.ts
-import 'dart:html';
+import 'package:canvas_text_editor/src/dom/dom.dart';
 
 import '../../../interface/editor.dart';
 import '../../../interface/row.dart';
@@ -29,7 +29,7 @@ class LineBreakParticle {
 		final double left = x + element.metrics.width;
 		ctx.translate(left, top);
 		ctx.scale(scale, scale);
-		ctx.strokeStyle = color;
+		ctx.strokeColor = color;
 		ctx.lineWidth = lineWidth;
 		ctx.lineCap = 'round';
 		ctx.lineJoin = 'round';

@@ -1,6 +1,5 @@
 import 'dart:async';
-import 'dart:html';
-import 'dart:js_util' as js_util;
+import 'package:canvas_text_editor/src/dom/dom.dart';
 
 import '../../dataset/constant/editor.dart';
 import '../../dataset/constant/shortcut.dart';
@@ -53,7 +52,6 @@ class GlobalEvent {
 	late final EventListener _setPageScaleListener;
 	late final EventListener _visibilityChangeListener;
 	late final dynamic _dprChangeListener;
-	bool _dprUsesEventListener = false;
 	bool _isRegistered = false;
 
 	void register() {
@@ -72,25 +70,9 @@ class GlobalEvent {
 		window.removeEventListener('blur', _clearSideEffectListener);
 		document.removeEventListener('mousedown', _clearSideEffectListener);
 		document.removeEventListener('mouseup', _setCanvasEventAbilityListener);
-		js_util.callMethod(
-			document,
-			'removeEventListener',
-			<dynamic>['wheel', _setPageScaleListener],
-		);
+		document.removeEventListener('wheel', _setPageScaleListener);
 		document.removeEventListener('visibilitychange', _visibilityChangeListener);
-		if (_dprUsesEventListener) {
-			js_util.callMethod(
-				dprMediaQueryList,
-				'removeEventListener',
-				<dynamic>['change', _dprChangeListener],
-			);
-		} else {
-			js_util.callMethod(
-				dprMediaQueryList,
-				'removeListener',
-				<dynamic>[_dprChangeListener],
-			);
-		}
+		dprMediaQueryList.removeEventListener('change', _dprChangeListener);
 		_isRegistered = false;
 	}
 
@@ -201,45 +183,29 @@ class GlobalEvent {
 		window.addEventListener('blur', _clearSideEffectListener);
 		document.addEventListener('mousedown', _clearSideEffectListener);
 		document.addEventListener('mouseup', _setCanvasEventAbilityListener);
-		js_util.callMethod(
-			document,
-			'addEventListener',
-			<dynamic>[
-				'wheel',
-				_setPageScaleListener,
-				js_util.jsify(<String, dynamic>{'passive': false}),
-			],
+		document.addEventListener(
+			'wheel',
+			_setPageScaleListener,
+			AddEventListenerOptions(passive: false),
 		);
 		document.addEventListener('visibilitychange', _visibilityChangeListener);
-		if (_dprUsesEventListener) {
-			js_util.callMethod(
-				dprMediaQueryList,
-				'addEventListener',
-				<dynamic>['change', _dprChangeListener],
-			);
-		} else {
-			js_util.callMethod(
-				dprMediaQueryList,
-				'addListener',
-				<dynamic>[_dprChangeListener],
-			);
-		}
+		dprMediaQueryList.addEventListener('change', _dprChangeListener);
 	}
 
 	void _initListeners() {
-		_clearSideEffectListener = js_util.allowInterop(clearSideEffect);
-		_setCanvasEventAbilityListener = js_util.allowInterop(setCanvasEventAbility);
-		_setPageScaleListener = js_util.allowInterop((Event event) {
-			if (event is WheelEvent) {
-				setPageScale(event);
+		// Callbacks convertidos UMA vez (.toJS de novo geraria outra função JS e
+		// o removeEventListener não acharia o listener registrado).
+		_clearSideEffectListener = ((Event event) => clearSideEffect(event)).toJS;
+		_setCanvasEventAbilityListener =
+				((Event event) => setCanvasEventAbility(event)).toJS;
+		_setPageScaleListener = ((Event event) {
+			if (event.isA<WheelEvent>()) {
+				setPageScale(event as WheelEvent);
 			}
-		});
-		_visibilityChangeListener = js_util.allowInterop(_handleVisibilityChange);
-		_dprUsesEventListener =
-				js_util.hasProperty(dprMediaQueryList, 'addEventListener') == true;
-		_dprChangeListener = js_util.allowInterop((Event? event) {
-			_handleDprChange(event);
-		});
+		}).toJS;
+		_visibilityChangeListener =
+				((Event event) => _handleVisibilityChange(event)).toJS;
+		_dprChangeListener = ((Event event) => _handleDprChange(event)).toJS;
 	}
 
 	void _resetState() {
@@ -255,26 +221,15 @@ class GlobalEvent {
 
 	Element? _resolveEventTarget(Event event) {
 		try {
-			if (js_util.hasProperty(event, 'composedPath')) {
-				final dynamic path = js_util.callMethod(event, 'composedPath', const []);
-				final dynamic dartPath = js_util.dartify(path);
-				if (dartPath is List && dartPath.isNotEmpty) {
-					final dynamic first = dartPath.first;
-					if (first is Element) {
-						return first;
-					}
-				}
-				final dynamic first = js_util.getProperty(path, '0');
-				if (first is Element) {
+			final JSArray<EventTarget> path = event.composedPath();
+			if (path.length > 0) {
+				final Element? first = asElement(path[0]);
+				if (first != null) {
 					return first;
 				}
 			}
 		} catch (_) {}
-		final EventTarget? target = event.target;
-		if (target is Element) {
-			return target;
-		}
-		return null;
+		return asElement(event.target);
 	}
 
 	List<Element> _resolvePageList() {
@@ -283,7 +238,7 @@ class GlobalEvent {
 			return pageList;
 		}
 		if (pageList is Iterable) {
-			return pageList.whereType<Element>().toList();
+			return List<Element>.from(pageList);
 		}
 		return <Element>[];
 	}

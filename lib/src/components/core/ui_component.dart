@@ -1,5 +1,5 @@
 import 'dart:async';
-import 'dart:html';
+import 'package:canvas_text_editor/src/dom/dom.dart';
 
 /// Base de todos os componentes de UI do `CanvasEditorWidget`.
 ///
@@ -53,7 +53,7 @@ class UiScheduler {
 
   void schedule(void Function() task) {
     _pending.add(task);
-    _frameId ??= window.requestAnimationFrame(_flush);
+    _frameId ??= raf(_flush);
   }
 
   void _flush(num _) {

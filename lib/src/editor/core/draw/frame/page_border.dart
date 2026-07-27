@@ -1,4 +1,4 @@
-import 'dart:html';
+import 'package:canvas_text_editor/src/dom/dom.dart';
 
 import '../../../interface/editor.dart';
 import '../../../interface/common.dart';
@@ -63,7 +63,7 @@ class PageBorder {
 
 		ctx.save();
 		ctx.translate(0.5, 0.5);
-		ctx.strokeStyle = strokeColor;
+		ctx.strokeColor = strokeColor;
 		ctx.lineWidth = lineWidth;
 		ctx.rect(x, y, width, rectHeight);
 		ctx.stroke();

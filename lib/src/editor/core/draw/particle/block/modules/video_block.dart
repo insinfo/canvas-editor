@@ -1,5 +1,5 @@
 import 'dart:async';
-import 'dart:html';
+import 'package:canvas_text_editor/src/dom/dom.dart';
 
 import '../../../../../interface/row.dart';
 
@@ -37,7 +37,7 @@ class VideoBlock {
 				completer.completeError(event);
 			}
 		});
-		video.play().then((_) => video.pause()).catchError((error) {
+		video.play().toDart.then((_) => video.pause()).catchError((error) {
 			if (!completer.isCompleted) {
 				completer.completeError(error);
 			}
@@ -45,7 +45,7 @@ class VideoBlock {
 		return completer.future;
 	}
 
-	void render(DivElement blockItemContainer) {
+	void render(HTMLDivElement blockItemContainer) {
 		final VideoElement video = VideoElement()
 			..style.width = '100%'
 			..style.height = '100%'

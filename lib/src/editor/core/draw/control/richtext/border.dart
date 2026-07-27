@@ -1,4 +1,4 @@
-import 'dart:html';
+import 'package:canvas_text_editor/src/dom/dom.dart';
 
 import '../../../../interface/editor.dart';
 import '../../../../interface/element.dart';
@@ -40,7 +40,7 @@ class ControlBorder {
     ctx.save();
     ctx.translate(0, 1 * scale);
     ctx.lineWidth = (controlOption.borderWidth ?? 0) * scale;
-    ctx.strokeStyle = controlOption.borderColor ?? '';
+    ctx.strokeColor = controlOption.borderColor ?? '';
     ctx.beginPath();
     ctx.rect(
       _borderRect.x,

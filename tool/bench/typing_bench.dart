@@ -21,9 +21,11 @@ import 'package:shelf/shelf_io.dart' as io;
 import 'package:shelf_static/shelf_static.dart';
 
 const _benchMainSource = r'''
-import 'dart:html' as html;
-import 'dart:js_util' as js_util;
+import 'dart:js_interop';
+import 'dart:js_interop_unsafe';
 import 'dart:typed_data';
+
+import 'package:web/web.dart' as html;
 
 import 'package:canvas_text_editor/src/editor.dart';
 import 'package:canvas_text_editor/src/editor/core/draw/draw.dart' as draw_lib;
@@ -31,37 +33,38 @@ import 'package:canvas_text_editor/src/editor/interface/range.dart'
     as range_model;
 
 Future<double> _openFromUrl(EditorApp app, String url) async {
-  final request = await html.HttpRequest.request(
-    url,
-    responseType: 'arraybuffer',
-  );
-  final buffer = request.response as ByteBuffer;
-  final bytes = buffer.asUint8List();
+  final resp = await html.window.fetch(url.toJS).toDart;
+  final JSAny? raw = await resp.arrayBuffer().toDart;
+  final Uint8List bytes = (raw! as JSArrayBuffer).toDart.asUint8List();
   final start = html.window.performance.now();
   await app.openDocxBytes(url, bytes);
   return (html.window.performance.now() - start).toDouble();
 }
 
 void main() {
-  html.window.onLoad.listen((_) async {
+  html.window.addEventListener('load', ((html.Event _) {
+    _boot();
+  }).toJS);
+}
+
+void _boot() async {
     draw_lib.Draw.debugRenderTiming = true;
     final app = EditorApp(isApple: false);
     await app.initialize();
 
-    js_util.setProperty(
-      html.window,
-      '__perf',
-      js_util.jsify({
-        'openDocxFromUrl': js_util.allowInterop((String url, Object cb) {
+    final JSObject perf = JSObject();
+    void expose(String name, JSFunction fn) =>
+        perf.setProperty(name.toJS, fn);
+    expose('openDocxFromUrl', ((String url, JSFunction cb) {
           _openFromUrl(app, url).then(
-            (ms) => js_util.callMethod(cb, 'call', <Object?>[null, ms]),
-            onError: (Object error) => js_util
-                .callMethod(cb, 'call', <Object?>[null, -1, '$error']),
+            (ms) => cb.callAsFunction(null, ms.toJS),
+            onError: (Object error) =>
+                cb.callAsFunction(null, (-1).toJS, '$error'.toJS),
           );
-        }),
+    }).toJS);
         // Posiciona o cursor num elemento de texto perto do meio do documento
         // e foca o textarea de entrada. Retorna o índice usado ou -1.
-        'focusMiddleText': js_util.allowInterop(() {
+    expose('focusMiddleText', (() {
           final draw = app.editor.getDraw();
           final elements = draw.getOriginalMainElementList();
           if (elements.isEmpty) {
@@ -92,47 +95,47 @@ void main() {
           );
           app.editor.command.executeSetRange(index, index);
           final input = html.document.querySelector('.ce-inputarea');
-          if (input is html.TextAreaElement) {
-            input.focus();
+          if (input != null && input.isA<html.HTMLTextAreaElement>()) {
+            (input as html.HTMLTextAreaElement).focus();
           }
           return index;
-        }),
-        'pageCount': js_util.allowInterop(() {
+    }).toJS);
+    expose('pageCount', (() {
           return app.editor.getDraw().getPageList().length;
-        }),
+    }).toJS);
         // Sanidade da digitação: nº de elementos do corpo — cresce 1 por
         // tecla; se não crescer, as teclas não estão chegando ao editor e a
         // latência medida é lixo.
-        'elementCount': js_util.allowInterop(() {
+    expose('elementCount', (() {
           return app.editor.getDraw().getOriginalMainElementList().length;
-        }),
-        'resetHistoryDiagnostics': js_util.allowInterop(() {
+    }).toJS);
+    expose('resetHistoryDiagnostics', (() {
           app.editor.getDraw().resetHistoryDiagnostics();
-        }),
-        'historyDiagnostics': js_util.allowInterop(() {
+    }).toJS);
+    expose('historyDiagnostics', (() {
           final stats = app.editor.getDraw().getHistoryDiagnostics();
           return stats.entries.map((entry) =>
               '${entry.key}:${entry.value}').join(',');
-        }),
-        'resetLayoutDiagnostics': js_util.allowInterop(() {
+    }).toJS);
+    expose('resetLayoutDiagnostics', (() {
           app.editor.getDraw().resetLayoutDiagnostics();
-        }),
-        'layoutDiagnostics': js_util.allowInterop(() {
+    }).toJS);
+    expose('layoutDiagnostics', (() {
           final stats = app.editor.getDraw().getLayoutDiagnostics();
           return stats.entries
               .map((entry) => '${entry.key}:${entry.value}')
               .join(',');
-        }),
+    }).toJS);
         // F5.5: conclui a paginação sob demanda (síncrono) e devolve o custo
         // em ms — é o pior caso realista para digitar no meio do documento.
-        'finishLayout': js_util.allowInterop(() {
+    expose('finishLayout', (() {
           final start = html.window.performance.now();
           app.editor.getDraw().finishProgressiveLayout();
           return (html.window.performance.now() - start).toDouble();
-        }),
+    }).toJS);
         // Fidelidade G3: primeiro texto de cada página (p/ comparar com o
         // PDF do Word página a página e achar onde a divergência acumula).
-        'pageStarts': js_util.allowInterop(() {
+    expose('pageStarts', (() {
           final draw = app.editor.getDraw();
           final pages = draw.getPageRowList();
           final starts = <String>[];
@@ -166,10 +169,10 @@ void main() {
             starts.add(buffer.toString().replaceAll('|','/'));
           }
           return starts.join('|');
-        }),
+    }).toJS);
         // Fidelidade: rows do parágrafo cujo texto começa com [prefix]
         // (altura/offset/nº de linhas + estilo do 1º elemento).
-        'paragraphProbe': js_util.allowInterop((String prefix) {
+    expose('paragraphProbe', ((String prefix) {
           final draw = app.editor.getDraw();
           final els = draw.getOriginalMainElementList();
           int start = -1;
@@ -206,24 +209,26 @@ void main() {
               'lsv=${el.lineSpacingValue} b=${el.paraSpacingBefore} '
               'a=${el.paraSpacingAfter} rm=${el.rowMargin})  '
               'rows=${out.length}  ${out.join(' ; ')}';
-        }),
+    }).toJS);
         // F5.4a: nº de canvases com backing store vivo (largura > 1) vs total,
         // e memória aproximada do backing store (MB).
-        'canvasMemStats': js_util.allowInterop(() {
+    expose('canvasMemStats', (() {
           final pages = app.editor.getDraw().getPageList();
           var live = 0;
           num livemb = 0;
           for (final c in pages) {
-            if (c is html.CanvasElement && (c.width ?? 0) > 1) {
+            if (!c.isA<html.HTMLCanvasElement>()) continue;
+            final canvas = c as html.HTMLCanvasElement;
+            if (canvas.width > 1) {
               live++;
-              livemb += (c.width ?? 0) * (c.height ?? 0) * 4;
+              livemb += canvas.width * canvas.height * 4;
             }
           }
           return 'live=$live/${pages.length} '
               'backingMB=${(livemb / 1048576).toStringAsFixed(1)}';
-        }),
+    }).toJS);
         // Depuração F4.5: visão agregada das tabelas no documento aberto.
-        'tableStats': js_util.allowInterop(() {
+    expose('tableStats', (() {
           final draw = app.editor.getDraw();
           final els = draw.getOriginalMainElementList();
           var tables = 0, parts = 0, trsTotal = 0;
@@ -255,10 +260,10 @@ void main() {
           return 'tables=$tables parts=$parts trsTotal=$trsTotal '
               'hTotal=${hTotal.round()} innerW=${draw.getInnerWidth()} '
               'pageH=${draw.getHeight()} top3=${tallest.take(3).toList()}';
-        }),
+    }).toJS);
         // Depuração F4.3: primeiras rows (altura/offset) + elementos com os
         // campos de espaçamento, como JSON.
-        'rowStats': js_util.allowInterop(() {
+    expose('rowStats', (() {
           final draw = app.editor.getDraw();
           final rows = draw.getRowList().take(8).map((row) => {
                 'h': row.height.toStringAsFixed(1),
@@ -277,11 +282,9 @@ void main() {
                 'f': el.font,
               });
           return '${rows.toList()} || ${els.toList()}';
-        }),
-      }),
-    );
-    js_util.setProperty(html.window, '__perfReady', true);
-  });
+    }).toJS);
+    html.window.setProperty('__perf'.toJS, perf);
+    html.window.setProperty('__perfReady'.toJS, true.toJS);
 }
 ''';
 

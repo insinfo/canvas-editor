@@ -1,4 +1,4 @@
-import 'dart:html';
+import 'package:canvas_text_editor/src/dom/dom.dart';
 
 import '../../../../dataset/enum/element.dart';
 import '../../../../dataset/enum/key_map.dart';

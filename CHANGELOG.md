@@ -1,5 +1,34 @@
 ## 2.0.0-dev — Complete Restructuring
 
+### Migração `dart:html` → `package:web` 1.1.1 (2026-07-27)
+
+- **Toda a lib compilável migrada** (107 arquivos, ~3000 sites): `lib/`,
+  `example/web/`, `tool/` (benchmarks e screenshots, incluindo os harnesses
+  embutidos compilados com dart2js) e `test/` (E2E + browser). `example2/`
+  (demo AngularDart 8) ficou fora do escopo e foi excluída da análise.
+- **Camada de compatibilidade `lib/src/dom/dom.dart`**: reexporta
+  `package:web` + `dart:js_interop`(`_unsafe`) e complementa só o que falta —
+  streams de eventos, `fillColor`/`strokeColor`/`setDash` no canvas, coleções
+  (`toElements`, `appendAll`, `clearChildren`), `offset` de mouse, `raf`,
+  `blobFromBytes`, leitura segura de `data-*` e probes de tipo JS
+  (`jsIsEvent`, `jsIsHTMLDivElement`, …) — `isA<T>()` não aceita variável de
+  tipo no dart2js, então os probes são monomórficos.
+- **`dart:js_util`/`dart:js` eliminados** em favor de interop tipada:
+  `Intl.Segmenter` (cacheado no hot path de abertura de DOCX), clipboard
+  assíncrono (`ClipboardItem`), impressão via iframe, Prism tokenize,
+  `IntersectionObserver`/`MutationObserver`, `requestIdleCallback`.
+- **Correções que só aparecem em runtime dart2js** (analyzer não pega):
+  dispatch dinâmico em objetos JS (handlers de mouse/composition/hotkey agora
+  usam vistas tipadas), tear-offs de membros interop (`classList.add`,
+  `setAttribute`), e `dataset['x']` retornando `undefined` onde o tipo declara
+  `String` — leituras de `data-*` agora passam por `element.data('x')`
+  (null-safe via `getAttribute`).
+- **Verificação**: `dart analyze` sem erros; 77 testes VM de round-trip DOCX
+  verdes; 4 testes de canvas em Chrome verdes; example compilado com
+  `dart2js -O2` e smoke com puppeteer (abrir ETP real, digitar, réguas,
+  rodapé) com zero erros JS.
+- Plano e inventário completos em `doc/plano_migracao_dart_html_package_web.md`.
+
 > **⚠️ Breaking**: This release is a complete restructuring of the codebase.
 > Multiple UI regressions are present and will be fixed in subsequent commits.
 

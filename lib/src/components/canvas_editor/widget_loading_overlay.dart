@@ -1,4 +1,4 @@
-import 'dart:html';
+import 'package:canvas_text_editor/src/dom/dom.dart';
 
 import '../core/ui_component.dart';
 
@@ -7,18 +7,18 @@ import '../core/ui_component.dart';
 /// event loop (2× `window.animationFrame`) para o browser pintar o overlay
 /// antes do trabalho pesado começar.
 class WidgetLoadingOverlay extends UiComponent {
-  WidgetLoadingOverlay(DivElement host) {
-    root = DivElement()
-      ..classes.add('ce-loading-overlay')
+  WidgetLoadingOverlay(HTMLDivElement host) {
+    root = HTMLDivElement()
+      ..classList.add('ce-loading-overlay')
       ..style.display = 'none'
-      ..append(DivElement()..classes.add('ce-loading-overlay__spinner'))
-      ..append(_label = DivElement()..classes.add('ce-loading-overlay__label'));
+      ..append(HTMLDivElement()..classList.add('ce-loading-overlay__spinner'))
+      ..append(_label = HTMLDivElement()..classList.add('ce-loading-overlay__label'));
     host.append(root);
   }
 
   @override
-  late final DivElement root;
-  late final DivElement _label;
+  late final HTMLDivElement root;
+  late final HTMLDivElement _label;
 
   Future<void> show(String message) async {
     _label.text = message;

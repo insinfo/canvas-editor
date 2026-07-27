@@ -1,4 +1,4 @@
-import 'dart:html';
+import 'package:canvas_text_editor/src/dom/dom.dart';
 
 import '../core/draw/particle/latex/la_tex_particle.dart';
 import '../dataset/constant/common.dart';
@@ -2023,7 +2023,7 @@ Element convertElementToDom(IElement element, IEditorOption options) {
     tagName = 'sub';
   }
 
-  final dom = Element.tag(tagName);
+  final dom = document.createElement(tagName);
 
   final fontFamily = element.font ?? options.defaultFont;
   if (fontFamily != null && fontFamily.isNotEmpty) {
@@ -2072,7 +2072,7 @@ Element convertElementToDom(IElement element, IEditorOption options) {
   return dom;
 }
 
-DivElement createDomFromElementList(
+HTMLDivElement createDomFromElementList(
   List<IElement> elementList, {
   IEditorOption? options,
 }) {
@@ -2084,14 +2084,14 @@ DivElement createDomFromElementList(
     }
   }
 
-  DivElement buildDom(List<IElement> payload) {
-    final container = DivElement();
+  HTMLDivElement buildDom(List<IElement> payload) {
+    final container = HTMLDivElement();
 
     for (var index = 0; index < payload.length; index++) {
       final element = payload[index];
 
       if (element.type == ElementType.table) {
-        final tableDom = TableElement()
+        final tableDom = HTMLTableElement()
           ..setAttribute('cellspacing', '0')
           ..setAttribute('cellpadding', '0')
           ..setAttribute('border', '0');
@@ -2111,9 +2111,9 @@ DivElement createDomFromElementList(
         }
 
         if (element.colgroup != null && element.colgroup!.isNotEmpty) {
-          final colgroupDom = Element.tag('colgroup');
+          final colgroupDom = document.createElement('colgroup');
           for (final colgroup in element.colgroup!) {
-            final colDom = Element.tag('col')
+            final colDom = document.createElement('col')
               ..setAttribute('width', '${colgroup.width}');
             colgroupDom.append(colDom);
           }
@@ -2122,10 +2122,10 @@ DivElement createDomFromElementList(
 
         if (element.trList != null) {
           for (final tr in element.trList!) {
-            final trDom = TableRowElement()..style.height = '${tr.height}px';
+            final trDom = (document.createElement('tr') as HTMLTableRowElement)..style.height = '${tr.height}px';
 
             for (final td in tr.tdList) {
-              final tdDom = TableCellElement()
+              final tdDom = (document.createElement('td') as HTMLTableCellElement)
                 ..colSpan = td.colspan
                 ..rowSpan = td.rowspan;
 
@@ -2158,7 +2158,7 @@ DivElement createDomFromElementList(
               appendChildNodes(tdDom, childDom);
 
               if (td.backgroundColor != null) {
-                tdDom.style.backgroundColor = td.backgroundColor;
+                tdDom.style.backgroundColor = td.backgroundColor!;
               }
 
               trDom.append(tdDom);
@@ -2170,7 +2170,7 @@ DivElement createDomFromElementList(
 
         container.append(tableDom);
       } else if (element.type == ElementType.hyperlink) {
-        final anchor = AnchorElement()
+        final anchor = HTMLAnchorElement()
           ..text = (element.valueList ?? <IElement>[]) // safe fallback
               .map((item) => item.value)
               .join('');
@@ -2180,14 +2180,14 @@ DivElement createDomFromElementList(
         container.append(anchor);
       } else if (element.type == ElementType.title) {
         final level = element.level ?? TitleLevel.first;
-        final heading = Element.tag('h${titleOrderNumberMapping[level]}');
+        final heading = document.createElement('h${titleOrderNumberMapping[level]}');
         final childDom = buildDom(element.valueList ?? <IElement>[]);
         appendChildNodes(heading, childDom);
         container.append(heading);
       } else if (element.type == ElementType.list) {
         final listTag =
             list_constants.listTypeElementMapping[element.listType] ?? 'ul';
-        final listElement = Element.tag(listTag);
+        final listElement = document.createElement(listTag);
 
         if (element.listStyle != null) {
           final cssStyle =
@@ -2200,7 +2200,7 @@ DivElement createDomFromElementList(
         final zipList = zipElementList(element.valueList ?? <IElement>[]);
         final listElementMap = splitListElement(zipList);
         listElementMap.forEach((_, listValue) {
-          final li = LIElement();
+          final li = HTMLLIElement();
           final childDom = buildDom(listValue);
           appendChildNodes(li, childDom);
           listElement.append(li);
@@ -2208,7 +2208,7 @@ DivElement createDomFromElementList(
 
         container.append(listElement);
       } else if (element.type == ElementType.image) {
-        final image = ImageElement();
+        final image = HTMLImageElement();
         if (element.value.isNotEmpty) {
           image.src = element.value;
         }
@@ -2246,7 +2246,7 @@ DivElement createDomFromElementList(
         } else if (element.block?.type == BlockType.iframe) {
           final iframeBlock = element.block?.iframeBlock;
           if (iframeBlock?.src != null || iframeBlock?.srcdoc != null) {
-            final iframe = IFrameElement()
+            final iframe = HTMLIFrameElement()
               ..style.display = 'block'
               ..style.border = 'none';
             final sandbox = iframe.sandbox;
@@ -2258,7 +2258,7 @@ DivElement createDomFromElementList(
             if (iframeBlock?.src != null) {
               iframe.src = iframeBlock!.src!;
             } else if (iframeBlock?.srcdoc != null) {
-              iframe.srcdoc = iframeBlock!.srcdoc!;
+              iframe.srcdoc = iframeBlock!.srcdoc!.toJS;
             }
             final iframeWidth =
                 element.width ?? options?.width ?? window.innerWidth;
@@ -2270,24 +2270,21 @@ DivElement createDomFromElementList(
           }
         }
       } else if (element.type == ElementType.separator) {
-        container.append(HRElement());
+        container.append((document.createElement('hr') as HTMLHRElement));
       } else if (element.type == ElementType.checkbox) {
-        final checkbox = InputElement(type: 'checkbox')
+        final checkbox = (HTMLInputElement()..type = 'checkbox')
           ..checked = element.checkbox?.value ?? false;
         container.append(checkbox);
       } else if (element.type == ElementType.radio) {
-        final radio = InputElement(type: 'radio')
+        final radio = (HTMLInputElement()..type = 'radio')
           ..checked = element.radio?.value ?? false;
         container.append(radio);
       } else if (element.type == ElementType.tab) {
-        final span = SpanElement()
-          ..setInnerHtml(
-            '$NON_BREAKING_SPACE$NON_BREAKING_SPACE',
-            validator: NodeValidatorBuilder.common()..allowHtml5(),
-          );
+        final span = HTMLSpanElement()
+          ..innerHtml = '$NON_BREAKING_SPACE$NON_BREAKING_SPACE';
         container.append(span);
       } else if (element.type == ElementType.control) {
-        final controlSpan = SpanElement();
+        final controlSpan = HTMLSpanElement();
         final childDom = buildDom(element.control?.value ?? <IElement>[]);
         appendChildNodes(controlSpan, childDom);
         container.append(controlSpan);
@@ -2329,12 +2326,12 @@ DivElement createDomFromElementList(
     return container;
   }
 
-  final clipboardDom = DivElement();
+  final clipboardDom = HTMLDivElement();
   final groupedElementList = groupElementListByRowFlex(elementList);
   for (final group in groupedElementList) {
     final isDefaultRowFlex =
         group.rowFlex == null || group.rowFlex == RowFlex.left;
-    final rowContainer = DivElement();
+    final rowContainer = HTMLDivElement();
 
     if (!isDefaultRowFlex && group.data.isNotEmpty) {
       final firstElement = group.data.first;
@@ -2581,7 +2578,8 @@ bool getIsBlockElement(IElement? element) {
 
 Element replaceHTMLElementTag(Element oldDom, String tagName) {
   final newDom = document.createElement(tagName);
-  oldDom.attributes.forEach(newDom.setAttribute);
+  oldDom.attributes
+      .forEach((String name, String value) => newDom.setAttribute(name, value));
   newDom.innerHtml = oldDom.innerHtml;
   return newDom;
 }
@@ -2645,8 +2643,8 @@ IElement? convertTextNodeToElement(Node? textNode) {
     return null;
   }
 
-  final parentNode = textNode.parentNode;
-  if (parentNode is! Element) {
+  final Element? parentNode = asElement(textNode.parentNode);
+  if (parentNode == null) {
     return null;
   }
 
@@ -2661,7 +2659,7 @@ IElement? convertTextNodeToElement(Node? textNode) {
     return null;
   }
 
-  final value = textNode.text;
+  final value = textNode.textContent;
   if (value == null || value.isEmpty) {
     return null;
   }
@@ -2776,7 +2774,7 @@ List<IElement> getElementListByHTML(
           elementList.add(IElement(value: '\n'));
           continue;
         case 'A':
-          final anchor = node as AnchorElement;
+          final anchor = node as HTMLAnchorElement;
           final text = anchor.innerText;
           if (text.isNotEmpty) {
             elementList.add(
@@ -2811,7 +2809,7 @@ List<IElement> getElementListByHTML(
               valueList: valueList,
             ),
           );
-          final nextSibling = node.nextNode;
+          final nextSibling = node.nextSibling;
           if (nextSibling != null) {
             final nextNodeName = nextSibling.nodeName ?? '';
             if (nextNodeName.isNotEmpty &&
@@ -2839,8 +2837,8 @@ List<IElement> getElementListByHTML(
           listElement.listStyle = listStyle;
         }
 
-        listNode.querySelectorAll('li').forEach((li) {
-          final liValueList = getElementListByHTML(li.innerHtml ?? '', options);
+        for (final li in listNode.querySelectorAll('li').toElements()) {
+          final liValueList = getElementListByHTML(li.innerHtml, options);
           for (final listItem in liValueList) {
             if (listItem.value == '\n') {
               listItem.listWrap = true;
@@ -2848,7 +2846,7 @@ List<IElement> getElementListByHTML(
           }
           liValueList.insert(0, IElement(value: '\n'));
           listElement.valueList!.addAll(liValueList);
-        });
+        }
 
         elementList.add(listElement);
         continue;
@@ -2865,7 +2863,7 @@ List<IElement> getElementListByHTML(
       }
 
       if (node.nodeName == 'IMG') {
-        final image = node as ImageElement;
+        final image = node as HTMLImageElement;
         final src = image.src ?? '';
         final width = image.width;
         final height = image.height;
@@ -2916,9 +2914,11 @@ List<IElement> getElementListByHTML(
       }
 
       if (node.nodeName == 'IFRAME') {
-        final iframe = node as IFrameElement;
+        final iframe = node as HTMLIFrameElement;
         final src = iframe.src;
-        final srcdoc = iframe.srcdoc;
+        final JSAny rawSrcdoc = iframe.srcdoc;
+        final String? srcdoc =
+            rawSrcdoc.isA<JSString>() ? (rawSrcdoc as JSString).toDart : null;
         final width = parseIntAttribute(iframe.getAttribute('width'));
         final height = parseIntAttribute(iframe.getAttribute('height'));
         final hasSrc = src != null && src.isNotEmpty;
@@ -2947,7 +2947,7 @@ List<IElement> getElementListByHTML(
       }
 
       if (node.nodeName == 'TABLE') {
-        final table = node as TableElement;
+        final table = node as HTMLTableElement;
         final tableElement = IElement(
           value: '\n',
           type: ElementType.table,
@@ -2956,7 +2956,7 @@ List<IElement> getElementListByHTML(
         );
 
         final colElements = table.querySelectorAll('colgroup col');
-        table.querySelectorAll('tr').forEach((trNode) {
+        for (final trNode in table.querySelectorAll('tr').toElements()) {
           final trStyle = trNode.getComputedStyle();
           final trHeight = double.tryParse(
                 trStyle.height.replaceAll('px', ''),
@@ -2968,10 +2968,10 @@ List<IElement> getElementListByHTML(
             tdList: <ITd>[],
           );
 
-          trNode.querySelectorAll('th,td').forEach((tdNode) {
-            final tableCell = tdNode as TableCellElement;
+          for (final tdNode in trNode.querySelectorAll('th,td').toElements()) {
+            final tableCell = tdNode as HTMLTableCellElement;
             final valueList =
-                getElementListByHTML(tableCell.innerHtml ?? '', options);
+                getElementListByHTML(tableCell.innerHtml, options);
             final td = ITd(
               colspan: tableCell.colSpan,
               rowspan: tableCell.rowSpan,
@@ -2988,10 +2988,10 @@ List<IElement> getElementListByHTML(
               td.backgroundColor = backgroundColor;
             }
             tr.tdList.add(td);
-          });
+          }
 
           tableElement.trList!.add(tr);
-        });
+        }
 
         if ((tableElement.trList?.isNotEmpty ?? false) &&
             tableElement.trList!.first.tdList.isNotEmpty) {
@@ -3000,7 +3000,8 @@ List<IElement> getElementListByHTML(
           if (tdCount > 0) {
             final defaultWidth = (options.innerWidth / tdCount).ceilToDouble();
             for (var i = 0; i < tdCount; i++) {
-              final col = colElements.length > i ? colElements[i] : null;
+              final col =
+                  colElements.length > i ? colElements[i] as Element : null;
               final colWidthAttr = col?.getAttribute('width');
               final colWidth =
                   colWidthAttr != null ? double.tryParse(colWidthAttr) : null;
@@ -3017,7 +3018,7 @@ List<IElement> getElementListByHTML(
       }
 
       if (node.nodeName == 'INPUT') {
-        final input = node as InputElement;
+        final input = node as HTMLInputElement;
         final type = input.type?.toLowerCase();
         if (type == ControlComponent.checkbox.name) {
           elementList.add(
@@ -3053,11 +3054,7 @@ List<IElement> getElementListByHTML(
     }
   }
 
-  final clipboardDom = DivElement()
-    ..setInnerHtml(
-      htmlText,
-      validator: NodeValidatorBuilder.common()..allowHtml5(),
-    );
+  final clipboardDom = HTMLDivElement()..innerHtml = htmlText;
   final body = document.body;
   if (body != null) {
     body.append(clipboardDom);
@@ -3066,8 +3063,8 @@ List<IElement> getElementListByHTML(
   }
 
   final deleteNodes = <Node>[];
-  for (final child in clipboardDom.childNodes) {
-    final text = child.text?.trim();
+  for (final child in clipboardDom.childNodes.toList()) {
+    final text = child.textContent?.trim();
     if (child.nodeType != Node.ELEMENT_NODE && (text == null || text.isEmpty)) {
       deleteNodes.add(child);
     }

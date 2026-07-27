@@ -1,4 +1,4 @@
-import 'dart:js_util' as js_util;
+import 'package:canvas_text_editor/src/dom/dom.dart';
 
 import '../../../dataset/enum/element.dart';
 import '../../../interface/editor.dart';
@@ -118,16 +118,13 @@ bool _shouldPreventDefault(dynamic overrideResult) {
     final dynamic value = overrideResult['preventDefault'];
     return value != null && value != false;
   }
-  try {
-    if (js_util.hasProperty(overrideResult, 'preventDefault')) {
-      final dynamic value =
-          js_util.getProperty(overrideResult, 'preventDefault');
-      if (value != null && value != false) {
-        return true;
-      }
+  if (jsIsJSObject(overrideResult)) {
+    final JSObject jsResult = overrideResult as JSObject;
+    if (jsResult.hasProperty('preventDefault'.toJS).toDart) {
+      final JSAny? value = jsResult.getProperty('preventDefault'.toJS);
+      return value != null && value != false.toJS;
     }
-  } catch (_) {
-    // ignore interop read failure
+    return false;
   }
   try {
     final dynamic value = overrideResult.preventDefault;

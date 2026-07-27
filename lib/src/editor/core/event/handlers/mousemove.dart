@@ -1,4 +1,4 @@
-import 'dart:html' as html;
+import 'package:canvas_text_editor/src/dom/dom.dart' as html;
 
 import '../../../dataset/enum/common.dart';
 import '../../../dataset/enum/control.dart';
@@ -61,9 +61,11 @@ void mousemove(dynamic evt, dynamic host) {
                 display == ImageDisplay.floatTop ||
                 display == ImageDisplay.floatBottom)) {
           draw.getPreviewer()?.clearResizer();
+          final html.MouseEvent? mouseEvt =
+              html.jsIsMouseEvent(evt) ? evt as html.MouseEvent : null;
           draw.getImageParticle()?.dragFloatImage(
-                (evt?.movementX as num?)?.toDouble() ?? 0,
-                (evt?.movementY as num?)?.toDouble() ?? 0,
+                mouseEvt?.movementX.toDouble() ?? 0,
+                mouseEvt?.movementY.toDouble() ?? 0,
               );
         }
       }
@@ -79,8 +81,10 @@ void mousemove(dynamic evt, dynamic host) {
     return;
   }
 
-  final html.Element? target = evt?.target as html.Element?;
-  final String? pageIndex = target?.dataset['index'];
+  final html.Element? target = html.jsIsEvent(evt)
+      ? html.asElement((evt as html.Event).target)
+      : null;
+  final String? pageIndex = target?.data('index');
   if (pageIndex != null) {
     final int? parsed = int.tryParse(pageIndex);
     if (parsed != null && draw.getPageNo() != parsed) {
@@ -184,7 +188,7 @@ void mousemove(dynamic evt, dynamic host) {
   // Repaint coalescido por frame (só o range mudou; sem relayout). Em docs
   // grandes o mousemove dispara dezenas de vezes/seg — agrupar em 1 rAF
   // mantém a seleção fluida.
-  host.selectionRafHandle ??= html.window.requestAnimationFrame((_) {
+  host.selectionRafHandle ??= html.raf((_) {
     host.selectionRafHandle = null;
     draw.render(
       IDrawOption(

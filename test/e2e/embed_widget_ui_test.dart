@@ -16,8 +16,10 @@ const String _zeroWidthSpace = '\u200B';
 
 const String _fixtureMain = r'''
 import 'dart:convert';
-import 'dart:html';
-import 'dart:js_util' as js_util;
+import 'dart:js_interop';
+import 'dart:js_interop_unsafe';
+
+import 'package:web/web.dart';
 
 import 'package:canvas_text_editor/canvas_text_editor.dart';
 
@@ -25,7 +27,7 @@ void main() {
   String? loadedName;
   Object? lastError;
   final List<Map<String, Object?>> rangeStyleEvents = <Map<String, Object?>>[];
-  final host = document.querySelector('#host') as DivElement;
+  final host = document.querySelector('#host') as HTMLDivElement;
   final widget = CanvasEditorWidget(
     host,
     config: CanvasEditorConfig(
@@ -52,8 +54,10 @@ void main() {
     });
   });
 
-  js_util.setProperty(window, '__embedTest', js_util.jsify({
-    'reset': js_util.allowInterop(() {
+  final JSObject embedTest = JSObject();
+  void expose(String name, JSFunction fn) =>
+      embedTest.setProperty(name.toJS, fn);
+  expose('reset', (() {
       widget.command.executeSetValue(
         IEditorData(
           main: splitText('Teste negrito')
@@ -62,8 +66,8 @@ void main() {
         ),
       );
       widget.command.executeSetRange(0, 7);
-    }),
-    'resetMultipleParagraphs': js_util.allowInterop(() {
+  }).toJS);
+  expose('resetMultipleParagraphs', (() {
       widget.command.executeSetValue(
         IEditorData(main: <IElement>[
           IElement(value: 'Primeiro parágrafo para formatar.'),
@@ -76,14 +80,14 @@ void main() {
         (element) => element.value == '\u200B',
       );
       widget.command.executeSetRange(0, secondBreak - 1);
-    }),
-    'cachedRowsJson': js_util.allowInterop(() => jsonEncode([
+  }).toJS);
+  expose('cachedRowsJson', (() => jsonEncode([
       for (final row in widget.editor.getDraw().getRowList())
         for (final element in row.elementList)
           if (element.value != '\u200B' && element.value.trim().isNotEmpty)
             {'value': element.value, 'bold': element.bold},
-    ])),
-    'mainJson': js_util.allowInterop(() => jsonEncode([
+  ])).toJS);
+  expose('mainJson', (() => jsonEncode([
       for (final element in widget.value.data.main)
         {
           'value': element.value,
@@ -99,8 +103,8 @@ void main() {
           'paraSpacingBefore': element.paraSpacingBefore,
           'paraSpacingAfter': element.paraSpacingAfter,
         },
-    ])),
-    'flatJson': js_util.allowInterop(() => jsonEncode([
+  ])).toJS);
+  expose('flatJson', (() => jsonEncode([
       for (final element in widget.editor.getDraw().getElementList())
         {
           'value': element.value,
@@ -111,23 +115,22 @@ void main() {
           'italic': element.italic,
           'level': element.level?.name,
         },
-    ])),
-    'loadedName': js_util.allowInterop(() => loadedName),
-    'lastError': js_util.allowInterop(() => lastError?.toString()),
-    'setViewer': js_util.allowInterop(() {
+  ])).toJS);
+  expose('loadedName', (() => loadedName).toJS);
+  expose('lastError', (() => lastError?.toString()).toJS);
+  expose('setViewer', (() {
       widget.setMode(CanvasEditorWidgetMode.viewer);
-    }),
-    'zoneName': js_util.allowInterop(
-      () => widget.editor.getDraw().getZone().getZone().name,
-    ),
-    'refreshFloatingToolbar': js_util.allowInterop(() {
+  }).toJS);
+  expose('zoneName',
+      (() => widget.editor.getDraw().getZone().getZone().name).toJS);
+  expose('refreshFloatingToolbar', (() {
       widget.refreshFloatingToolbar();
-    }),
-    'setCollapsedCaret': js_util.allowInterop(() {
+  }).toJS);
+  expose('setCollapsedCaret', (() {
       widget.command.executeSetRange(5, 5);
       widget.refreshFloatingToolbar();
-    }),
-    'selectTitleWord': js_util.allowInterop(() {
+  }).toJS);
+  expose('selectTitleWord', (() {
       widget.command.executeSetValue(IEditorData(main: <IElement>[
         IElement(
           value: '',
@@ -142,8 +145,8 @@ void main() {
         (element) => element.level == TitleLevel.first,
       );
       widget.command.executeSetRange(start - 1, start + 3);
-    }),
-    'selectSizedTitle': js_util.allowInterop(() {
+  }).toJS);
+  expose('selectSizedTitle', (() {
       widget.command.executeSetValue(IEditorData(main: <IElement>[
         IElement(
           value: '',
@@ -169,28 +172,26 @@ void main() {
       );
       widget.command.executeSetRange(start - 1, end);
       widget.refreshFloatingToolbar();
-    }),
-    'clearRangeStyleEvents': js_util.allowInterop(rangeStyleEvents.clear),
-    'rangeStyleEventsJson':
-        js_util.allowInterop(() => jsonEncode(rangeStyleEvents)),
-    'resetLayoutDiagnostics': js_util.allowInterop(
-      () => widget.editor.getDraw().resetLayoutDiagnostics(),
-    ),
-    'layoutDiagnosticsJson': js_util.allowInterop(
-      () => jsonEncode(widget.editor.getDraw().getLayoutDiagnostics()),
-    ),
-    'togglePageBreakMarkers': js_util.allowInterop(() {
+  }).toJS);
+  expose('clearRangeStyleEvents', (rangeStyleEvents.clear).toJS);
+  expose('rangeStyleEventsJson',
+      (() => jsonEncode(rangeStyleEvents)).toJS);
+  expose('resetLayoutDiagnostics',
+      (() => widget.editor.getDraw().resetLayoutDiagnostics()).toJS);
+  expose('layoutDiagnosticsJson',
+      (() => jsonEncode(widget.editor.getDraw().getLayoutDiagnostics())).toJS);
+  expose('togglePageBreakMarkers', (() {
       widget.togglePageBreakMarkers();
       return widget.editor.getDraw().getOptions().pageBreak?.showMarker;
-    }),
-    'saveNewDocxBase64': js_util.allowInterop(() {
+  }).toJS);
+  expose('saveNewDocxBase64', (() {
       try {
         return base64Encode(widget.saveDocx());
       } catch (error) {
         return 'ERRO: $error';
       }
-    }),
-    'insertTable': js_util.allowInterop(() {
+  }).toJS);
+  expose('insertTable', (() {
       widget.command.executeSetValue(IEditorData(
         main: splitText('Antes da tabela')
             .map((value) => IElement(value: value))
@@ -198,8 +199,8 @@ void main() {
       ));
       widget.command.executeSetRange(5, 5);
       widget.command.executeInsertTable(3, 3);
-    }),
-    'setParagraphSpacing': js_util.allowInterop(() {
+  }).toJS);
+  expose('setParagraphSpacing', (() {
       widget.command.executeSetRange(0, 7);
       widget.command.executeParagraphSpacing(
         'auto',
@@ -207,12 +208,12 @@ void main() {
         before: 4,
         after: 8,
       );
-    }),
-    'applyTitleOne': js_util.allowInterop(() {
+  }).toJS);
+  expose('applyTitleOne', (() {
       widget.command.executeSetRange(0, 7);
       widget.command.executeTitle(TitleLevel.first);
-    }),
-    'focusFirstTableCell': js_util.allowInterop(() {
+  }).toJS);
+  expose('focusFirstTableCell', (() {
       final table = widget.editor.getDraw().getOriginalElementList().firstWhere(
         (element) => element.type == ElementType.table,
       );
@@ -231,16 +232,16 @@ void main() {
       widget.editor.getDraw().getTableTool()?.render();
       widget.refreshFloatingToolbar();
       return true;
-    }),
-    'exportPdfBase64': js_util.allowInterop(() {
+  }).toJS);
+  expose('exportPdfBase64', (() {
       try {
         return base64Encode(widget.exportPdfBytes());
       } catch (error) {
         return 'ERRO: $error';
       }
-    }),
-  }));
-  js_util.setProperty(window, '__embedReady', true);
+  }).toJS);
+  (window as JSObject).setProperty('__embedTest'.toJS, embedTest);
+  (window as JSObject).setProperty('__embedReady'.toJS, true.toJS);
 }
 ''';
 

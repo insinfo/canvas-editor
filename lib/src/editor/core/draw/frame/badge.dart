@@ -1,4 +1,4 @@
-import 'dart:html';
+import 'package:canvas_text_editor/src/dom/dom.dart';
 
 import '../../../interface/badge.dart';
 import '../../../interface/editor.dart';
@@ -7,12 +7,12 @@ import '../draw.dart';
 class Badge {
 	Badge(this._draw)
 			: _options = _draw.getOptions(),
-				_imageCache = <String, ImageElement>{},
+				_imageCache = <String, HTMLImageElement>{},
 				_areaBadgeMap = <String, IBadge>{};
 
 	final Draw _draw;
 	final IEditorOption _options;
-	final Map<String, ImageElement> _imageCache;
+	final Map<String, HTMLImageElement> _imageCache;
 	final Map<String, IBadge> _areaBadgeMap;
 
 	IBadge? _mainBadge;
@@ -56,7 +56,7 @@ class Badge {
 		double height,
 		String value,
 	) {
-		final ImageElement? cached = _imageCache[value];
+		final HTMLImageElement? cached = _imageCache[value];
 		if (cached != null) {
 			if (cached.complete == true) {
 				ctx.drawImageScaled(cached, x, y, width, height);
@@ -64,7 +64,7 @@ class Badge {
 			return;
 		}
 
-		final ImageElement img = ImageElement()
+		final HTMLImageElement img = HTMLImageElement()
 			..crossOrigin = 'Anonymous'
 			..src = value;
 		img.onLoad.first.then((_) {

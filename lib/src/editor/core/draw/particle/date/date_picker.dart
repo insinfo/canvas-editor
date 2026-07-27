@@ -1,4 +1,4 @@
-import 'dart:html';
+import 'package:canvas_text_editor/src/dom/dom.dart';
 
 import '../../../../dataset/constant/editor.dart';
 import '../../../../dataset/enum/editor.dart';
@@ -68,11 +68,11 @@ class _DatePickerTitleDom {
     required this.nextYear,
   });
 
-  final SpanElement preYear;
-  final SpanElement preMonth;
-  final SpanElement now;
-  final SpanElement nextMonth;
-  final SpanElement nextYear;
+  final HTMLSpanElement preYear;
+  final HTMLSpanElement preMonth;
+  final HTMLSpanElement now;
+  final HTMLSpanElement nextMonth;
+  final HTMLSpanElement nextYear;
 }
 
 class _DatePickerTimeDom {
@@ -82,9 +82,9 @@ class _DatePickerTimeDom {
     required this.second,
   });
 
-  final OListElement hour;
-  final OListElement minute;
-  final OListElement second;
+  final HTMLOListElement hour;
+  final HTMLOListElement minute;
+  final HTMLOListElement second;
 }
 
 class _DatePickerMenuDom {
@@ -94,9 +94,9 @@ class _DatePickerMenuDom {
     required this.submit,
   });
 
-  final ButtonElement time;
-  final ButtonElement now;
-  final ButtonElement submit;
+  final HTMLButtonElement time;
+  final HTMLButtonElement now;
+  final HTMLButtonElement submit;
 }
 
 class _DatePickerDom {
@@ -112,13 +112,13 @@ class _DatePickerDom {
     required this.menu,
   });
 
-  final DivElement container;
-  final DivElement dateWrap;
-  final List<SpanElement> weekItems;
-  final UListElement timeWrap;
-  final List<SpanElement> timeLabels;
+  final HTMLDivElement container;
+  final HTMLDivElement dateWrap;
+  final List<HTMLSpanElement> weekItems;
+  final HTMLUListElement timeWrap;
+  final List<HTMLSpanElement> timeLabels;
   final _DatePickerTitleDom title;
-  final DivElement day;
+  final HTMLDivElement day;
   final _DatePickerTimeDom time;
   final _DatePickerMenuDom menu;
 }
@@ -176,30 +176,30 @@ class DatePicker {
   DateTime? _pickDate;
 
   _DatePickerDom _createDom() {
-    final DivElement container = DivElement()
-      ..classes.add('$editorPrefix-date-container')
+    final HTMLDivElement container = HTMLDivElement()
+      ..classList.add('$editorPrefix-date-container')
       ..style.display = 'none'
       ..setAttribute(editorComponent, EditorComponent.popup.name);
 
-    final DivElement dateWrap = DivElement()
-      ..classes.add('$editorPrefix-date-wrap')
+    final HTMLDivElement dateWrap = HTMLDivElement()
+      ..classList.add('$editorPrefix-date-wrap')
       ..style.display = 'none';
-    final DivElement titleWrap = DivElement()
-      ..classes.add('$editorPrefix-date-title');
+    final HTMLDivElement titleWrap = HTMLDivElement()
+      ..classList.add('$editorPrefix-date-title');
 
-    final SpanElement preYear = SpanElement()
-      ..classes.add('$editorPrefix-date-title__pre-year')
+    final HTMLSpanElement preYear = HTMLSpanElement()
+      ..classList.add('$editorPrefix-date-title__pre-year')
       ..innerText = '<<';
-    final SpanElement preMonth = SpanElement()
-      ..classes.add('$editorPrefix-date-title__pre-month')
+    final HTMLSpanElement preMonth = HTMLSpanElement()
+      ..classList.add('$editorPrefix-date-title__pre-month')
       ..innerText = '<';
-    final SpanElement nowTitle = SpanElement()
-      ..classes.add('$editorPrefix-date-title__now');
-    final SpanElement nextMonth = SpanElement()
-      ..classes.add('$editorPrefix-date-title__next-month')
+    final HTMLSpanElement nowTitle = HTMLSpanElement()
+      ..classList.add('$editorPrefix-date-title__now');
+    final HTMLSpanElement nextMonth = HTMLSpanElement()
+      ..classList.add('$editorPrefix-date-title__next-month')
       ..innerText = '>';
-    final SpanElement nextYear = SpanElement()
-      ..classes.add('$editorPrefix-date-title__next-year')
+    final HTMLSpanElement nextYear = HTMLSpanElement()
+      ..classList.add('$editorPrefix-date-title__next-year')
       ..innerText = '>>';
 
     titleWrap
@@ -209,37 +209,37 @@ class DatePicker {
       ..append(nextMonth)
       ..append(nextYear);
 
-    final DivElement weekWrap = DivElement()
-      ..classes.add('$editorPrefix-date-week');
-    final List<SpanElement> weekItems = <SpanElement>[];
+    final HTMLDivElement weekWrap = HTMLDivElement()
+      ..classList.add('$editorPrefix-date-week');
+    final List<HTMLSpanElement> weekItems = <HTMLSpanElement>[];
     for (int i = 0; i < 7; i++) {
-      final SpanElement weekSpan = SpanElement();
+      final HTMLSpanElement weekSpan = HTMLSpanElement();
       weekItems.add(weekSpan);
       weekWrap.append(weekSpan);
     }
 
-    final DivElement dayWrap = DivElement()
-      ..classes.add('$editorPrefix-date-day');
+    final HTMLDivElement dayWrap = HTMLDivElement()
+      ..classList.add('$editorPrefix-date-day');
 
     dateWrap
       ..append(titleWrap)
       ..append(weekWrap)
       ..append(dayWrap);
 
-    final UListElement timeWrap = UListElement()
-      ..classes.add('$editorPrefix-time-wrap')
+    final HTMLUListElement timeWrap = HTMLUListElement()
+      ..classList.add('$editorPrefix-time-wrap')
       ..style.display = 'none';
-    final List<SpanElement> timeLabels = <SpanElement>[];
-    final List<OListElement> timeColumns = <OListElement>[];
+    final List<HTMLSpanElement> timeLabels = <HTMLSpanElement>[];
+    final List<HTMLOListElement> timeColumns = <HTMLOListElement>[];
     for (int i = 0; i < 3; i++) {
-      final LIElement li = LIElement();
-      final SpanElement text = SpanElement();
+      final HTMLLIElement li = HTMLLIElement();
+      final HTMLSpanElement text = HTMLSpanElement();
       timeLabels.add(text);
       li.append(text);
-      final OListElement ol = OListElement();
+      final HTMLOListElement ol = HTMLOListElement();
       final int endIndex = i == 0 ? 24 : 60;
       for (int j = 0; j < endIndex; j++) {
-        final LIElement item = LIElement()
+        final HTMLLIElement item = HTMLLIElement()
           ..innerText = j.toString().padLeft(2, '0')
           ..setAttribute('data-id', '$j');
         ol.append(item);
@@ -249,14 +249,14 @@ class DatePicker {
       timeWrap.append(li);
     }
 
-    final DivElement menuWrap = DivElement()
-      ..classes.add('$editorPrefix-date-menu');
-    final ButtonElement timeBtn = ButtonElement()
-      ..classes.add('$editorPrefix-date-menu__time');
-    final ButtonElement nowBtn = ButtonElement()
-      ..classes.add('$editorPrefix-date-menu__now');
-    final ButtonElement submitBtn = ButtonElement()
-      ..classes.add('$editorPrefix-date-menu__submit');
+    final HTMLDivElement menuWrap = HTMLDivElement()
+      ..classList.add('$editorPrefix-date-menu');
+    final HTMLButtonElement timeBtn = HTMLButtonElement()
+      ..classList.add('$editorPrefix-date-menu__time');
+    final HTMLButtonElement nowBtn = HTMLButtonElement()
+      ..classList.add('$editorPrefix-date-menu__now');
+    final HTMLButtonElement submitBtn = HTMLButtonElement()
+      ..classList.add('$editorPrefix-date-menu__submit');
     menuWrap
       ..append(timeBtn)
       ..append(nowBtn)
@@ -507,7 +507,7 @@ class DatePicker {
     }
     final int previousMonthTotal = DateTime(year, month, 0).day;
 
-    _dom.day.children.clear();
+    _dom.day.clearChildren();
 
     final int preStartDay = previousMonthTotal - firstWeekday + 1;
     for (int i = preStartDay; i <= previousMonthTotal; i++) {
@@ -546,23 +546,23 @@ class DatePicker {
     }
   }
 
-  DivElement _buildDayCell(
+  HTMLDivElement _buildDayCell(
     int day, {
     bool isDisabled = false,
     bool isToday = false,
     bool isSelected = false,
     void Function()? onClick,
   }) {
-    final DivElement cell = DivElement()
+    final HTMLDivElement cell = HTMLDivElement()
       ..innerText = '$day';
     if (isDisabled) {
-      cell.classes.add('disable');
+      cell.classList.add('disable');
     }
     if (isToday) {
-      cell.classes.add('active');
+      cell.classList.add('active');
     }
     if (isSelected) {
-      cell.classes.add('select');
+      cell.classList.add('select');
     }
     if (onClick != null) {
       cell.onClick.listen((Event evt) {
@@ -609,39 +609,39 @@ class DatePicker {
     final int hour = pick.hour;
     final int minute = pick.minute;
     final int second = pick.second;
-    final List<OListElement> domList = <OListElement>[
+    final List<HTMLOListElement> domList = <HTMLOListElement>[
       _dom.time.hour,
       _dom.time.minute,
       _dom.time.second,
     ];
-    for (final OListElement list in domList) {
-      for (final Element child in list.children) {
-        child.classes.remove('active');
+    for (final HTMLOListElement list in domList) {
+      for (final Element child in list.children.toElements()) {
+        child.classList.remove('active');
       }
     }
     final List<int> times = <int>[hour, minute, second];
     for (int i = 0; i < domList.length; i++) {
-      final OListElement list = domList[i];
+      final HTMLOListElement list = domList[i];
       final Element? pickDom =
         list.querySelector("[data-id='${times[i]}']");
-      if (pickDom is HtmlElement) {
-        pickDom.classes.add('active');
+      if (pickDom != null && pickDom.isA<HTMLElement>()) {
+        pickDom.classList.add('active');
         if (isIntoView) {
-          _scrollIntoView(list, pickDom);
+          _scrollIntoView(list, pickDom as HTMLElement);
         }
       }
     }
   }
 
-  void _scrollIntoView(HtmlElement container, HtmlElement selected) {
+  void _scrollIntoView(HTMLElement container, HTMLElement selected) {
     int top = selected.offsetTop;
-    HtmlElement? pointer = selected.offsetParent as HtmlElement?;
+    HTMLElement? pointer = selected.offsetParent as HTMLElement?;
     while (pointer != null && pointer != container && container.contains(pointer)) {
       top += pointer.offsetTop;
-      pointer = pointer.offsetParent as HtmlElement?;
+      pointer = pointer.offsetParent as HTMLElement?;
     }
     final int bottom = top + selected.offsetHeight;
-    final int viewTop = container.scrollTop;
+    final int viewTop = container.scrollTop.round();
     final int viewBottom = viewTop + container.clientHeight;
     if (top < viewTop) {
       container.scrollTop = top;
@@ -652,14 +652,14 @@ class DatePicker {
 
   void _toggleDateTimePicker() {
     if (_isDatePicker) {
-      _dom.dateWrap.classes.add('active');
-      _dom.timeWrap.classes.remove('active');
+      _dom.dateWrap.classList.add('active');
+      _dom.timeWrap.classList.remove('active');
       _dom.dateWrap.style.display = 'block';
       _dom.timeWrap.style.display = 'none';
       _dom.menu.time.innerText = _lang.timeSelect;
     } else {
-      _dom.dateWrap.classes.remove('active');
-      _dom.timeWrap.classes.add('active');
+      _dom.dateWrap.classList.remove('active');
+      _dom.timeWrap.classList.add('active');
       _dom.dateWrap.style.display = 'none';
       _dom.timeWrap.style.display = 'flex';
       _dom.menu.time.innerText = _lang.returnText;
@@ -677,10 +677,10 @@ class DatePicker {
 
   void _toggleVisible(bool isVisible) {
     if (isVisible) {
-      _dom.container.classes.add('active');
+      _dom.container.classList.add('active');
       _dom.container.style.display = 'block';
     } else {
-      _dom.container.classes.remove('active');
+      _dom.container.classList.remove('active');
       _dom.container.style.display = 'none';
     }
   }

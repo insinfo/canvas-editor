@@ -1,4 +1,4 @@
-import 'dart:html';
+import 'package:canvas_text_editor/src/dom/dom.dart';
 
 import '../../editor/core/command/command.dart';
 import '../../editor/core/draw/draw.dart';
@@ -41,29 +41,29 @@ String _tabTypeTitle(String type) => switch (type) {
 /// vertical pontilhada sobre o documento durante o arrasto.
 class WidgetRuler extends UiComponent {
   WidgetRuler(this._command, this._draw) {
-    root = DivElement()..classes.add('ce-rulers');
-    _corner = DivElement()
-      ..classes.addAll(<String>['ce-ruler-corner', 'ce-ruler-corner--left'])
+    root = HTMLDivElement()..classList.add('ce-rulers');
+    _corner = HTMLDivElement()
+      ..classList.addAll(<String>['ce-ruler-corner', 'ce-ruler-corner--left'])
       ..title = '${_tabTypeTitle('left')} — clique para alternar';
     listen(_corner.onClick, (_) => _cycleTabType());
-    _horizontal = DivElement()..classes.add('ce-ruler-horizontal');
-    _vertical = DivElement()..classes.add('ce-ruler-vertical');
-    root.children.addAll(<Element>[_corner, _horizontal, _vertical]);
+    _horizontal = HTMLDivElement()..classList.add('ce-ruler-horizontal');
+    _vertical = HTMLDivElement()..classList.add('ce-ruler-vertical');
+    root.appendAll(<Element>[_corner, _horizontal, _vertical]);
     listen(_horizontal.onMouseDown, _startDrag);
     listen(document.onMouseMove, _handleDrag);
     listen(document.onMouseUp, _finishDrag);
     listen(window.onResize, (_) => refresh());
-    window.requestAnimationFrame((_) => refresh());
+    raf((_) => refresh());
   }
 
   final Command _command;
   final Draw _draw;
 
   @override
-  late final DivElement root;
-  late final DivElement _corner;
-  late final DivElement _horizontal;
-  late final DivElement _vertical;
+  late final HTMLDivElement root;
+  late final HTMLDivElement _corner;
+  late final HTMLDivElement _horizontal;
+  late final HTMLDivElement _vertical;
 
   _RulerDrag _drag = _RulerDrag.none;
   double _pageWidth = 0;
@@ -79,30 +79,30 @@ class WidgetRuler extends UiComponent {
   String _tabType = 'left';
   int _dragTabIndex = -1;
   bool _tabRemovePending = false;
-  final List<DivElement> _tabMarkers = <DivElement>[];
+  final List<HTMLDivElement> _tabMarkers = <HTMLDivElement>[];
 
   // Régua CONTEXTUAL de tabela (Word): com o cursor dentro de uma tabela, a
   // régua mostra as fronteiras das colunas; arrastar redimensiona a coluna.
-  final List<DivElement> _columnMarkers = <DivElement>[];
+  final List<HTMLDivElement> _columnMarkers = <HTMLDivElement>[];
   List<double> _columnEdges = <double>[]; // x na página (px de tela)
   int _dragColumnIndex = -1;
   double _dragColumnStartX = 0;
 
   // Marcadores persistentes (reposicionados sem reconstruir a régua — o
   // sync com o cursor roda por tecla via rangeStyleChange coalescido).
-  DivElement? _markerMarginLeft;
-  DivElement? _markerMarginRight;
-  DivElement? _markerFirstLine;
-  DivElement? _markerHanging;
-  DivElement? _markerLeftBox;
-  DivElement? _markerRight;
+  HTMLDivElement? _markerMarginLeft;
+  HTMLDivElement? _markerMarginRight;
+  HTMLDivElement? _markerFirstLine;
+  HTMLDivElement? _markerHanging;
+  HTMLDivElement? _markerLeftBox;
+  HTMLDivElement? _markerRight;
 
   // Linha-guia vertical (Word/OnlyOffice) durante o arrasto.
-  DivElement? _guide;
+  HTMLDivElement? _guide;
 
   // Régua vertical estilo Word: a escala representa a PÁGINA ATIVA (a do
   // cursor) e desliza com o scroll — rolar sem clicar não re-ancora.
-  DivElement? _verticalInner;
+  HTMLDivElement? _verticalInner;
   bool _scrollHooked = false;
 
   // Durante a seleção por arrasto a régua não atualiza (Word) — sincroniza
@@ -137,7 +137,7 @@ class WidgetRuler extends UiComponent {
     if (_scrollHooked || scroller == null) return;
     _scrollHooked = true;
     listen(scroller.onScroll, (_) {
-      window.requestAnimationFrame((_) => _syncVerticalScroll());
+      raf((_) => _syncVerticalScroll());
     });
     // Seleção por arrasto: pausa o sync dos marcadores até o mouseup.
     listen(document.onMouseDown, (MouseEvent event) {
@@ -152,14 +152,15 @@ class WidgetRuler extends UiComponent {
 
   /// Desliza a escala vertical para acompanhar a página ATIVA no viewport.
   void _syncVerticalScroll() {
-    final DivElement? inner = _verticalInner;
+    final HTMLDivElement? inner = _verticalInner;
     if (inner == null) return;
     try {
       final int pageNo = _draw.getPageNo();
       final dynamic page = _draw.getPage(pageNo);
-      if (page is! Element) return;
-      final Rectangle<num> pageRect = page.getBoundingClientRect();
-      final Rectangle<num> rulerRect = _vertical.getBoundingClientRect();
+      if (!jsIsElement(page)) return;
+      page as Element;
+      final DOMRect pageRect = page.getBoundingClientRect();
+      final DOMRect rulerRect = _vertical.getBoundingClientRect();
       final double offset = (pageRect.top - rulerRect.top).toDouble();
       inner.style.transform = 'translateY(${offset}px)';
     } catch (_) {}
@@ -230,10 +231,10 @@ class WidgetRuler extends UiComponent {
   void _cycleTabType() {
     final int next =
         (_tabTypeCycle.indexOf(_tabType) + 1) % _tabTypeCycle.length;
-    _corner.classes.remove('ce-ruler-corner--$_tabType');
+    _corner.classList.remove('ce-ruler-corner--$_tabType');
     _tabType = _tabTypeCycle[next];
     _corner
-      ..classes.add('ce-ruler-corner--$_tabType')
+      ..classList.add('ce-ruler-corner--$_tabType')
       ..title = '${_tabTypeTitle(_tabType)} — clique para alternar';
   }
 
@@ -273,14 +274,14 @@ class WidgetRuler extends UiComponent {
   }
 
   void _buildHorizontal(double pxPerCm) {
-    _horizontal.children.clear();
+    _horizontal.clearChildren();
     final double left = _margins[3];
     final double right = _margins[1];
     final double contentWidth =
         (_pageWidth - left - right).clamp(1, _pageWidth);
-    _horizontal.children.addAll(<Element>[
-      DivElement()
-        ..classes.add('ce-ruler__paper')
+    _horizontal.appendAll(<Element>[
+      HTMLDivElement()
+        ..classList.add('ce-ruler__paper')
         ..style.left = '${left}px'
         ..style.width = '${contentWidth}px',
       _marginShade(start: true, size: left),
@@ -308,7 +309,7 @@ class WidgetRuler extends UiComponent {
         'Recuo à esquerda', _RulerDrag.indentLeft);
     _markerRight = _marker('ce-ruler__indent ce-ruler__indent--right',
         'Recuo à direita', _RulerDrag.indentRight);
-    _horizontal.children.addAll(<Element>[
+    _horizontal.appendAll(<Element>[
       _markerMarginLeft!,
       _markerMarginRight!,
       _markerFirstLine!,
@@ -323,14 +324,14 @@ class WidgetRuler extends UiComponent {
 
   /// (Re)cria os marcadores de tab stop na régua horizontal.
   void _renderTabMarkers() {
-    for (final DivElement marker in _tabMarkers) {
+    for (final HTMLDivElement marker in _tabMarkers) {
       marker.remove();
     }
     _tabMarkers.clear();
     for (int index = 0; index < _tabStops.length; index++) {
       final ITabStop stop = _tabStops[index];
-      final DivElement marker = DivElement()
-        ..classes
+      final HTMLDivElement marker = HTMLDivElement()
+        ..classList
             .addAll(<String>['ce-ruler__tab', 'ce-ruler__tab--${stop.type}'])
         ..title = '${_tabTypeTitle(stop.type)} — arraste para fora para '
             'remover'
@@ -345,7 +346,7 @@ class WidgetRuler extends UiComponent {
   /// Régua contextual de tabela (Word): marcadores nas fronteiras das colunas
   /// da tabela sob o cursor. Fora de tabela, remove os marcadores.
   void _renderColumnMarkers() {
-    for (final DivElement marker in _columnMarkers) {
+    for (final HTMLDivElement marker in _columnMarkers) {
       marker.remove();
     }
     _columnMarkers.clear();
@@ -369,8 +370,8 @@ class WidgetRuler extends UiComponent {
       _columnEdges.add(x);
     }
     for (int index = 0; index < _columnEdges.length; index++) {
-      final DivElement marker = DivElement()
-        ..classes.add('ce-ruler__column')
+      final HTMLDivElement marker = HTMLDivElement()
+        ..classList.add('ce-ruler__column')
         ..title = 'Mover coluna da tabela'
         ..dataset['drag'] = _RulerDrag.tableColumn.name
         ..dataset['colIndex'] = '$index'
@@ -393,7 +394,7 @@ class WidgetRuler extends UiComponent {
   void _positionMarkers() {
     final double left = _margins[3];
     final double right = _margins[1];
-    void setX(DivElement? marker, double x) {
+    void setX(HTMLDivElement? marker, double x) {
       marker?.style.left = '${x.clamp(0, _pageWidth)}px';
     }
 
@@ -406,17 +407,17 @@ class WidgetRuler extends UiComponent {
   }
 
   void _buildVertical(double pxPerCm) {
-    _vertical.children.clear();
+    _vertical.clearChildren();
     final double pageHeight = _draw.getHeight();
     final double top = _margins[0];
     final double bottom = _margins[2];
     // A escala cobre a página INTEIRA e desliza com o scroll (translateY em
     // _syncVerticalScroll), como no Word — o viewport da régua só recorta.
-    final DivElement inner = DivElement()
-      ..classes.add('ce-ruler-vertical__inner')
+    final HTMLDivElement inner = HTMLDivElement()
+      ..classList.add('ce-ruler-vertical__inner')
       ..style.height = '${pageHeight}px';
-    inner.append(DivElement()
-      ..classes.add('ce-ruler__paper')
+    inner.append(HTMLDivElement()
+      ..classList.add('ce-ruler__paper')
       ..style.top = '${top.clamp(0, pageHeight)}px'
       ..style.height =
           '${(pageHeight - top - bottom).clamp(0, pageHeight).toDouble()}px');
@@ -431,8 +432,8 @@ class WidgetRuler extends UiComponent {
     _syncVerticalScroll();
   }
 
-  DivElement _marginShade({required bool start, required double size}) {
-    final DivElement shade = DivElement()..classes.add('ce-ruler__margin');
+  HTMLDivElement _marginShade({required bool start, required double size}) {
+    final HTMLDivElement shade = HTMLDivElement()..classList.add('ce-ruler__margin');
     shade.style
       ..width = '${size}px'
       ..setProperty(start ? 'left' : 'right', '0');
@@ -451,8 +452,8 @@ class WidgetRuler extends UiComponent {
     final double quarter = pxPerCm / 4;
     void appendTick(double position, int distance, {bool numbered = false}) {
       final int part = distance % 4;
-      final SpanElement tick = SpanElement()
-        ..classes.addAll(<String>[
+      final HTMLSpanElement tick = HTMLSpanElement()
+        ..classList.addAll(<String>[
           'ce-ruler__tick',
           horizontal ? 'horizontal' : 'vertical',
           part == 0
@@ -465,8 +466,8 @@ class WidgetRuler extends UiComponent {
       if (part == 0 && numbered) {
         final int number = distance ~/ 4;
         if (number > 0) {
-          tick.append(SpanElement()
-            ..classes.add('ce-ruler__number')
+          tick.append(HTMLSpanElement()
+            ..classList.add('ce-ruler__number')
             ..text = '$number');
         }
       }
@@ -488,9 +489,9 @@ class WidgetRuler extends UiComponent {
     }
   }
 
-  DivElement _marker(String classes, String title, _RulerDrag drag) {
-    final DivElement marker = DivElement()
-      ..classes.addAll(classes.split(' '))
+  HTMLDivElement _marker(String classes, String title, _RulerDrag drag) {
+    final HTMLDivElement marker = HTMLDivElement()
+      ..classList.addAll(classes.split(' '))
       ..title = title;
     if (drag != _RulerDrag.none) {
       marker.dataset['drag'] = drag.name;
@@ -500,9 +501,10 @@ class WidgetRuler extends UiComponent {
 
   void _startDrag(MouseEvent event) {
     final EventTarget? target = event.target;
-    if (target is! Element) return;
-    final Element? marker = target.closest('[data-drag]');
-    final String? name = marker?.dataset['drag'];
+    final Element? targetElement = asElement(target);
+    if (targetElement == null) return;
+    final Element? marker = targetElement.closest('[data-drag]');
+    final String? name = marker?.data('drag');
     if (name == null) {
       // Clique no fundo da régua dentro da área de texto: adiciona uma
       // parada do tipo selecionado no canto e já inicia o arrasto (Word).
@@ -515,7 +517,7 @@ class WidgetRuler extends UiComponent {
     );
     if (_drag == _RulerDrag.none) return;
     if (_drag == _RulerDrag.tabStop) {
-      _dragTabIndex = int.tryParse(marker?.dataset['tabIndex'] ?? '') ?? -1;
+      _dragTabIndex = int.tryParse(marker?.data('tabIndex') ?? '') ?? -1;
       if (_dragTabIndex < 0 || _dragTabIndex >= _tabStops.length) {
         _drag = _RulerDrag.none;
         return;
@@ -523,7 +525,7 @@ class WidgetRuler extends UiComponent {
       _tabRemovePending = false;
     }
     if (_drag == _RulerDrag.tableColumn) {
-      _dragColumnIndex = int.tryParse(marker?.dataset['colIndex'] ?? '') ?? -1;
+      _dragColumnIndex = int.tryParse(marker?.data('colIndex') ?? '') ?? -1;
       if (_dragColumnIndex < 0 || _dragColumnIndex >= _columnEdges.length) {
         _drag = _RulerDrag.none;
         return;
@@ -533,13 +535,13 @@ class WidgetRuler extends UiComponent {
     event
       ..preventDefault()
       ..stopPropagation();
-    root.classes.add('is-dragging');
-    _showGuide(event.client.x.toDouble());
+    root.classList.add('is-dragging');
+    _showGuide(event.clientX.toDouble());
   }
 
   void _startAddTabStop(MouseEvent event) {
-    final Rectangle<num> bounds = _horizontal.getBoundingClientRect();
-    final double x = (event.client.x - bounds.left).toDouble();
+    final DOMRect bounds = _horizontal.getBoundingClientRect();
+    final double x = (event.clientX - bounds.left).toDouble();
     final double left = _margins[3];
     final double right = _margins[1];
     if (x <= left + 1 || x >= _pageWidth - right - 1) return;
@@ -551,15 +553,15 @@ class WidgetRuler extends UiComponent {
     event
       ..preventDefault()
       ..stopPropagation();
-    root.classes.add('is-dragging');
-    _showGuide(event.client.x.toDouble());
+    root.classList.add('is-dragging');
+    _showGuide(event.clientX.toDouble());
   }
 
   void _showGuide(double clientX) {
-    final Rectangle<num> bounds = _horizontal.getBoundingClientRect();
+    final DOMRect bounds = _horizontal.getBoundingClientRect();
     final double top = bounds.bottom.toDouble();
-    final DivElement guide =
-        _guide ??= DivElement()..classes.add('ce-ruler-guide');
+    final HTMLDivElement guide =
+        _guide ??= HTMLDivElement()..classList.add('ce-ruler-guide');
     guide.style
       ..top = '${top}px'
       ..height = '${(window.innerHeight ?? 800) - top}px'
@@ -576,9 +578,9 @@ class WidgetRuler extends UiComponent {
 
   void _handleDrag(MouseEvent event) {
     if (_drag == _RulerDrag.none) return;
-    final Rectangle<num> bounds = _horizontal.getBoundingClientRect();
+    final DOMRect bounds = _horizontal.getBoundingClientRect();
     final double x =
-        (event.client.x - bounds.left).clamp(0, _pageWidth).toDouble();
+        (event.clientX - bounds.left).clamp(0, _pageWidth).toDouble();
     final double minContent = 48 * _scale;
     switch (_drag) {
       case _RulerDrag.marginLeft:
@@ -614,12 +616,12 @@ class WidgetRuler extends UiComponent {
         _tabStops[_dragTabIndex].position =
             ((x - _margins[3]).clamp(0, contentWidth)) / _scale;
         // Arrastar para fora da régua (verticalmente) remove a parada.
-        final double clientY = event.client.y.toDouble();
+        final double clientY = event.clientY.toDouble();
         _tabRemovePending =
             clientY < bounds.top - 14 || clientY > bounds.bottom + 14;
         if (_dragTabIndex < _tabMarkers.length) {
           _tabMarkers[_dragTabIndex]
-              .classes
+              .classList
               .toggle('is-removing', _tabRemovePending);
         }
         _positionTabMarkers();
@@ -632,7 +634,7 @@ class WidgetRuler extends UiComponent {
       case _RulerDrag.none:
         return;
     }
-    _showGuide(event.client.x.toDouble());
+    _showGuide(event.clientX.toDouble());
     _positionMarkers();
   }
 
@@ -640,7 +642,7 @@ class WidgetRuler extends UiComponent {
     if (_drag == _RulerDrag.none) return;
     final _RulerDrag completed = _drag;
     _drag = _RulerDrag.none;
-    root.classes.remove('is-dragging');
+    root.classList.remove('is-dragging');
     _hideGuide();
     if (completed == _RulerDrag.tableColumn) {
       final int index = _dragColumnIndex;
@@ -658,7 +660,7 @@ class WidgetRuler extends UiComponent {
           _command.executeTableColumnWidth(index - 1, delta);
         }
       }
-      window.requestAnimationFrame((_) => refresh());
+      raf((_) => refresh());
       return;
     }
     if (completed == _RulerDrag.tabStop) {
@@ -685,12 +687,12 @@ class WidgetRuler extends UiComponent {
       _command.executeParagraphIndent(
           _indentLeft / _scale, _firstLine / _scale, _indentRight / _scale);
     }
-    window.requestAnimationFrame((_) => refresh());
+    raf((_) => refresh());
   }
 
   void setVisible(bool visible) {
     root.style.display = visible ? '' : 'none';
-    if (visible) window.requestAnimationFrame((_) => refresh());
+    if (visible) raf((_) => refresh());
   }
 
   @override

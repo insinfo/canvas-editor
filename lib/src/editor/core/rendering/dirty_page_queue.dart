@@ -1,5 +1,5 @@
 import 'dart:collection';
-import 'dart:html';
+import 'package:canvas_text_editor/src/dom/dom.dart';
 
 typedef DirtyPagePaint = void Function(int pageIndex);
 typedef DirtyPagePredicate = bool Function(int pageIndex);
@@ -55,7 +55,7 @@ class DirtyPageQueue {
     }
     _scheduled = true;
     final int version = _version;
-    window.requestAnimationFrame((_) => _drain(version));
+    raf((_) => _drain(version));
   }
 
   void _drain(int version) {

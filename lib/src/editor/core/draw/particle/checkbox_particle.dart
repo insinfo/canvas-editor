@@ -1,4 +1,4 @@
-import 'dart:html';
+import 'package:canvas_text_editor/src/dom/dom.dart';
 import '../../../dataset/constant/common.dart';
 import '../../../dataset/enum/vertical_align.dart';
 import '../../../interface/draw.dart';
@@ -58,8 +58,8 @@ class CheckboxParticle {
 		final double scale = (_options.scale ?? 1).toDouble();
 		final double gap = (_options.checkbox?.gap ?? 5).toDouble();
 		final double lineWidth = (_options.checkbox?.lineWidth ?? 1).toDouble();
-		final String fillStyle = _options.checkbox?.fillStyle ?? '#5175f4';
-		final String strokeStyle = _options.checkbox?.strokeStyle ?? '#ffffff';
+		final String fillColor = _options.checkbox?.fillStyle ?? '#5175f4';
+		final String strokeColor = _options.checkbox?.strokeStyle ?? '#ffffff';
 		final VerticalAlign verticalAlign =
 			_options.checkbox?.verticalAlign ?? VerticalAlign.bottom;
 		final bool isTopAlign = verticalAlign == VerticalAlign.top;
@@ -96,15 +96,15 @@ class CheckboxParticle {
 		ctx.beginPath();
 		ctx.translate(0.5, 0.5);
 		ctx.lineWidth = lineWidth;
-		ctx.strokeStyle = fillStyle;
+		ctx.strokeColor = fillColor;
 		if (element.checkbox?.value == true) {
 			ctx.rect(left, top, width, height);
 			ctx.stroke();
 			ctx.beginPath();
-			ctx.fillStyle = fillStyle;
+			ctx.fillColor = fillColor;
 			ctx.fillRect(left, top, width, height);
 			ctx.beginPath();
-			ctx.strokeStyle = strokeStyle;
+			ctx.strokeColor = strokeColor;
 			ctx.lineWidth = lineWidth * 2 * scale;
 			ctx.moveTo(left + 2 * scale, top + height / 2);
 			ctx.lineTo(left + width / 2, top + height - 3 * scale);

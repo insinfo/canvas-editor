@@ -1,4 +1,4 @@
-import 'dart:html';
+import 'package:canvas_text_editor/src/dom/dom.dart';
 
 import '../../../../dataset/constant/editor.dart';
 import '../../../../dataset/enum/element.dart';
@@ -12,19 +12,19 @@ class BlockParticle {
 			: _draw = draw,
 				_container = draw.getContainer(),
 				_blockMap = <String, BaseBlock>{},
-				_blockContainer = DivElement()
-					..classes.add('$editorPrefix-block-container') {
+				_blockContainer = HTMLDivElement()
+					..classList.add('$editorPrefix-block-container') {
 		_container.append(_blockContainer);
 	}
 
 	final Draw _draw;
-	final DivElement _container;
-	final DivElement _blockContainer;
+	final HTMLDivElement _container;
+	final HTMLDivElement _blockContainer;
 	final Map<String, BaseBlock> _blockMap;
 
 	Draw getDraw() => _draw;
 
-	DivElement getBlockContainer() => _blockContainer;
+	HTMLDivElement getBlockContainer() => _blockContainer;
 
 	void render(
 		CanvasRenderingContext2D ctx,

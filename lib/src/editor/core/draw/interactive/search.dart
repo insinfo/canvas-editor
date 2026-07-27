@@ -1,4 +1,4 @@
-import 'dart:html';
+import 'package:canvas_text_editor/src/dom/dom.dart';
 
 import '../../../dataset/constant/common.dart';
 import '../../../dataset/constant/element.dart' as element_constants;
@@ -135,14 +135,15 @@ class Search {
     final double height = _draw.getHeight();
     final double pageGap = _draw.getPageGap();
     final double preY = pageNo * (height + pageGap);
-    final DivElement anchor = DivElement()
+    final HTMLDivElement anchor = HTMLDivElement()
       ..style.position = 'absolute'
       ..style.width = '${rightTop[0] - leftTop[0] + _anchorOverflowSize}px'
       ..style.height = '${leftBottom[1] - leftTop[1] + _anchorOverflowSize}px'
       ..style.left = '${leftTop[0]}px'
       ..style.top = '${leftTop[1] + preY}px';
     _draw.getContainer().append(anchor);
-    anchor.scrollIntoView(ScrollAlignment.BOTTOM);
+    anchor.scrollIntoView(
+        ScrollIntoViewOptions(block: 'end'));
     anchor.remove();
   }
 
@@ -392,7 +393,7 @@ class Search {
         continue;
       }
       if (navigateIndexSet.contains(i)) {
-        ctx.fillStyle = navigateColor;
+        ctx.fillColor = navigateColor;
         final ISearchResult? previousMatch =
             i > 0 ? searchMatchList[i - 1] : null;
         if (previousMatch == null ||
@@ -400,7 +401,7 @@ class Search {
           searchNavigateScrollIntoView(position);
         }
       } else {
-        ctx.fillStyle = fillColor;
+        ctx.fillColor = fillColor;
       }
       final double x = leftTop[0];
       final double y = leftTop[1];

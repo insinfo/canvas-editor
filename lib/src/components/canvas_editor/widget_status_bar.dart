@@ -1,4 +1,4 @@
-import 'dart:html';
+import 'package:canvas_text_editor/src/dom/dom.dart';
 
 import '../../editor/index.dart';
 import '../core/ui_component.dart';
@@ -17,14 +17,14 @@ class WidgetStatusBar extends UiComponent {
   final Command _command;
 
   @override
-  late final DivElement root;
+  late final HTMLDivElement root;
 
-  late final SpanElement _pageLabel;
-  late final SpanElement _wordLabel;
-  late final ButtonElement _zoomLabel;
-  late final RangeInputElement _zoomSlider;
-  late final ButtonElement _pagingButton;
-  late final ButtonElement _continuousButton;
+  late final HTMLSpanElement _pageLabel;
+  late final HTMLSpanElement _wordLabel;
+  late final HTMLButtonElement _zoomLabel;
+  late final HTMLInputElement _zoomSlider;
+  late final HTMLButtonElement _pagingButton;
+  late final HTMLButtonElement _continuousButton;
 
   int _currentPage = 1;
   int _pageCount = 1;
@@ -32,22 +32,22 @@ class WidgetStatusBar extends UiComponent {
   /// Índice 0-based da página visível — usado pela exportação de imagem.
   int get currentPageIndex => _currentPage - 1;
 
-  DivElement _build() {
-    _pageLabel = SpanElement()
-      ..classes.add('ce-statusbar__pages')
+  HTMLDivElement _build() {
+    _pageLabel = HTMLSpanElement()
+      ..classList.add('ce-statusbar__pages')
       ..text = 'Página 1 de 1';
-    _wordLabel = SpanElement()
-      ..classes.add('ce-statusbar__words')
+    _wordLabel = HTMLSpanElement()
+      ..classList.add('ce-statusbar__words')
       ..text = '0 palavras';
 
     _pagingButton = _iconButton('ti-file', 'Modo paginado',
         () => _command.executePageMode(PageMode.paging))
-      ..classes.add('active');
+      ..classList.add('active');
     _continuousButton = _iconButton('ti-arrows-vertical', 'Modo contínuo',
         () => _command.executePageMode(PageMode.continuity));
 
-    _zoomSlider = RangeInputElement()
-      ..classes.add('ce-statusbar__zoom-slider')
+    _zoomSlider = (HTMLInputElement()..type = 'range')
+      ..classList.add('ce-statusbar__zoom-slider')
       ..min = '50'
       ..max = '300'
       ..step = '10'
@@ -59,22 +59,22 @@ class WidgetStatusBar extends UiComponent {
         _command.executePageScale(percent / 100);
       }
     });
-    _zoomLabel = ButtonElement()
+    _zoomLabel = HTMLButtonElement()
       ..type = 'button'
-      ..classes.add('ce-statusbar__zoom-label')
+      ..classList.add('ce-statusbar__zoom-label')
       ..title = 'Restaurar zoom para 100%'
       ..text = '100%'
       ..onClick.listen((_) => _command.executePageScaleRecovery());
 
-    return DivElement()
-      ..classes.add('ce-statusbar')
-      ..children.addAll(<Element>[
-        DivElement()
-          ..classes.add('ce-statusbar__left')
-          ..children.addAll(<Element>[_pageLabel, _wordLabel]),
-        DivElement()
-          ..classes.add('ce-statusbar__right')
-          ..children.addAll(<Element>[
+    return HTMLDivElement()
+      ..classList.add('ce-statusbar')
+      ..appendAll(<Element>[
+        HTMLDivElement()
+          ..classList.add('ce-statusbar__left')
+          ..appendAll(<Element>[_pageLabel, _wordLabel]),
+        HTMLDivElement()
+          ..classList.add('ce-statusbar__right')
+          ..appendAll(<Element>[
             _pagingButton,
             _continuousButton,
             _iconButton('ti-zoom-out', 'Reduzir zoom',
@@ -87,13 +87,13 @@ class WidgetStatusBar extends UiComponent {
       ]);
   }
 
-  ButtonElement _iconButton(
+  HTMLButtonElement _iconButton(
       String iconClass, String label, void Function() action) {
-    return ButtonElement()
+    return HTMLButtonElement()
       ..type = 'button'
       ..title = label
       ..setAttribute('aria-label', label)
-      ..append(SpanElement()..classes.addAll(<String>['ti', iconClass]))
+      ..append(HTMLSpanElement()..classList.addAll(<String>['ti', iconClass]))
       ..onClick.listen((_) => action());
   }
 
@@ -128,8 +128,8 @@ class WidgetStatusBar extends UiComponent {
   }
 
   void setPageMode(PageMode mode) {
-    _pagingButton.classes.toggle('active', mode == PageMode.paging);
-    _continuousButton.classes.toggle('active', mode == PageMode.continuity);
+    _pagingButton.classList.toggle('active', mode == PageMode.paging);
+    _continuousButton.classList.toggle('active', mode == PageMode.continuity);
   }
 
   void setVisible(bool visible) {

@@ -1,4 +1,4 @@
-import 'dart:html';
+import 'package:canvas_text_editor/src/dom/dom.dart';
 
 import '../../../../dataset/constant/common.dart';
 import '../../../../dataset/enum/control.dart';
@@ -299,7 +299,7 @@ class ControlSearch {
       if (leftTop == null || leftBottom == null || rightTop == null) {
         continue;
       }
-      ctx.fillStyle = match.backgroundColor ?? searchMatchColor;
+      ctx.fillColor = match.backgroundColor ?? searchMatchColor;
       ctx.globalAlpha = match.alpha ?? searchMatchAlpha;
       final double x = leftTop[0];
       final double y = leftTop[1];

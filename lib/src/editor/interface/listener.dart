@@ -1,4 +1,4 @@
-import 'dart:html' show Event, MouseEvent;
+import 'package:canvas_text_editor/src/dom/dom.dart' show Event, MouseEvent;
 
 import '../dataset/enum/editor.dart';
 import '../dataset/enum/element.dart';

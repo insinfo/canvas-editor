@@ -1,7 +1,10 @@
+// Shell demo legada: os `is HTMLLIElement` dos menus são tolerados aqui —
+// em dart2js o guard vira no-op benigno (dataset null é tratado). A shell
+// nova (CanvasEditorWidget) usa isA<>() em todos os testes de tipo.
+// ignore_for_file: invalid_runtime_check_with_js_interop_types
 import 'dart:async';
 import 'dart:convert';
-import 'dart:html';
-import 'dart:js_util' as js_util;
+import 'package:canvas_text_editor/src/dom/dom.dart';
 import 'dart:typed_data';
 
 import 'package:canvas_text_editor/ce_docx.dart';
@@ -28,62 +31,62 @@ class EditorApp {
   late final Editor editor;
   Command get command => editor.command;
 
-  late final DivElement undoDom;
-  late final DivElement redoDom;
-  late final DivElement painterDom;
-  late final SpanElement fontSelectDom;
-  late final DivElement fontOptionDom;
-  late final SpanElement sizeSelectDom;
-  late final DivElement sizeOptionDom;
-  late final DivElement boldDom;
-  late final DivElement italicDom;
-  late final DivElement underlineDom;
-  late final DivElement underlineOptionDom;
-  late final DivElement strikeoutDom;
-  late final DivElement superscriptDom;
-  late final DivElement subscriptDom;
-  late final DivElement colorDom;
-  late final InputElement colorControlDom;
-  late final SpanElement colorSpanDom;
-  late final DivElement highlightDom;
-  late final InputElement highlightControlDom;
-  late final SpanElement highlightSpanDom;
-  late final SpanElement titleSelectDom;
-  late final DivElement titleOptionDom;
-  late final DivElement leftDom;
-  late final DivElement centerDom;
-  late final DivElement rightDom;
-  late final DivElement alignmentDom;
-  late final DivElement justifyDom;
-  late final DivElement rowOptionDom;
-  late final DivElement listDom;
-  late final DivElement listOptionDom;
-  late final DivElement separatorDom;
-  late final DivElement separatorOptionDom;
-  late final SpanElement pageScalePercentageDom;
-  late final DivElement searchDom;
-  late final InputElement searchInputDom;
-  late final InputElement replaceInputDom;
-  late final DivElement searchCollapseDom;
-  late final LabelElement searchResultDom;
-  SpanElement? searchCloseDom;
-  ButtonElement? replaceButton;
-  DivElement? searchArrowLeftDom;
-  DivElement? searchArrowRightDom;
-  late final DivElement catalogDom;
-  late final DivElement catalogMainDom;
-  late final DivElement pageModeOptionsDom;
-  late final DivElement watermarkOptionDom;
-  late final DivElement controlOptionDom;
-  late final DivElement dateOptionsDom;
-  late final DivElement modeElement;
-  late final DivElement fullscreenDom;
-  late final DivElement editorOptionDom;
-  late final DivElement commentDom;
+  late final HTMLDivElement undoDom;
+  late final HTMLDivElement redoDom;
+  late final HTMLDivElement painterDom;
+  late final HTMLSpanElement fontSelectDom;
+  late final HTMLDivElement fontOptionDom;
+  late final HTMLSpanElement sizeSelectDom;
+  late final HTMLDivElement sizeOptionDom;
+  late final HTMLDivElement boldDom;
+  late final HTMLDivElement italicDom;
+  late final HTMLDivElement underlineDom;
+  late final HTMLDivElement underlineOptionDom;
+  late final HTMLDivElement strikeoutDom;
+  late final HTMLDivElement superscriptDom;
+  late final HTMLDivElement subscriptDom;
+  late final HTMLDivElement colorDom;
+  late final HTMLInputElement colorControlDom;
+  late final HTMLSpanElement colorSpanDom;
+  late final HTMLDivElement highlightDom;
+  late final HTMLInputElement highlightControlDom;
+  late final HTMLSpanElement highlightSpanDom;
+  late final HTMLSpanElement titleSelectDom;
+  late final HTMLDivElement titleOptionDom;
+  late final HTMLDivElement leftDom;
+  late final HTMLDivElement centerDom;
+  late final HTMLDivElement rightDom;
+  late final HTMLDivElement alignmentDom;
+  late final HTMLDivElement justifyDom;
+  late final HTMLDivElement rowOptionDom;
+  late final HTMLDivElement listDom;
+  late final HTMLDivElement listOptionDom;
+  late final HTMLDivElement separatorDom;
+  late final HTMLDivElement separatorOptionDom;
+  late final HTMLSpanElement pageScalePercentageDom;
+  late final HTMLDivElement searchDom;
+  late final HTMLInputElement searchInputDom;
+  late final HTMLInputElement replaceInputDom;
+  late final HTMLDivElement searchCollapseDom;
+  late final HTMLLabelElement searchResultDom;
+  HTMLSpanElement? searchCloseDom;
+  HTMLButtonElement? replaceButton;
+  HTMLDivElement? searchArrowLeftDom;
+  HTMLDivElement? searchArrowRightDom;
+  late final HTMLDivElement catalogDom;
+  late final HTMLDivElement catalogMainDom;
+  late final HTMLDivElement pageModeOptionsDom;
+  late final HTMLDivElement watermarkOptionDom;
+  late final HTMLDivElement controlOptionDom;
+  late final HTMLDivElement dateOptionsDom;
+  late final HTMLDivElement modeElement;
+  late final HTMLDivElement fullscreenDom;
+  late final HTMLDivElement editorOptionDom;
+  late final HTMLDivElement commentDom;
 
   final List<EditorComment> _commentData =
       List<EditorComment>.from(commentList);
-  final List<List<DivElement>> _tableCellList = <List<DivElement>>[];
+  final List<List<HTMLDivElement>> _tableCellList = <List<HTMLDivElement>>[];
 
   // Documento DOCX aberto (roteiro_editor_profissional, F2.4/F3.3).
   DocxFile? _openedDocx;
@@ -133,7 +136,7 @@ class EditorApp {
     _setupStyleGallery();
     _setupRibbonTabs();
     _setupOptionsDialog();
-    commentDom = _requireElement<DivElement>('.comment');
+    commentDom = _requireElement<HTMLDivElement>('.comment');
 
     _setupEditorListeners();
 
@@ -147,7 +150,7 @@ class EditorApp {
   }
 
   void _setupHyperlinkControl() {
-    final hyperlinkDom = _requireElement<DivElement>('.menu-item__hyperlink');
+    final hyperlinkDom = _requireElement<HTMLDivElement>('.menu-item__hyperlink');
     hyperlinkDom.onClick.listen((_) {
       final defaultText = command.getRangeText();
       Dialog(
@@ -195,18 +198,18 @@ class EditorApp {
   }
 
   void _setupWatermarkControl() {
-    final watermarkDom = _requireElement<DivElement>('.menu-item__watermark');
+    final watermarkDom = _requireElement<HTMLDivElement>('.menu-item__watermark');
     watermarkOptionDom =
-        _requireElementFrom<DivElement>(watermarkDom, '.options');
+        _requireElementFrom<HTMLDivElement>(watermarkDom, '.options');
     watermarkDom.onClick
-        .listen((_) => watermarkOptionDom.classes.toggle('visible'));
+        .listen((_) => watermarkOptionDom.classList.toggle('visible'));
     watermarkOptionDom.onMouseDown.listen((event) {
       final target = event.target;
-      if (target is! LIElement) {
+      if (target is! HTMLLIElement) {
         return;
       }
-      final menu = target.dataset['menu'];
-      watermarkOptionDom.classes.toggle('visible');
+      final menu = target.data('menu');
+      watermarkOptionDom.classList.toggle('visible');
       if (menu == 'add') {
         Dialog(
           DialogOptions(
@@ -312,7 +315,7 @@ class EditorApp {
   }
 
   void _setupCodeblockControl() {
-    final codeblockDom = _requireElement<DivElement>('.menu-item__codeblock');
+    final codeblockDom = _requireElement<HTMLDivElement>('.menu-item__codeblock');
     codeblockDom.onClick.listen((_) {
       Dialog(
         DialogOptions(
@@ -331,21 +334,22 @@ class EditorApp {
             if (value == null || value.trim().isEmpty) {
               return;
             }
-            final prism = js_util.getProperty(js_util.globalThis, 'Prism');
+            final JSObject? prism =
+                globalContext.getProperty('Prism'.toJS) as JSObject?;
             if (prism == null) {
               return;
             }
-            final languages = js_util.getProperty(prism, 'languages');
-            final jsLanguage = languages != null
-                ? js_util.getProperty(languages, 'javascript')
-                : null;
-            final tokenList =
-                js_util.callMethod(prism, 'tokenize', [value, jsLanguage]);
-            if (tokenList is! List) {
+            final JSObject? languages =
+                prism.getProperty('languages'.toJS) as JSObject?;
+            final JSAny? jsLanguage =
+                languages?.getProperty('javascript'.toJS);
+            final JSAny? tokensJs =
+                prism.callMethod('tokenize'.toJS, value.toJS, jsLanguage);
+            if (tokensJs == null || !tokensJs.isA<JSArray>()) {
               return;
             }
-            final formatTokens =
-                formatPrismToken(List<dynamic>.from(tokenList));
+            final formatTokens = formatPrismToken(
+                List<dynamic>.from((tokensJs as JSArray).toDart));
             final elements = <IElement>[IElement(value: '\n')];
             for (final token in formatTokens) {
               final parts = editor_utils.splitText(token.content);
@@ -371,17 +375,17 @@ class EditorApp {
   }
 
   void _setupControlMenu() {
-    final controlDom = _requireElement<DivElement>('.menu-item__control');
-    controlOptionDom = _requireElementFrom<DivElement>(controlDom, '.options');
+    final controlDom = _requireElement<HTMLDivElement>('.menu-item__control');
+    controlOptionDom = _requireElementFrom<HTMLDivElement>(controlDom, '.options');
     controlDom.onClick
-        .listen((_) => controlOptionDom.classes.toggle('visible'));
+        .listen((_) => controlOptionDom.classList.toggle('visible'));
     controlOptionDom.onMouseDown.listen((event) {
-      controlOptionDom.classes.toggle('visible');
+      controlOptionDom.classList.toggle('visible');
       final target = event.target;
-      if (target is! LIElement) {
+      if (target is! HTMLLIElement) {
         return;
       }
-      final controlType = _parseControlType(target.dataset['control']);
+      final controlType = _parseControlType(target.data('control'));
       if (controlType == null) {
         return;
       }
@@ -690,7 +694,7 @@ class EditorApp {
   }
 
   void _setupCheckboxRadioLatexControls() {
-    final checkboxDom = _requireElement<DivElement>('.menu-item__checkbox');
+    final checkboxDom = _requireElement<HTMLDivElement>('.menu-item__checkbox');
     checkboxDom.onClick.listen((_) {
       command.executeInsertElementList([
         IElement(
@@ -701,7 +705,7 @@ class EditorApp {
       ]);
     });
 
-    final radioDom = _requireElement<DivElement>('.menu-item__radio');
+    final radioDom = _requireElement<HTMLDivElement>('.menu-item__radio');
     radioDom.onClick.listen((_) {
       command.executeInsertElementList([
         IElement(
@@ -712,7 +716,7 @@ class EditorApp {
       ]);
     });
 
-    final latexDom = _requireElement<DivElement>('.menu-item__latex');
+    final latexDom = _requireElement<HTMLDivElement>('.menu-item__latex');
     latexDom.onClick.listen((_) {
       Dialog(
         DialogOptions(
@@ -743,10 +747,10 @@ class EditorApp {
   }
 
   void _setupDateControl() {
-    final dateDom = _requireElement<DivElement>('.menu-item__date');
-    dateOptionsDom = _requireElementFrom<DivElement>(dateDom, '.options');
+    final dateDom = _requireElement<HTMLDivElement>('.menu-item__date');
+    dateOptionsDom = _requireElementFrom<HTMLDivElement>(dateDom, '.options');
     dateDom.onClick.listen((_) {
-      dateOptionsDom.classes.toggle('visible');
+      dateOptionsDom.classList.toggle('visible');
       final bodyRect = document.body?.getBoundingClientRect();
       final optionRect = dateOptionsDom.getBoundingClientRect();
       if (bodyRect != null &&
@@ -773,14 +777,14 @@ class EditorApp {
     });
     dateOptionsDom.onMouseDown.listen((event) {
       final target = event.target;
-      if (target is! LIElement) {
+      if (target is! HTMLLIElement) {
         return;
       }
-      final format = target.dataset['format'];
+      final format = target.data('format');
       if (format == null) {
         return;
       }
-      dateOptionsDom.classes.toggle('visible');
+      dateOptionsDom.classList.toggle('visible');
       command.executeInsertElementList([
         IElement(
           type: ElementType.date,
@@ -793,7 +797,7 @@ class EditorApp {
   }
 
   void _setupBlockControl() {
-    final blockDom = _requireElement<DivElement>('.menu-item__block');
+    final blockDom = _requireElement<HTMLDivElement>('.menu-item__block');
     blockDom.onClick.listen((_) {
       Dialog(
         DialogOptions(
@@ -886,22 +890,22 @@ class EditorApp {
   }
 
   void _setupSearchAndReplace() {
-    searchDom = _requireElement<DivElement>('.menu-item__search');
+    searchDom = _requireElement<HTMLDivElement>('.menu-item__search');
     searchDom.title = 'Buscar e substituir (${isApple ? '⌘' : 'Ctrl'}+F)';
     searchCollapseDom =
-        _requireElement<DivElement>('.menu-item__search__collapse');
-    searchInputDom = _requireElement<InputElement>(
+        _requireElement<HTMLDivElement>('.menu-item__search__collapse');
+    searchInputDom = _requireElement<HTMLInputElement>(
         '.menu-item__search__collapse__search input');
-    replaceInputDom = _requireElement<InputElement>(
+    replaceInputDom = _requireElement<HTMLInputElement>(
         '.menu-item__search__collapse__replace input');
-    searchResultDom = _requireElement<LabelElement>(
+    searchResultDom = _requireElement<HTMLLabelElement>(
         '.menu-item__search__collapse .search-result');
-    searchCloseDom = searchCollapseDom.querySelector('span') as SpanElement?;
-    replaceButton = searchCollapseDom.querySelector('button') as ButtonElement?;
+    searchCloseDom = searchCollapseDom.querySelector('span') as HTMLSpanElement?;
+    replaceButton = searchCollapseDom.querySelector('button') as HTMLButtonElement?;
     searchArrowLeftDom =
-        searchCollapseDom.querySelector('.arrow-left') as DivElement?;
+        searchCollapseDom.querySelector('.arrow-left') as HTMLDivElement?;
     searchArrowRightDom =
-        searchCollapseDom.querySelector('.arrow-right') as DivElement?;
+        searchCollapseDom.querySelector('.arrow-right') as HTMLDivElement?;
 
     void updateResult() {
       final dynamic info = command.getSearchNavigateInfo();
@@ -973,18 +977,18 @@ class EditorApp {
   }
 
   void _setupPrintControl() {
-    final printDom = _requireElement<DivElement>('.menu-item__print');
+    final printDom = _requireElement<HTMLDivElement>('.menu-item__print');
     printDom
       ..title = 'Imprimir (${isApple ? '⌘' : 'Ctrl'}+P)'
       ..onClick.listen((_) => command.executePrint());
   }
 
   void _setupCatalogControls() {
-    catalogDom = _requireElement<DivElement>('.catalog');
-    catalogMainDom = _requireElement<DivElement>('.catalog__main');
-    final catalogModeDom = _requireElement<DivElement>('.catalog-mode');
+    catalogDom = _requireElement<HTMLDivElement>('.catalog');
+    catalogMainDom = _requireElement<HTMLDivElement>('.catalog__main');
+    final catalogModeDom = _requireElement<HTMLDivElement>('.catalog-mode');
     final catalogCloseDom =
-        _requireElement<DivElement>('.catalog__header__close');
+        _requireElement<HTMLDivElement>('.catalog__header__close');
     // Word não mostra o "Catálogo" por padrão (é o Painel de Navegação, oculto
     // e acessível pela aba Exibir). Começa fechado; o botão do rodapé reabre.
     catalogDom.style.display = 'none';
@@ -1008,18 +1012,18 @@ class EditorApp {
   /// "Substituir" (só o resultado atual) e "Substituir tudo", além dos atalhos
   /// Ctrl/⌘+F e Ctrl/⌘+H. Tudo em Dart — sem JavaScript.
   void _setupFindSidebar() {
-    final findSidebar = _requireElement<DivElement>('.find-sidebar');
-    final closeDom = _requireElement<DivElement>('.find-sidebar__close');
-    final searchInput = _requireElement<InputElement>('.find-sidebar__search');
+    final findSidebar = _requireElement<HTMLDivElement>('.find-sidebar');
+    final closeDom = _requireElement<HTMLDivElement>('.find-sidebar__close');
+    final searchInput = _requireElement<HTMLInputElement>('.find-sidebar__search');
     final replaceInput =
-        _requireElement<InputElement>('.find-sidebar__replace');
-    final countDom = _requireElement<SpanElement>('.find-sidebar__count');
-    final prevDom = _requireElement<DivElement>('.find-sidebar__prev');
-    final nextDom = _requireElement<DivElement>('.find-sidebar__next');
+        _requireElement<HTMLInputElement>('.find-sidebar__replace');
+    final countDom = _requireElement<HTMLSpanElement>('.find-sidebar__count');
+    final prevDom = _requireElement<HTMLDivElement>('.find-sidebar__prev');
+    final nextDom = _requireElement<HTMLDivElement>('.find-sidebar__next');
     final replaceOneButton =
-        _requireElement<ButtonElement>('.find-sidebar__replace-one');
+        _requireElement<HTMLButtonElement>('.find-sidebar__replace-one');
     final replaceAllButton =
-        _requireElement<ButtonElement>('.find-sidebar__replace-all');
+        _requireElement<HTMLButtonElement>('.find-sidebar__replace-all');
 
     findSidebar.style.display = 'none';
 
@@ -1151,7 +1155,7 @@ class EditorApp {
       if (card == null) {
         return;
       }
-      final levelValue = card.dataset['level'];
+      final levelValue = card.data('level');
       final level = _parseTitleLevel(
         levelValue != null && levelValue.isNotEmpty ? levelValue : null,
       );
@@ -1223,7 +1227,7 @@ class EditorApp {
     };
 
     String commandName(Element el) {
-      for (final cls in el.classes) {
+      for (final cls in el.classList.toList()) {
         if (cls.startsWith('menu-item__')) {
           return cls.substring('menu-item__'.length);
         }
@@ -1234,47 +1238,47 @@ class EditorApp {
     void applyTab(String tabName) {
       final allowed = tabControls[tabName] ?? tabControls['inicial']!;
       final visibleGroups = <Element>[];
-      for (final node in document.querySelectorAll('.visible')) {
-        node.classes.remove('visible');
+      for (final node in document.querySelectorAll('.visible').toElements()) {
+        node.classList.remove('visible');
       }
-      for (final group in document.querySelectorAll('.menu-item')) {
+      for (final group in document.querySelectorAll('.menu-item').toElements()) {
         var visible = 0;
-        for (final child in group.children) {
+        for (final child in group.childElements) {
           final name = commandName(child);
           if (name.isEmpty) {
             continue;
           }
           final show = allowed.contains(name);
-          child.classes.toggle('ribbon-hidden', !show);
+          child.classList.toggle('ribbon-hidden', !show);
           if (show) {
             visible += 1;
           }
         }
-        group.classes.toggle('ribbon-hidden', visible == 0);
+        group.classList.toggle('ribbon-hidden', visible == 0);
         if (visible > 0) {
           visibleGroups.add(group);
         }
       }
-      for (final divider in document.querySelectorAll('.menu-divider')) {
-        divider.classes.add('ribbon-hidden');
+      for (final divider in document.querySelectorAll('.menu-divider').toElements()) {
+        divider.classList.add('ribbon-hidden');
       }
       for (var i = 0; i < visibleGroups.length - 1; i++) {
         var node = visibleGroups[i].nextElementSibling;
-        while (node != null && !node.classes.contains('menu-divider')) {
+        while (node != null && !node.classList.contains('menu-divider')) {
           node = node.nextElementSibling;
         }
-        node?.classes.remove('ribbon-hidden');
+        node?.classList.remove('ribbon-hidden');
       }
     }
 
-    final tabs = document.querySelectorAll('.ribbon-tab');
+    final tabs = document.querySelectorAll('.ribbon-tab').toElements();
     for (final t in tabs) {
       t.onClick.listen((_) {
         for (final x in tabs) {
-          x.classes.remove('ribbon-tab--active');
+          x.classList.remove('ribbon-tab--active');
         }
-        t.classes.add('ribbon-tab--active');
-        applyTab(t.dataset['tab'] ?? 'inicial');
+        t.classList.add('ribbon-tab--active');
+        applyTab(t.data('tab') ?? 'inicial');
       });
     }
     applyTab('inicial');
@@ -1282,37 +1286,37 @@ class EditorApp {
 
   void _setupPageControls() {
     pageScalePercentageDom =
-        _requireElement<SpanElement>('.page-scale-percentage');
+        _requireElement<HTMLSpanElement>('.page-scale-percentage');
     pageScalePercentageDom.onClick
         .listen((_) => command.executePageScaleRecovery());
-    _requireElement<DivElement>('.page-scale-minus')
+    _requireElement<HTMLDivElement>('.page-scale-minus')
         .onClick
         .listen((_) => command.executePageScaleMinus());
-    _requireElement<DivElement>('.page-scale-add')
+    _requireElement<HTMLDivElement>('.page-scale-add')
         .onClick
         .listen((_) => command.executePageScaleAdd());
 
     final pageModeControls =
         document.querySelectorAll('.page-mode, .menu-item__page-mode');
-    pageModeOptionsDom = _requireElementFrom<DivElement>(
-      pageModeControls.first as DivElement,
+    pageModeOptionsDom = _requireElementFrom<HTMLDivElement>(
+      pageModeControls.first as HTMLDivElement,
       '.options',
     );
-    for (final pageModeDom in pageModeControls.whereType<DivElement>()) {
-      final options = _requireElementFrom<DivElement>(pageModeDom, '.options');
-      pageModeDom.onClick.listen((_) => options.classes.toggle('visible'));
+    for (final pageModeDom in pageModeControls.toElements()) {
+      final options = _requireElementFrom<HTMLDivElement>(pageModeDom, '.options');
+      pageModeDom.onClick.listen((_) => options.classList.toggle('visible'));
       options.onClick.listen((event) {
         final target = event.target;
-        if (target is! LIElement) {
+        if (target is! HTMLLIElement) {
           return;
         }
-        final pageMode = _parsePageMode(target.dataset['pageMode']);
+        final pageMode = _parsePageMode(target.data('pageMode'));
         if (pageMode != null) {
           command.executePageMode(pageMode);
           _setActiveDataset(
             '.page-mode .options, .menu-item__page-mode .options',
             'pageMode',
-            target.dataset['pageMode'],
+            target.data('pageMode'),
           );
         }
       });
@@ -1322,17 +1326,17 @@ class EditorApp {
   void _setupPaperControls() {
     final paperSizeControls =
         document.querySelectorAll('.paper-size, .menu-item__paper-size');
-    for (final paperSizeDom in paperSizeControls.whereType<DivElement>()) {
+    for (final paperSizeDom in paperSizeControls.toElements()) {
       final paperSizeOptions =
-          _requireElementFrom<DivElement>(paperSizeDom, '.options');
+          _requireElementFrom<HTMLDivElement>(paperSizeDom, '.options');
       paperSizeDom.onClick
-          .listen((_) => paperSizeOptions.classes.toggle('visible'));
+          .listen((_) => paperSizeOptions.classList.toggle('visible'));
       paperSizeOptions.onClick.listen((event) {
         final target = event.target;
-        if (target is! LIElement) {
+        if (target is! HTMLLIElement) {
           return;
         }
-        final paperType = target.dataset['paperSize'];
+        final paperType = target.data('paperSize');
         if (paperType == null) {
           return;
         }
@@ -1356,24 +1360,24 @@ class EditorApp {
     final paperDirectionControls = document
         .querySelectorAll('.paper-direction, .menu-item__paper-direction');
     for (final paperDirectionDom
-        in paperDirectionControls.whereType<DivElement>()) {
+        in paperDirectionControls.toElements()) {
       final paperDirectionOptions =
-          _requireElementFrom<DivElement>(paperDirectionDom, '.options');
+          _requireElementFrom<HTMLDivElement>(paperDirectionDom, '.options');
       paperDirectionDom.onClick
-          .listen((_) => paperDirectionOptions.classes.toggle('visible'));
+          .listen((_) => paperDirectionOptions.classList.toggle('visible'));
       paperDirectionOptions.onClick.listen((event) {
         final target = event.target;
-        if (target is! LIElement) {
+        if (target is! HTMLLIElement) {
           return;
         }
         final direction =
-            _parsePaperDirection(target.dataset['paperDirection']);
+            _parsePaperDirection(target.data('paperDirection'));
         if (direction != null) {
           command.executePaperDirection(direction);
           _setActiveDataset(
             '.paper-direction .options, .menu-item__paper-direction .options',
             'paperDirection',
-            target.dataset['paperDirection'],
+            target.data('paperDirection'),
           );
         }
       });
@@ -1381,21 +1385,21 @@ class EditorApp {
 
     final paperMarginControls =
         document.querySelectorAll('.paper-margin, .menu-item__paper-margin');
-    for (final paperMarginDom in paperMarginControls.whereType<DivElement>()) {
+    for (final paperMarginDom in paperMarginControls.toElements()) {
       final paperMarginOptions =
-          paperMarginDom.querySelector('.options') as DivElement?;
+          paperMarginDom.querySelector('.options') as HTMLDivElement?;
       if (paperMarginOptions == null) {
         paperMarginDom.onClick.listen((_) => _showPaperMarginDialog());
         continue;
       }
       paperMarginDom.onClick
-          .listen((_) => paperMarginOptions.classes.toggle('visible'));
+          .listen((_) => paperMarginOptions.classList.toggle('visible'));
       paperMarginOptions.onClick.listen((event) {
         final target = event.target;
-        if (target is! LIElement) {
+        if (target is! HTMLLIElement) {
           return;
         }
-        final preset = target.dataset['paperMargin'];
+        final preset = target.data('paperMargin');
         if (preset == null) {
           return;
         }
@@ -1489,30 +1493,30 @@ class EditorApp {
       return;
     }
     for (final options
-        in document.querySelectorAll(optionsSelector).whereType<DivElement>()) {
-      for (final li in options.querySelectorAll('li').whereType<LIElement>()) {
-        li.classes.toggle('active', li.dataset[dataName] == value);
+        in document.querySelectorAll(optionsSelector).toElements()) {
+      for (final li in options.querySelectorAll('li').toElements()) {
+        li.classList.toggle('active', li.data(dataName) == value);
       }
     }
   }
 
   void _setupHeaderFooterControls() {
-    (document.querySelector('.menu-item__edit-header') as DivElement?)
+    (document.querySelector('.menu-item__edit-header') as HTMLDivElement?)
         ?.onClick
         .listen((_) {
       _switchEditorZone(EditorZone.header);
     });
-    (document.querySelector('.menu-item__edit-footer') as DivElement?)
+    (document.querySelector('.menu-item__edit-footer') as HTMLDivElement?)
         ?.onClick
         .listen((_) {
       _switchEditorZone(EditorZone.footer);
     });
-    (document.querySelector('.menu-item__close-zone') as DivElement?)
+    (document.querySelector('.menu-item__close-zone') as HTMLDivElement?)
         ?.onClick
         .listen((_) {
       _switchEditorZone(EditorZone.main);
     });
-    (document.querySelector('.menu-item__remove-header-textbox') as DivElement?)
+    (document.querySelector('.menu-item__remove-header-textbox') as HTMLDivElement?)
         ?.onClick
         .listen((_) {
       final draw = editor.getDraw();
@@ -1548,7 +1552,7 @@ class EditorApp {
   }
 
   void _setupFullscreenControl() {
-    fullscreenDom = _requireElement<DivElement>('.fullscreen');
+    fullscreenDom = _requireElement<HTMLDivElement>('.fullscreen');
     void toggleFullscreen() {
       if (document.fullscreenElement == null) {
         document.documentElement?.requestFullscreen();
@@ -1565,12 +1569,12 @@ class EditorApp {
       }
     });
     document.onFullscreenChange.listen((_) {
-      fullscreenDom.classes.toggle('exist');
+      fullscreenDom.classList.toggle('exist');
     });
   }
 
   void _setupModeControl() {
-    modeElement = _requireElement<DivElement>('.editor-mode');
+    modeElement = _requireElement<HTMLDivElement>('.editor-mode');
     final modes = <Map<String, Object>>[
       {'mode': EditorMode.edit, 'name': 'Modo de edição'},
       {'mode': EditorMode.clean, 'name': 'Modo limpo'},
@@ -1590,21 +1594,21 @@ class EditorApp {
       const enableMenu = {'search', 'print'};
       for (final element in document
           .querySelectorAll('.menu-item>div')
-          .whereType<DivElement>()) {
-        final menu = element.dataset['menu'];
+          .toElements()) {
+        final menu = element.data('menu');
         final shouldDisable =
             isReadonly && (menu == null || !enableMenu.contains(menu));
         if (shouldDisable) {
-          element.classes.add('disable');
+          element.classList.add('disable');
         } else {
-          element.classes.remove('disable');
+          element.classList.remove('disable');
         }
       }
     });
   }
 
   void _setupOptionsDialog() {
-    editorOptionDom = _requireElement<DivElement>('.editor-option');
+    editorOptionDom = _requireElement<HTMLDivElement>('.editor-option');
     editorOptionDom.onClick.listen((_) {
       final currentOptions = command.getOptions();
       final encoder = const JsonEncoder.withIndent('  ');
@@ -1653,222 +1657,214 @@ class EditorApp {
       }
       final type = _parseElementType(payload['type']);
       if (type == ElementType.subscript) {
-        subscriptDom.classes.add('active');
+        subscriptDom.classList.add('active');
       } else {
-        subscriptDom.classes.remove('active');
+        subscriptDom.classList.remove('active');
       }
       if (type == ElementType.superscript) {
-        superscriptDom.classes.add('active');
+        superscriptDom.classList.add('active');
       } else {
-        superscriptDom.classes.remove('active');
+        superscriptDom.classList.remove('active');
       }
       if (type == ElementType.separator) {
-        separatorDom.classes.add('active');
+        separatorDom.classList.add('active');
       } else {
-        separatorDom.classes.remove('active');
+        separatorDom.classList.remove('active');
       }
       for (final li
-          in separatorOptionDom.querySelectorAll('li').whereType<LIElement>()) {
-        li.classes.remove('active');
+          in separatorOptionDom.querySelectorAll('li').toElements()) {
+        li.classList.remove('active');
       }
       if (type == ElementType.separator) {
         final dashArray = payload['dashArray'];
         if (dashArray is List) {
           final dashValue = dashArray.join(',');
           final li = separatorOptionDom
-              .querySelector("[data-separator='$dashValue']") as LIElement?;
-          li?.classes.add('active');
+              .querySelector("[data-separator='$dashValue']") as HTMLLIElement?;
+          li?.classList.add('active');
         }
       }
 
       for (final li
-          in fontOptionDom.querySelectorAll('li').whereType<LIElement>()) {
-        li.classes.remove('active');
+          in fontOptionDom.querySelectorAll('li').toElements()) {
+        li.classList.remove('active');
       }
       final font = payload['font'] as String?;
       if (font != null) {
         final currentFont =
-            fontOptionDom.querySelector("[data-family='$font']") as LIElement?;
+            fontOptionDom.querySelector("[data-family='$font']") as HTMLLIElement?;
         if (currentFont != null) {
           fontSelectDom.text = currentFont.text;
           fontSelectDom.style.fontFamily = font;
-          currentFont.classes.add('active');
+          currentFont.classList.add('active');
         }
       }
 
       for (final li
-          in sizeOptionDom.querySelectorAll('li').whereType<LIElement>()) {
-        li.classes.remove('active');
+          in sizeOptionDom.querySelectorAll('li').toElements()) {
+        li.classList.remove('active');
       }
       final size = payload['size'];
       if (size != null) {
         final sizeString = '$size';
         final currentSizeDom = sizeOptionDom
-            .querySelector("[data-size='$sizeString']") as LIElement?;
+            .querySelector("[data-size='$sizeString']") as HTMLLIElement?;
         if (currentSizeDom != null) {
           sizeSelectDom.text = currentSizeDom.text;
-          currentSizeDom.classes.add('active');
+          currentSizeDom.classList.add('active');
         } else {
           sizeSelectDom.text = sizeString;
         }
       }
 
-      (payload['bold'] == true
-          ? boldDom.classes.add
-          : boldDom.classes.remove)('active');
-      (payload['italic'] == true
-          ? italicDom.classes.add
-          : italicDom.classes.remove)('active');
-      (payload['underline'] == true
-          ? underlineDom.classes.add
-          : underlineDom.classes.remove)('active');
-      (payload['strikeout'] == true
-          ? strikeoutDom.classes.add
-          : strikeoutDom.classes.remove)('active');
+      boldDom.classList.toggle('active', payload['bold'] == true);
+      italicDom.classList.toggle('active', payload['italic'] == true);
+      underlineDom.classList.toggle('active', payload['underline'] == true);
+      strikeoutDom.classList.toggle('active', payload['strikeout'] == true);
 
       final color = payload['color'] as String?;
       if (color != null) {
-        colorDom.classes.add('active');
+        colorDom.classList.add('active');
         colorControlDom.value = color;
         colorSpanDom.style.backgroundColor = color;
       } else {
-        colorDom.classes.remove('active');
+        colorDom.classList.remove('active');
         colorControlDom.value = '#000000';
         colorSpanDom.style.backgroundColor = '#000000';
       }
 
       final highlight = payload['highlight'] as String?;
       if (highlight != null) {
-        highlightDom.classes.add('active');
+        highlightDom.classList.add('active');
         highlightControlDom.value = highlight;
         highlightSpanDom.style.backgroundColor = highlight;
       } else {
-        highlightDom.classes.remove('active');
+        highlightDom.classList.remove('active');
         highlightControlDom.value = '#ffff00';
         highlightSpanDom.style.backgroundColor = '#ffff00';
       }
 
       final rowFlex = _parseRowFlex(payload['rowFlex']);
-      leftDom.classes.remove('active');
-      centerDom.classes.remove('active');
-      rightDom.classes.remove('active');
-      alignmentDom.classes.remove('active');
-      justifyDom.classes.remove('active');
+      leftDom.classList.remove('active');
+      centerDom.classList.remove('active');
+      rightDom.classList.remove('active');
+      alignmentDom.classList.remove('active');
+      justifyDom.classList.remove('active');
       switch (rowFlex) {
         case RowFlex.right:
-          rightDom.classes.add('active');
+          rightDom.classList.add('active');
           break;
         case RowFlex.center:
-          centerDom.classes.add('active');
+          centerDom.classList.add('active');
           break;
         case RowFlex.alignment:
-          alignmentDom.classes.add('active');
+          alignmentDom.classList.add('active');
           break;
         case RowFlex.justify:
-          justifyDom.classes.add('active');
+          justifyDom.classList.add('active');
           break;
         case RowFlex.left:
-          leftDom.classes.add('active');
+          leftDom.classList.add('active');
           break;
       }
 
       for (final li
-          in rowOptionDom.querySelectorAll('li').whereType<LIElement>()) {
-        li.classes.remove('active');
+          in rowOptionDom.querySelectorAll('li').toElements()) {
+        li.classList.remove('active');
       }
       final rowMargin = payload['rowMargin'];
       if (rowMargin != null) {
         final marginString = '$rowMargin';
         final currentMarginDom = rowOptionDom
-            .querySelector("[data-rowmargin='$marginString']") as LIElement?;
-        currentMarginDom?.classes.add('active');
+            .querySelector("[data-rowmargin='$marginString']") as HTMLLIElement?;
+        currentMarginDom?.classList.add('active');
       }
 
       payload['undo'] == true
-          ? undoDom.classes.remove('no-allow')
-          : undoDom.classes.add('no-allow');
+          ? undoDom.classList.remove('no-allow')
+          : undoDom.classList.add('no-allow');
       payload['redo'] == true
-          ? redoDom.classes.remove('no-allow')
-          : redoDom.classes.add('no-allow');
+          ? redoDom.classList.remove('no-allow')
+          : redoDom.classList.add('no-allow');
       payload['painter'] == true
-          ? painterDom.classes.add('active')
-          : painterDom.classes.remove('active');
+          ? painterDom.classList.add('active')
+          : painterDom.classList.remove('active');
 
       for (final li
-          in titleOptionDom.querySelectorAll('li').whereType<LIElement>()) {
-        li.classes.remove('active');
+          in titleOptionDom.querySelectorAll('li').toElements()) {
+        li.classList.remove('active');
       }
       final levelValue = payload['level'];
       if (levelValue != null) {
         final selector =
             "[data-level='${levelValue is Enum ? levelValue.name : levelValue}']";
-        final current = titleOptionDom.querySelector(selector) as LIElement?;
+        final current = titleOptionDom.querySelector(selector) as HTMLLIElement?;
         if (current != null) {
           titleSelectDom.text = current.text;
-          current.classes.add('active');
+          current.classList.add('active');
         }
       } else {
         titleSelectDom.text = 'Normal';
-        (titleOptionDom.querySelector('li') as LIElement?)
-            ?.classes
+        (titleOptionDom.querySelector('li') as HTMLLIElement?)
+            ?.classList
             .add('active');
       }
 
       // Espelha o estilo atual no card ativo da galeria de Estilos.
       final styleGallery = document.querySelector('.style-gallery');
       if (styleGallery != null) {
-        for (final card in styleGallery.querySelectorAll('.style-card')) {
-          card.classes.remove('style-card--active');
+        for (final card in styleGallery.querySelectorAll('.style-card').toElements()) {
+          card.classList.remove('style-card--active');
         }
         final levelName = levelValue == null
             ? ''
             : (levelValue is Enum ? levelValue.name : '$levelValue');
         styleGallery
             .querySelector(".style-card[data-level='$levelName']")
-            ?.classes
+            ?.classList
             .add('style-card--active');
       }
 
       for (final li
-          in listOptionDom.querySelectorAll('li').whereType<LIElement>()) {
-        li.classes.remove('active');
+          in listOptionDom.querySelectorAll('li').toElements()) {
+        li.classList.remove('active');
       }
       final listTypeValue = payload['listType'];
       final listStyleValue = payload['listStyle'];
       if (listTypeValue != null) {
-        listDom.classes.add('active');
+        listDom.classList.add('active');
         final typeName =
             listTypeValue is Enum ? listTypeValue.name : '$listTypeValue';
         final styleName =
             listStyleValue is Enum ? listStyleValue.name : '$listStyleValue';
         final selector =
             "[data-list-type='$typeName'][data-list-style='$styleName']";
-        final listItem = listOptionDom.querySelector(selector) as LIElement?;
-        listItem?.classes.add('active');
+        final listItem = listOptionDom.querySelector(selector) as HTMLLIElement?;
+        listItem?.classList.add('active');
       } else {
-        listDom.classes.remove('active');
+        listDom.classList.remove('active');
       }
 
       for (final element in commentDom
           .querySelectorAll('.comment-item')
-          .whereType<DivElement>()) {
-        element.classes.remove('active');
+          .toElements()) {
+        element.classList.remove('active');
       }
       final groupIds = payload['groupIds'];
       if (groupIds is List && groupIds.isNotEmpty) {
         final targetId = groupIds.first;
         final activeComment = commentDom
-            .querySelector(".comment-item[data-id='$targetId']") as DivElement?;
+            .querySelector(".comment-item[data-id='$targetId']") as HTMLDivElement?;
         if (activeComment != null) {
-          activeComment.classes.add('active');
+          activeComment.classList.add('active');
           app_utils.scrollIntoView(commentDom, activeComment);
         }
       }
 
       final rangeContext = command.getRangeContext();
       if (rangeContext != null) {
-        final rowSpan = document.querySelector('.row-no') as SpanElement?;
-        final colSpan = document.querySelector('.col-no') as SpanElement?;
+        final rowSpan = document.querySelector('.row-no') as HTMLSpanElement?;
+        final colSpan = document.querySelector('.col-no') as HTMLSpanElement?;
         rowSpan?.text = '${rangeContext.startRowNo + 1}';
         colSpan?.text = '${rangeContext.startColNo + 1}';
       }
@@ -1877,17 +1873,17 @@ class EditorApp {
     listener.visiblePageNoListChange = (dynamic payload) {
       if (payload is List) {
         final text = payload.map((item) => (item as num) + 1).join(', ');
-        (document.querySelector('.page-no-list') as SpanElement?)?.text = text;
+        (document.querySelector('.page-no-list') as HTMLSpanElement?)?.text = text;
       }
     };
 
     listener.pageSizeChange = (dynamic payload) {
-      (document.querySelector('.page-size') as SpanElement?)?.text = '$payload';
+      (document.querySelector('.page-size') as HTMLSpanElement?)?.text = '$payload';
     };
 
     listener.intersectionPageNoChange = (dynamic payload) {
       if (payload is num) {
-        (document.querySelector('.page-no') as SpanElement?)?.text =
+        (document.querySelector('.page-no') as HTMLSpanElement?)?.text =
             '${payload + 1}';
       }
     };
@@ -1911,11 +1907,11 @@ class EditorApp {
       ];
       for (final key in disableMenus) {
         final menuDom =
-            document.querySelector('.menu-item__$key') as DivElement?;
+            document.querySelector('.menu-item__$key') as HTMLDivElement?;
         if (menuDom != null) {
           isActive
-              ? menuDom.classes.add('disable')
-              : menuDom.classes.remove('disable');
+              ? menuDom.classList.add('disable')
+              : menuDom.classList.remove('disable');
         }
       }
     };
@@ -1933,13 +1929,13 @@ class EditorApp {
     };
 
     listener.saved = (dynamic payload) {
-      window.console.log('elementList: $payload');
+      consoleLog('elementList: $payload');
     };
   }
 
   Future<void> _handleContentChange() async {
     final wordCount = await command.getWordCount();
-    (document.querySelector('.word-count') as SpanElement?)?.text =
+    (document.querySelector('.word-count') as HTMLSpanElement?)?.text =
         '$wordCount';
 
     if (_isCatalogVisible) {
@@ -1955,15 +1951,15 @@ class EditorApp {
 
   Future<void> _updateCatalog() async {
     final catalog = await command.getCatalog();
-    catalogMainDom.children.clear();
+    catalogMainDom.clearChildren();
     if (catalog == null) {
       return;
     }
-    void appendCatalog(DivElement parent, List<ICatalogItem> entries) {
+    void appendCatalog(HTMLDivElement parent, List<ICatalogItem> entries) {
       for (final entry in entries) {
-        final itemDom = DivElement()..classes.add('catalog-item');
-        final contentDom = DivElement()..classes.add('catalog-item__content');
-        final span = SpanElement()..text = entry.name;
+        final itemDom = HTMLDivElement()..classList.add('catalog-item');
+        final contentDom = HTMLDivElement()..classList.add('catalog-item__content');
+        final span = HTMLSpanElement()..text = entry.name;
         contentDom.append(span);
         contentDom.onClick
             .listen((_) => command.executeLocationCatalog(entry.id));
@@ -1982,18 +1978,18 @@ class EditorApp {
     final groupIds = await command.getGroupIds();
     for (final comment in _commentData) {
       final selector = ".comment-item[data-id='${comment.id}']";
-      final existing = commentDom.querySelector(selector) as DivElement?;
+      final existing = commentDom.querySelector(selector) as HTMLDivElement?;
       if (groupIds.contains(comment.id)) {
         if (existing == null) {
-          final commentItem = DivElement()
-            ..classes.add('comment-item')
+          final commentItem = HTMLDivElement()
+            ..classList.add('comment-item')
             ..setAttribute('data-id', comment.id);
           commentItem.onClick
               .listen((_) => command.executeLocationGroup(comment.id));
 
-          final title = DivElement()..classes.add('comment-item__title');
-          title.append(SpanElement()..text = comment.rangeText);
-          final close = Element.tag('i');
+          final title = HTMLDivElement()..classList.add('comment-item__title');
+          title.append(HTMLSpanElement()..text = comment.rangeText);
+          final close = document.createElement('i');
           close.onClick.listen((event) {
             event.stopPropagation();
             command.executeDeleteGroup(comment.id);
@@ -2001,15 +1997,15 @@ class EditorApp {
           title.append(close);
           commentItem.append(title);
 
-          final info = DivElement()..classes.add('comment-item__info');
+          final info = HTMLDivElement()..classList.add('comment-item__info');
           info
-            ..append(SpanElement()..text = comment.userName)
-            ..append(SpanElement()..text = comment.createdDate);
+            ..append(HTMLSpanElement()..text = comment.userName)
+            ..append(HTMLSpanElement()..text = comment.createdDate);
           commentItem.append(info);
 
           commentItem.append(
-            DivElement()
-              ..classes.add('comment-item__content')
+            HTMLDivElement()
+              ..classList.add('comment-item__content')
               ..text = comment.content,
           );
 
@@ -2381,7 +2377,7 @@ class EditorApp {
   }
 
   void _createEditorInstance() {
-    final container = _requireElement<DivElement>('.editor');
+    final container = _requireElement<HTMLDivElement>('.editor');
     final header = <IElement>[
       IElement(value: 'Hospital Municipal', size: 32, rowFlex: RowFlex.center),
       IElement(
@@ -2402,39 +2398,43 @@ class EditorApp {
       ),
       options,
     );
-    js_util.setProperty(js_util.globalThis, 'editor', editor);
+    // Exposto no console para debug (window.editor); caixa opaca p/ o JS.
+    globalContext.setProperty('editor'.toJS, editor.toJSBox);
   }
 
   void _bindGlobalListeners() {
-    window.addEventListener('click', (event) {
+    window.addEventListener(
+        'click',
+        ((Event event) {
       final target = event.target;
       if (target is! Node) {
         return;
       }
       final visibleList =
-          document.querySelectorAll('.visible').whereType<Element>().toList();
+          document.querySelectorAll('.visible').toElements().toList();
       for (final visibleDom in visibleList) {
         final owner = visibleDom.parent;
         if (visibleDom.contains(target) || owner?.contains(target) == true) {
           continue;
         }
-        visibleDom.classes.remove('visible');
+        visibleDom.classList.remove('visible');
       }
-    }, true);
+    }).toJS,
+        true.toJS);
   }
 
   void _setupUndoRedoAndFormat() {
-    undoDom = _requireElement<DivElement>('.menu-item__undo');
+    undoDom = _requireElement<HTMLDivElement>('.menu-item__undo');
     undoDom
       ..title = 'Desfazer (${isApple ? '⌘' : 'Ctrl'}+Z)'
       ..onClick.listen((_) => command.executeUndo());
 
-    redoDom = _requireElement<DivElement>('.menu-item__redo');
+    redoDom = _requireElement<HTMLDivElement>('.menu-item__redo');
     redoDom
       ..title = 'Refazer (${isApple ? '⌘' : 'Ctrl'}+Y)'
       ..onClick.listen((_) => command.executeRedo());
 
-    painterDom = _requireElement<DivElement>('.menu-item__painter');
+    painterDom = _requireElement<HTMLDivElement>('.menu-item__painter');
     painterDom.onClick.listen((_) {
       if (_awaitingPainterSecondClick) {
         _painterTimer?.cancel();
@@ -2453,187 +2453,187 @@ class EditorApp {
       command.executePainter(IPainterOption(isDblclick: true));
     });
 
-    final formatDom = _requireElement<DivElement>('.menu-item__format');
+    final formatDom = _requireElement<HTMLDivElement>('.menu-item__format');
     formatDom.onClick.listen((_) => command.executeFormat());
   }
 
   void _setupFontAndStyleControls() {
-    final fontDom = _requireElement<DivElement>('.menu-item__font');
-    fontSelectDom = _requireElementFrom<SpanElement>(fontDom, '.select');
-    fontOptionDom = _requireElementFrom<DivElement>(fontDom, '.options');
-    fontDom.onClick.listen((_) => fontOptionDom.classes.toggle('visible'));
+    final fontDom = _requireElement<HTMLDivElement>('.menu-item__font');
+    fontSelectDom = _requireElementFrom<HTMLSpanElement>(fontDom, '.select');
+    fontOptionDom = _requireElementFrom<HTMLDivElement>(fontDom, '.options');
+    fontDom.onClick.listen((_) => fontOptionDom.classList.toggle('visible'));
     fontOptionDom.onClick.listen((event) {
       final target = event.target;
-      if (target is! LIElement) {
+      if (target is! HTMLLIElement) {
         return;
       }
-      final family = target.dataset['family'];
+      final family = target.data('family');
       if (family == null || family.isEmpty) {
         return;
       }
       command.executeFont(family);
     });
 
-    final sizeDom = _requireElement<DivElement>('.menu-item__size');
+    final sizeDom = _requireElement<HTMLDivElement>('.menu-item__size');
     sizeDom.title = 'Definir tamanho da fonte';
-    sizeSelectDom = _requireElementFrom<SpanElement>(sizeDom, '.select');
-    sizeOptionDom = _requireElementFrom<DivElement>(sizeDom, '.options');
-    sizeDom.onClick.listen((_) => sizeOptionDom.classes.toggle('visible'));
+    sizeSelectDom = _requireElementFrom<HTMLSpanElement>(sizeDom, '.select');
+    sizeOptionDom = _requireElementFrom<HTMLDivElement>(sizeDom, '.options');
+    sizeDom.onClick.listen((_) => sizeOptionDom.classList.toggle('visible'));
     sizeOptionDom.onClick.listen((event) {
       final target = event.target;
-      if (target is! LIElement) {
+      if (target is! HTMLLIElement) {
         return;
       }
-      final sizeValue = target.dataset['size'];
+      final sizeValue = target.data('size');
       final parsed = int.tryParse(sizeValue ?? '');
       if (parsed != null) {
         command.executeSize(parsed);
       }
     });
 
-    final sizeAddDom = _requireElement<DivElement>('.menu-item__size-add');
+    final sizeAddDom = _requireElement<HTMLDivElement>('.menu-item__size-add');
     sizeAddDom
       ..title = 'Aumentar tamanho da fonte (${isApple ? '⌘' : 'Ctrl'}+[)'
       ..onClick.listen((_) => command.executeSizeAdd());
 
-    final sizeMinusDom = _requireElement<DivElement>('.menu-item__size-minus');
+    final sizeMinusDom = _requireElement<HTMLDivElement>('.menu-item__size-minus');
     sizeMinusDom
       ..title = 'Reduzir tamanho da fonte (${isApple ? '⌘' : 'Ctrl'}+])'
       ..onClick.listen((_) => command.executeSizeMinus());
 
-    boldDom = _requireElement<DivElement>('.menu-item__bold');
+    boldDom = _requireElement<HTMLDivElement>('.menu-item__bold');
     boldDom
       ..title = 'Negrito (${isApple ? '⌘' : 'Ctrl'}+B)'
       ..onClick.listen((_) => command.executeBold());
 
-    italicDom = _requireElement<DivElement>('.menu-item__italic');
+    italicDom = _requireElement<HTMLDivElement>('.menu-item__italic');
     italicDom
       ..title = 'Itálico (${isApple ? '⌘' : 'Ctrl'}+I)'
       ..onClick.listen((_) => command.executeItalic());
 
-    underlineDom = _requireElement<DivElement>('.menu-item__underline');
+    underlineDom = _requireElement<HTMLDivElement>('.menu-item__underline');
     underlineDom.title = 'Sublinhado (${isApple ? '⌘' : 'Ctrl'}+U)';
     underlineOptionDom =
-        _requireElementFrom<DivElement>(underlineDom, '.options');
+        _requireElementFrom<HTMLDivElement>(underlineDom, '.options');
     final underlineSelect =
-        _requireElementFrom<SpanElement>(underlineDom, '.select');
+        _requireElementFrom<HTMLSpanElement>(underlineDom, '.select');
     final underlineIcon = _requireElementFrom<Element>(underlineDom, 'i');
     underlineSelect.onClick.listen((event) {
       event.stopPropagation();
-      underlineOptionDom.classes.toggle('visible');
+      underlineOptionDom.classList.toggle('visible');
     });
     underlineIcon.onClick.listen((event) {
       event.stopPropagation();
       command.executeUnderline();
-      underlineOptionDom.classes.remove('visible');
+      underlineOptionDom.classList.remove('visible');
     });
     underlineOptionDom.onMouseDown.listen((event) {
       final target = event.target;
-      if (target is! LIElement) {
+      if (target is! HTMLLIElement) {
         return;
       }
-      final styleValue = target.dataset['decorationStyle'];
+      final styleValue = target.data('decorationStyle');
       final style = _parseTextDecorationStyle(styleValue);
       final decoration = style != null ? ITextDecoration(style: style) : null;
       command.executeUnderline(decoration);
-      underlineOptionDom.classes.remove('visible');
+      underlineOptionDom.classList.remove('visible');
     });
 
-    strikeoutDom = _requireElement<DivElement>('.menu-item__strikeout');
+    strikeoutDom = _requireElement<HTMLDivElement>('.menu-item__strikeout');
     strikeoutDom.onClick.listen((_) => command.executeStrikeout());
 
-    superscriptDom = _requireElement<DivElement>('.menu-item__superscript');
+    superscriptDom = _requireElement<HTMLDivElement>('.menu-item__superscript');
     superscriptDom
       ..title = 'Sobrescrito (${isApple ? '⌘' : 'Ctrl'}+Shift+,)'
       ..onClick.listen((_) => command.executeSuperscript());
 
-    subscriptDom = _requireElement<DivElement>('.menu-item__subscript');
+    subscriptDom = _requireElement<HTMLDivElement>('.menu-item__subscript');
     subscriptDom
       ..title = 'Subscrito (${isApple ? '⌘' : 'Ctrl'}+Shift+.)'
       ..onClick.listen((_) => command.executeSubscript());
 
-    colorControlDom = _requireElement<InputElement>('#color');
+    colorControlDom = _requireElement<HTMLInputElement>('#color');
     colorControlDom.onInput.listen((_) {
       command.executeColor(colorControlDom.value);
     });
     colorControlDom.onChange.listen((_) {
       command.executeColor(colorControlDom.value);
     });
-    colorDom = _requireElement<DivElement>('.menu-item__color');
-    colorSpanDom = _requireElementFrom<SpanElement>(colorDom, 'span');
+    colorDom = _requireElement<HTMLDivElement>('.menu-item__color');
+    colorSpanDom = _requireElementFrom<HTMLSpanElement>(colorDom, 'span');
     colorDom.onClick.listen((_) {
       colorControlDom.click();
     });
 
-    highlightControlDom = _requireElement<InputElement>('#highlight');
+    highlightControlDom = _requireElement<HTMLInputElement>('#highlight');
     highlightControlDom.onInput.listen((_) {
       command.executeHighlight(highlightControlDom.value);
     });
     highlightControlDom.onChange.listen((_) {
       command.executeHighlight(highlightControlDom.value);
     });
-    highlightDom = _requireElement<DivElement>('.menu-item__highlight');
-    highlightSpanDom = _requireElementFrom<SpanElement>(highlightDom, 'span');
+    highlightDom = _requireElement<HTMLDivElement>('.menu-item__highlight');
+    highlightSpanDom = _requireElementFrom<HTMLSpanElement>(highlightDom, 'span');
     highlightDom.onClick.listen((_) {
       highlightControlDom.click();
     });
   }
 
   void _setupTitleAndAlignmentControls() {
-    final titleDom = _requireElement<DivElement>('.menu-item__title');
-    titleSelectDom = _requireElementFrom<SpanElement>(titleDom, '.select');
-    titleOptionDom = _requireElementFrom<DivElement>(titleDom, '.options');
+    final titleDom = _requireElement<HTMLDivElement>('.menu-item__title');
+    titleSelectDom = _requireElementFrom<HTMLSpanElement>(titleDom, '.select');
+    titleOptionDom = _requireElementFrom<HTMLDivElement>(titleDom, '.options');
     var index = 0;
     for (final li
-        in titleOptionDom.querySelectorAll('li').whereType<LIElement>()) {
+        in titleOptionDom.querySelectorAll('li').toElements()) {
       li.title = 'Ctrl+${isApple ? 'Option' : 'Alt'}+$index';
       index += 1;
     }
-    titleDom.onClick.listen((_) => titleOptionDom.classes.toggle('visible'));
+    titleDom.onClick.listen((_) => titleOptionDom.classList.toggle('visible'));
     titleOptionDom.onClick.listen((event) {
       final target = event.target;
-      if (target is! LIElement) {
+      if (target is! HTMLLIElement) {
         return;
       }
-      final levelValue = target.dataset['level'];
+      final levelValue = target.data('level');
       final level = _parseTitleLevel(levelValue);
       command.executeTitle(level);
     });
 
-    leftDom = _requireElement<DivElement>('.menu-item__left');
+    leftDom = _requireElement<HTMLDivElement>('.menu-item__left');
     leftDom
       ..title = 'Alinhar à esquerda (${isApple ? '⌘' : 'Ctrl'}+L)'
       ..onClick.listen((_) => command.executeRowFlex(RowFlex.left));
 
-    centerDom = _requireElement<DivElement>('.menu-item__center');
+    centerDom = _requireElement<HTMLDivElement>('.menu-item__center');
     centerDom
       ..title = 'Centralizar (${isApple ? '⌘' : 'Ctrl'}+E)'
       ..onClick.listen((_) => command.executeRowFlex(RowFlex.center));
 
-    rightDom = _requireElement<DivElement>('.menu-item__right');
+    rightDom = _requireElement<HTMLDivElement>('.menu-item__right');
     rightDom
       ..title = 'Alinhar à direita (${isApple ? '⌘' : 'Ctrl'}+R)'
       ..onClick.listen((_) => command.executeRowFlex(RowFlex.right));
 
-    alignmentDom = _requireElement<DivElement>('.menu-item__alignment');
+    alignmentDom = _requireElement<HTMLDivElement>('.menu-item__alignment');
     alignmentDom
       ..title = 'Justificar (${isApple ? '⌘' : 'Ctrl'}+J)'
       ..onClick.listen((_) => command.executeRowFlex(RowFlex.alignment));
 
-    justifyDom = _requireElement<DivElement>('.menu-item__justify');
+    justifyDom = _requireElement<HTMLDivElement>('.menu-item__justify');
     justifyDom
       ..title = 'Distribuir (${isApple ? '⌘' : 'Ctrl'}+Shift+J)'
       ..onClick.listen((_) => command.executeRowFlex(RowFlex.justify));
 
-    final rowMarginDom = _requireElement<DivElement>('.menu-item__row-margin');
-    rowOptionDom = _requireElementFrom<DivElement>(rowMarginDom, '.options');
-    rowMarginDom.onClick.listen((_) => rowOptionDom.classes.toggle('visible'));
+    final rowMarginDom = _requireElement<HTMLDivElement>('.menu-item__row-margin');
+    rowOptionDom = _requireElementFrom<HTMLDivElement>(rowMarginDom, '.options');
+    rowMarginDom.onClick.listen((_) => rowOptionDom.classList.toggle('visible'));
     rowOptionDom.onClick.listen((event) {
       final target = event.target;
-      if (target is! LIElement) {
+      if (target is! HTMLLIElement) {
         return;
       }
-      final marginValue = double.tryParse(target.dataset['rowmargin'] ?? '');
+      final marginValue = double.tryParse(target.data('rowmargin') ?? '');
       if (marginValue != null) {
         command.executeRowMargin(marginValue);
       }
@@ -2641,34 +2641,34 @@ class EditorApp {
   }
 
   void _setupListControls() {
-    listDom = _requireElement<DivElement>('.menu-item__list');
-    listOptionDom = _requireElementFrom<DivElement>(listDom, '.options');
+    listDom = _requireElement<HTMLDivElement>('.menu-item__list');
+    listOptionDom = _requireElementFrom<HTMLDivElement>(listDom, '.options');
     listDom
       ..title = 'Lista (${isApple ? '⌘' : 'Ctrl'}+Shift+U)'
-      ..onClick.listen((_) => listOptionDom.classes.toggle('visible'));
+      ..onClick.listen((_) => listOptionDom.classList.toggle('visible'));
     listOptionDom.onClick.listen((event) {
       final target = event.target;
-      if (target is! LIElement) {
+      if (target is! HTMLLIElement) {
         return;
       }
-      final listType = _parseListType(target.dataset['listType']);
-      final listStyle = _parseListStyle(target.dataset['listStyle']);
+      final listType = _parseListType(target.data('listType'));
+      final listStyle = _parseListStyle(target.data('listStyle'));
       command.executeList(listType, listStyle);
     });
   }
 
   void _setupSeparatorAndPageBreakControls() {
-    separatorDom = _requireElement<DivElement>('.menu-item__separator');
+    separatorDom = _requireElement<HTMLDivElement>('.menu-item__separator');
     separatorOptionDom =
-        _requireElementFrom<DivElement>(separatorDom, '.options');
+        _requireElementFrom<HTMLDivElement>(separatorDom, '.options');
     separatorDom.onClick
-        .listen((_) => separatorOptionDom.classes.toggle('visible'));
+        .listen((_) => separatorOptionDom.classList.toggle('visible'));
     separatorOptionDom.onMouseDown.listen((event) {
       final target = event.target;
-      if (target is! LIElement) {
+      if (target is! HTMLLIElement) {
         return;
       }
-      final dashValue = target.dataset['separator'];
+      final dashValue = target.data('separator');
       final dashList = dashValue != null && dashValue.isNotEmpty
           ? dashValue
               .split(',')
@@ -2685,7 +2685,7 @@ class EditorApp {
       command.executeSeparator(payload);
     });
 
-    final pageBreakDom = _requireElement<DivElement>('.menu-item__page-break');
+    final pageBreakDom = _requireElement<HTMLDivElement>('.menu-item__page-break');
     pageBreakDom.onClick.listen((_) => command.executePageBreak());
   }
 
@@ -2695,20 +2695,20 @@ class EditorApp {
         document.querySelector('.menu-item__table__collapse');
     final tableClose = document.querySelector('.table-close');
     final tablePanel = document.querySelector('.table-panel');
-    if (tableDom is! DivElement ||
-        tablePanelContainer is! DivElement ||
-        tableClose is! DivElement ||
-        tablePanel is! DivElement) {
-      window.console.warn(
+    if (tableDom is! HTMLDivElement ||
+        tablePanelContainer is! HTMLDivElement ||
+        tableClose is! HTMLDivElement ||
+        tablePanel is! HTMLDivElement) {
+      consoleWarn(
           'Table controls were skipped because the expected menu markup is incomplete.');
       return;
     }
 
     final Element? existingTableTitle = document.querySelector('.table-select');
-    final SpanElement tableTitle = existingTableTitle is SpanElement
+    final HTMLSpanElement tableTitle = existingTableTitle is HTMLSpanElement
         ? existingTableTitle
-        : (SpanElement()
-          ..classes.add('table-select')
+        : (HTMLSpanElement()
+          ..classList.add('table-select')
           ..text = 'Inserir');
     if (existingTableTitle == null) {
       final titleContainer = tablePanelContainer.querySelector('.table-title');
@@ -2717,14 +2717,14 @@ class EditorApp {
       }
     }
 
-    tablePanel.children.clear();
+    tablePanel.clearChildren();
     _tableCellList.clear();
 
     for (var r = 0; r < 10; r += 1) {
-      final row = DivElement()..classes.add('table-row');
-      final cells = <DivElement>[];
+      final row = HTMLDivElement()..classList.add('table-row');
+      final cells = <HTMLDivElement>[];
       for (var c = 0; c < 10; c += 1) {
-        final cell = DivElement()..classes.add('table-cel');
+        final cell = HTMLDivElement()..classList.add('table-cel');
         row.append(cell);
         cells.add(cell);
       }
@@ -2735,7 +2735,7 @@ class EditorApp {
     void resetTable() {
       for (final cells in _tableCellList) {
         for (final cell in cells) {
-          cell.classes.remove('active');
+          cell.classList.remove('active');
         }
       }
       _tableRowIndex = 0;
@@ -2751,7 +2751,7 @@ class EditorApp {
     tablePanel.onMouseMove.listen((event) {
       for (final cells in _tableCellList) {
         for (final cell in cells) {
-          cell.classes.remove('active');
+          cell.classList.remove('active');
         }
       }
       const cellSize = 16;
@@ -2767,7 +2767,7 @@ class EditorApp {
 
       for (var r = 0; r < _tableRowIndex; r += 1) {
         for (var c = 0; c < _tableColIndex; c += 1) {
-          _tableCellList[r][c].classes.add('active');
+          _tableCellList[r][c].classList.add('active');
         }
       }
       tableTitle.text = '$_tableRowIndex×$_tableColIndex';
@@ -2781,8 +2781,8 @@ class EditorApp {
   }
 
   void _setupImageControl() {
-    final imageDom = _requireElement<DivElement>('.menu-item__image');
-    final imageFileDom = _requireElement<InputElement>('#image');
+    final imageDom = _requireElement<HTMLDivElement>('.menu-item__image');
+    final imageFileDom = _requireElement<HTMLInputElement>('#image');
     imageDom.onClick.listen((_) => imageFileDom.click());
     imageFileDom.onChange.listen((_) {
       final files = imageFileDom.files;
@@ -2791,13 +2791,13 @@ class EditorApp {
       }
       final file = files.first;
       final reader = FileReader();
-      reader.readAsDataUrl(file);
+      reader.readAsDataURL(file);
       reader.onLoad.listen((_) {
-        final result = reader.result;
-        if (result is! String) {
+        final String? result = readerResultAsString(reader);
+        if (result == null) {
           return;
         }
-        final image = ImageElement()..src = result;
+        final image = HTMLImageElement()..src = result;
         image.onLoad.listen((_) {
           final width = image.width?.toDouble() ?? 0;
           final height = image.height?.toDouble() ?? 0;
@@ -2817,8 +2817,8 @@ class EditorApp {
   /// Abrir DOCX (roteiro_editor_profissional, F2.4): botão da toolbar +
   /// drag-drop no container do editor.
   void _setupDocxControl() {
-    final docxDom = _requireElement<DivElement>('.menu-item__docx');
-    final docxFileDom = _requireElement<InputElement>('#docx');
+    final docxDom = _requireElement<HTMLDivElement>('.menu-item__docx');
+    final docxFileDom = _requireElement<HTMLInputElement>('#docx');
     docxDom.onClick.listen((_) => docxFileDom.click());
     docxFileDom.onChange.listen((_) {
       final files = docxFileDom.files;
@@ -2829,15 +2829,15 @@ class EditorApp {
       docxFileDom.value = '';
     });
 
-    final container = _requireElement<DivElement>('.editor');
+    final container = _requireElement<HTMLDivElement>('.editor');
     container.onDragOver.listen((event) {
-      if (event.dataTransfer.types?.contains('Files') ?? false) {
+      if (dataTransferHasFiles(event.dataTransfer)) {
         event.preventDefault();
       }
     });
     container.onDrop.listen((event) {
-      final files = event.dataTransfer.files;
-      if (files == null || files.isEmpty) {
+      final files = filesOf(event.dataTransfer?.files);
+      if (files.isEmpty) {
         return;
       }
       final file = files.first;
@@ -2849,7 +2849,7 @@ class EditorApp {
     });
   }
 
-  DivElement? _loadingOverlay;
+  HTMLDivElement? _loadingOverlay;
 
   /// Overlay de carregamento (plano de otimização A6): feedback visual para
   /// operações síncronas longas (abrir/salvar DOCX). O chamador deve ceder o
@@ -2857,11 +2857,11 @@ class EditorApp {
   /// pintar o overlay antes do trabalho pesado.
   void _showLoading(String message) {
     _loadingOverlay?.remove();
-    final overlay = DivElement()
-      ..classes.add('ce-loading-overlay')
-      ..append(DivElement()..classes.add('ce-loading-overlay__spinner'))
-      ..append(DivElement()
-        ..classes.add('ce-loading-overlay__label')
+    final overlay = HTMLDivElement()
+      ..classList.add('ce-loading-overlay')
+      ..append(HTMLDivElement()..classList.add('ce-loading-overlay__spinner'))
+      ..append(HTMLDivElement()
+        ..classList.add('ce-loading-overlay__label')
         ..text = message);
     document.body?.append(overlay);
     _loadingOverlay = overlay;
@@ -2981,14 +2981,14 @@ class EditorApp {
 
       final notes = converted.notes.toSet();
       if (notes.isNotEmpty) {
-        window.console.group('Notas de fidelidade — $name');
+        console.group('Notas de fidelidade — $name'.toJS);
         for (final note in notes) {
-          window.console.info(note);
+          console.info(note.toJS);
         }
-        window.console.groupEnd();
+        console.groupEnd();
       }
     } catch (error, stackTrace) {
-      window.console.error('Erro ao abrir DOCX: $error\n$stackTrace');
+      consoleError('Erro ao abrir DOCX: $error\n$stackTrace');
       window.alert('Não foi possível abrir "$name": $error');
     } finally {
       _hideLoading();
@@ -3017,11 +3017,11 @@ class EditorApp {
     final notes = EditorToDocx.apply(docx, currentMain, originalMain);
     final bytes = DocxWriter.write(docx);
     if (notes.isNotEmpty) {
-      window.console.group('Notas do save — $_openedDocxName');
+      console.group('Notas do save — $_openedDocxName'.toJS);
       for (final note in notes.toSet()) {
-        window.console.info(note);
+        console.info(note.toJS);
       }
-      window.console.groupEnd();
+      console.groupEnd();
     }
     // Reancora o modelo no arquivo salvo para saves subsequentes.
     _openedDocx = DocxReader.read(bytes);
@@ -3030,7 +3030,7 @@ class EditorApp {
   }
 
   void _setupDocxSaveControl() {
-    final saveDom = _requireElement<DivElement>('.menu-item__docx-save');
+    final saveDom = _requireElement<HTMLDivElement>('.menu-item__docx-save');
     saveDom.onClick.listen((_) async {
       _showLoading('Salvando ${_openedDocxName ?? 'documento.docx'}…');
       try {
@@ -3041,16 +3041,16 @@ class EditorApp {
           window.alert('Abra um DOCX antes de salvar.');
           return;
         }
-        final blob = Blob([
-          bytes
-        ], 'application/vnd.openxmlformats-officedocument.wordprocessingml.document');
-        final url = Url.createObjectUrlFromBlob(blob);
-        AnchorElement(href: url)
+        final blob = blobFromBytes(bytes,
+            type:
+                'application/vnd.openxmlformats-officedocument.wordprocessingml.document');
+        final url = URL.createObjectURL(blob);
+        (HTMLAnchorElement()..href = url)
           ..download = _openedDocxName ?? 'documento.docx'
           ..click();
-        Url.revokeObjectUrl(url);
+        URL.revokeObjectURL(url);
       } catch (error, stackTrace) {
-        window.console.error('Erro ao salvar DOCX: $error\n$stackTrace');
+        consoleError('Erro ao salvar DOCX: $error\n$stackTrace');
         window.alert('Não foi possível salvar: $error');
       } finally {
         _hideLoading();

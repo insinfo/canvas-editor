@@ -1,7 +1,6 @@
 import 'dart:async';
 import 'dart:convert';
-import 'dart:html';
-import 'dart:js_util' as js_util;
+import 'package:canvas_text_editor/src/dom/dom.dart';
 
 import '../dataset/constant/editor.dart';
 import '../dataset/enum/area.dart';
@@ -82,7 +81,7 @@ ClipboardDataPayload? getClipboardData() {
 
 void removeClipboardData() {
   try {
-    window.localStorage.remove(editorClipboard);
+    window.localStorage.removeItem(editorClipboard);
   } catch (_) {
     // Ignore storage removal failures.
   }
@@ -97,42 +96,28 @@ Future<void> writeClipboardItem(
     return;
   }
 
-  final plainText = Blob(<dynamic>[text], 'text/plain');
-  final htmlText = Blob(<dynamic>[html], 'text/html');
+  final plainText =
+      Blob(<JSAny>[text.toJS].toJS, BlobPropertyBag(type: 'text/plain'));
+  final htmlText =
+      Blob(<JSAny>[html.toJS].toJS, BlobPropertyBag(type: 'text/html'));
 
-  if (js_util.hasProperty(js_util.globalThis, 'ClipboardItem')) {
-    final clipboardItemCtor = js_util.getProperty(
-      js_util.globalThis,
-      'ClipboardItem',
-    );
-
-    final item = js_util.callConstructor(
-      clipboardItemCtor,
-      <dynamic>[
-        js_util.jsify(<String, dynamic>{
-          plainText.type: plainText,
-          htmlText.type: htmlText,
-        })
-      ],
-    );
-
-    final clipboard = js_util.getProperty(window.navigator, 'clipboard');
-    if (clipboard != null) {
-      await js_util.promiseToFuture<void>(
-        js_util.callMethod(clipboard, 'write', <dynamic>[
-          js_util.jsify(<dynamic>[item]),
-        ]),
-      );
-    }
+  if (globalContext.hasProperty('ClipboardItem'.toJS).toDart) {
+    final JSObject items = JSObject()
+      ..setProperty(plainText.type.toJS, plainText)
+      ..setProperty(htmlText.type.toJS, htmlText);
+    final ClipboardItem item = ClipboardItem(items);
+    await window.navigator.clipboard
+        .write(<ClipboardItem>[item].toJS)
+        .toDart;
   } else {
-    final fakeElement = DivElement()
+    final fakeElement = HTMLDivElement()
       ..setAttribute('contenteditable', 'true')
       ..innerHtml = html;
     document.body?.append(fakeElement);
 
     final selection = window.getSelection();
     final range = document.createRange();
-    final br = SpanElement()..innerText = '\\n';
+    final br = HTMLSpanElement()..innerText = '\\n';
     fakeElement.append(br);
 
     range.selectNodeContents(fakeElement);

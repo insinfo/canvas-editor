@@ -1,4 +1,4 @@
-import 'dart:html';
+import 'package:canvas_text_editor/src/dom/dom.dart';
 
 import '../../../dataset/constant/page_number.dart';
 import '../../../dataset/enum/common.dart';
@@ -74,7 +74,7 @@ class PageNumber {
 
 		ctx.save();
 		ctx
-			..fillStyle = color
+			..fillColor = color
 			..font = '${fontSize}px $fontFamily';
 
 		final List<double> margins = _draw.getMargins();

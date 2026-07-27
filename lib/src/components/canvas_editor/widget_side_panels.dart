@@ -1,5 +1,5 @@
 import 'dart:async';
-import 'dart:html';
+import 'package:canvas_text_editor/src/dom/dom.dart';
 
 import '../../editor/index.dart';
 import '../../editor/interface/search.dart' show IReplaceOption;
@@ -37,11 +37,11 @@ class WidgetCommentsPanel extends UiComponent {
     this.readOnly = false,
   })  : _comments = List<CanvasEditorComment>.from(comments),
         _onClose = onClose {
-    _main = DivElement()..classes.add('ce-panel__main');
-    root = DivElement()
-      ..classes.addAll(<String>['ce-panel', 'ce-panel--comments'])
+    _main = HTMLDivElement()..classList.add('ce-panel__main');
+    root = HTMLDivElement()
+      ..classList.addAll(<String>['ce-panel', 'ce-panel--comments'])
       ..style.display = 'none'
-      ..children.addAll(<Element>[
+      ..appendAll(<Element>[
         _buildHeader('Comentários', hide),
         _main,
       ]);
@@ -54,8 +54,8 @@ class WidgetCommentsPanel extends UiComponent {
   final List<CanvasEditorComment> _comments;
 
   @override
-  late final DivElement root;
-  late final DivElement _main;
+  late final HTMLDivElement root;
+  late final HTMLDivElement _main;
 
   bool get isVisible => root.style.display != 'none';
 
@@ -81,10 +81,10 @@ class WidgetCommentsPanel extends UiComponent {
     final List<CanvasEditorComment> visible = _comments
         .where((CanvasEditorComment comment) => groupIds.contains(comment.id))
         .toList(growable: false);
-    _main.children.clear();
+    _main.clearChildren();
     if (visible.isEmpty) {
-      _main.append(DivElement()
-        ..classes.add('ce-panel__empty')
+      _main.append(HTMLDivElement()
+        ..classList.add('ce-panel__empty')
         ..text = 'O documento não tem comentários.');
       return;
     }
@@ -94,8 +94,8 @@ class WidgetCommentsPanel extends UiComponent {
   }
 
   Element _buildComment(CanvasEditorComment comment) {
-    final DivElement card = DivElement()
-      ..classes.add('ce-comment')
+    final HTMLDivElement card = HTMLDivElement()
+      ..classList.add('ce-comment')
       ..tabIndex = 0
       ..onClick.listen((_) => _command.executeLocationGroup(comment.id))
       ..onKeyDown.listen((KeyboardEvent event) {
@@ -105,25 +105,25 @@ class WidgetCommentsPanel extends UiComponent {
         }
       });
     if (comment.author?.isNotEmpty == true) {
-      card.append(SpanElement()
-        ..classes.add('ce-comment__author')
+      card.append(HTMLSpanElement()
+        ..classList.add('ce-comment__author')
         ..text = comment.author);
     }
     if (comment.quotedText?.isNotEmpty == true) {
-      card.append(DivElement()
-        ..classes.add('ce-comment__quote')
+      card.append(HTMLDivElement()
+        ..classList.add('ce-comment__quote')
         ..text = comment.quotedText);
     }
-    card.append(DivElement()
-      ..classes.add('ce-comment__content')
+    card.append(HTMLDivElement()
+      ..classList.add('ce-comment__content')
       ..text = comment.content);
     if (!readOnly) {
-      card.append(ButtonElement()
+      card.append(HTMLButtonElement()
         ..type = 'button'
-        ..classes.add('ce-comment__delete')
+        ..classList.add('ce-comment__delete')
         ..title = 'Excluir comentário'
         ..setAttribute('aria-label', 'Excluir comentário')
-        ..append(SpanElement()..classes.addAll(<String>['ti', 'ti-trash']))
+        ..append(HTMLSpanElement()..classList.addAll(<String>['ti', 'ti-trash']))
         ..onClick.listen((MouseEvent event) {
           event.stopPropagation();
           _command.executeDeleteGroup(comment.id);
@@ -140,11 +140,11 @@ class WidgetCommentsPanel extends UiComponent {
 /// documento e navega até eles via `executeLocationCatalog`.
 class WidgetCatalogPanel extends UiComponent {
   WidgetCatalogPanel(this._command, {required void Function() onClose}) {
-    _main = DivElement()..classes.add('ce-panel__main');
-    root = DivElement()
-      ..classes.addAll(<String>['ce-panel', 'ce-panel--catalog'])
+    _main = HTMLDivElement()..classList.add('ce-panel__main');
+    root = HTMLDivElement()
+      ..classList.addAll(<String>['ce-panel', 'ce-panel--catalog'])
       ..style.display = 'none'
-      ..children.addAll(<Element>[
+      ..appendAll(<Element>[
         _buildHeader('Navegação', onClose),
         _main,
       ]);
@@ -153,8 +153,8 @@ class WidgetCatalogPanel extends UiComponent {
   final Command _command;
 
   @override
-  late final DivElement root;
-  late final DivElement _main;
+  late final HTMLDivElement root;
+  late final HTMLDivElement _main;
 
   bool get isVisible => root.style.display != 'none';
 
@@ -164,10 +164,10 @@ class WidgetCatalogPanel extends UiComponent {
 
   Future<void> refresh() async {
     final ICatalog? catalog = await _command.getCatalog();
-    _main.children.clear();
+    _main.clearChildren();
     if (catalog == null || catalog.isEmpty) {
-      _main.append(DivElement()
-        ..classes.add('ce-panel__empty')
+      _main.append(HTMLDivElement()
+        ..classList.add('ce-panel__empty')
         ..text = 'O documento não tem títulos.');
       return;
     }
@@ -176,10 +176,10 @@ class WidgetCatalogPanel extends UiComponent {
 
   void _appendItems(Element parent, List<ICatalogItem> entries) {
     for (final ICatalogItem entry in entries) {
-      final DivElement item = DivElement()..classes.add('ce-catalog-item');
-      final DivElement content = DivElement()
-        ..classes.add('ce-catalog-item__content')
-        ..append(SpanElement()..text = entry.name)
+      final HTMLDivElement item = HTMLDivElement()..classList.add('ce-catalog-item');
+      final HTMLDivElement content = HTMLDivElement()
+        ..classList.add('ce-catalog-item__content')
+        ..append(HTMLSpanElement()..text = entry.name)
         ..title = entry.name;
       content.onClick.listen((_) => _command.executeLocationCatalog(entry.id));
       item.append(content);
@@ -203,10 +203,10 @@ class WidgetFindPanel extends UiComponent {
   final void Function() _onClose;
 
   @override
-  late final DivElement root;
-  late final InputElement _searchInput;
-  late final InputElement _replaceInput;
-  late final SpanElement _countLabel;
+  late final HTMLDivElement root;
+  late final HTMLInputElement _searchInput;
+  late final HTMLInputElement _replaceInput;
+  late final HTMLSpanElement _countLabel;
 
   /// Índice 0-based do resultado destacado, usado pelo "Substituir".
   int? _currentGroupIndex;
@@ -214,33 +214,33 @@ class WidgetFindPanel extends UiComponent {
   bool get isVisible => root.style.display != 'none';
 
   void _buildDom() {
-    _searchInput = InputElement(type: 'text')
-      ..classes.add('ce-find__input')
+    _searchInput = (HTMLInputElement()..type = 'text')
+      ..classList.add('ce-find__input')
       ..placeholder = 'Localizar no documento';
-    _replaceInput = InputElement(type: 'text')
-      ..classes.add('ce-find__input')
+    _replaceInput = (HTMLInputElement()..type = 'text')
+      ..classList.add('ce-find__input')
       ..placeholder = 'Substituir por';
-    _countLabel = SpanElement()..classes.add('ce-find__count');
+    _countLabel = HTMLSpanElement()..classList.add('ce-find__count');
 
-    final ButtonElement prevButton =
+    final HTMLButtonElement prevButton =
         _navButton('ti-chevron-up', 'Anterior', () {
       _command.executeSearchNavigatePre();
       _updateCount();
     });
-    final ButtonElement nextButton =
+    final HTMLButtonElement nextButton =
         _navButton('ti-chevron-down', 'Próximo', () {
       _command.executeSearchNavigateNext();
       _updateCount();
     });
 
-    final ButtonElement replaceOne = ButtonElement()
+    final HTMLButtonElement replaceOne = HTMLButtonElement()
       ..type = 'button'
-      ..classes.add('ce-find__action')
+      ..classList.add('ce-find__action')
       ..text = 'Substituir'
       ..onClick.listen((_) => _replaceCurrent());
-    final ButtonElement replaceAll = ButtonElement()
+    final HTMLButtonElement replaceAll = HTMLButtonElement()
       ..type = 'button'
-      ..classes.add('ce-find__action')
+      ..classList.add('ce-find__action')
       ..text = 'Substituir tudo'
       ..onClick.listen((_) => _replaceAll());
 
@@ -265,39 +265,38 @@ class WidgetFindPanel extends UiComponent {
       }
     });
 
-    root = DivElement()
-      ..classes.addAll(<String>['ce-panel', 'ce-panel--find'])
+    root = HTMLDivElement()
+      ..classList.addAll(<String>['ce-panel', 'ce-panel--find'])
       ..style.display = 'none'
-      ..children.addAll(<Element>[
+      ..appendAll(<Element>[
         _buildHeader('Localizar e substituir', close),
-        DivElement()
-          ..classes.add('ce-panel__main')
-          ..children.addAll(<Element>[
-            DivElement()
-              ..classes.add('ce-find__row')
-              ..children
-                  .addAll(<Element>[_searchInput, prevButton, nextButton]),
-            DivElement()
-              ..classes.add('ce-find__meta')
+        HTMLDivElement()
+          ..classList.add('ce-panel__main')
+          ..appendAll(<Element>[
+            HTMLDivElement()
+              ..classList.add('ce-find__row')
+              ..appendAll(<Element>[_searchInput, prevButton, nextButton]),
+            HTMLDivElement()
+              ..classList.add('ce-find__meta')
               ..append(_countLabel),
-            DivElement()
-              ..classes.add('ce-find__row')
+            HTMLDivElement()
+              ..classList.add('ce-find__row')
               ..append(_replaceInput),
-            DivElement()
-              ..classes.add('ce-find__actions')
-              ..children.addAll(<Element>[replaceOne, replaceAll]),
+            HTMLDivElement()
+              ..classList.add('ce-find__actions')
+              ..appendAll(<Element>[replaceOne, replaceAll]),
           ]),
       ]);
   }
 
-  ButtonElement _navButton(
+  HTMLButtonElement _navButton(
       String iconClass, String label, void Function() action) {
-    return ButtonElement()
+    return HTMLButtonElement()
       ..type = 'button'
-      ..classes.add('ce-find__nav')
+      ..classList.add('ce-find__nav')
       ..title = label
       ..setAttribute('aria-label', label)
-      ..append(SpanElement()..classes.addAll(<String>['ti', iconClass]))
+      ..append(HTMLSpanElement()..classList.addAll(<String>['ti', iconClass]))
       ..onClick.listen((_) => action());
   }
 
@@ -364,19 +363,19 @@ class WidgetFindPanel extends UiComponent {
   }
 }
 
-DivElement _buildHeader(String title, void Function() onClose) {
-  return DivElement()
-    ..classes.add('ce-panel__header')
-    ..children.addAll(<Element>[
-      SpanElement()
-        ..classes.add('ce-panel__title')
+HTMLDivElement _buildHeader(String title, void Function() onClose) {
+  return HTMLDivElement()
+    ..classList.add('ce-panel__header')
+    ..appendAll(<Element>[
+      HTMLSpanElement()
+        ..classList.add('ce-panel__title')
         ..text = title,
-      ButtonElement()
+      HTMLButtonElement()
         ..type = 'button'
-        ..classes.add('ce-panel__close')
+        ..classList.add('ce-panel__close')
         ..title = 'Fechar'
         ..setAttribute('aria-label', 'Fechar painel')
-        ..append(SpanElement()..classes.addAll(<String>['ti', 'ti-x']))
+        ..append(HTMLSpanElement()..classList.addAll(<String>['ti', 'ti-x']))
         ..onClick.listen((_) => onClose()),
     ]);
 }

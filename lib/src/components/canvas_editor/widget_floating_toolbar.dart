@@ -1,5 +1,5 @@
 import 'dart:async';
-import 'dart:html';
+import 'package:canvas_text_editor/src/dom/dom.dart';
 
 import '../../editor/index.dart';
 import '../core/ui_component.dart';
@@ -47,15 +47,15 @@ FloatingToolbarMode resolveSelectionContext(Command command) {
 /// tabela ou imagem selecionada (estilo Word).
 class WidgetFloatingToolbar extends UiComponent {
   WidgetFloatingToolbar(this._command, this._draw, this._editorRoot) {
-    root = DivElement()
-      ..classes.add('ce-floating-toolbar')
+    root = HTMLDivElement()
+      ..classList.add('ce-floating-toolbar')
       ..style.display = 'none'
       ..setAttribute('role', 'toolbar')
       ..setAttribute('aria-label', 'Formatação rápida');
     _textGroup = _group('texto');
     _tableGroup = _group('tabela');
     _imageGroup = _group('imagem');
-    root.children.addAll(<Element>[_textGroup, _tableGroup, _imageGroup]);
+    root.appendAll(<Element>[_textGroup, _tableGroup, _imageGroup]);
     _buildTextCommands();
     _buildTableCommands();
     _buildImageCommands();
@@ -68,25 +68,25 @@ class WidgetFloatingToolbar extends UiComponent {
   final Element _editorRoot;
 
   @override
-  late final DivElement root;
+  late final HTMLDivElement root;
 
-  late final DivElement _textGroup;
-  late final DivElement _tableGroup;
-  late final DivElement _imageGroup;
+  late final HTMLDivElement _textGroup;
+  late final HTMLDivElement _tableGroup;
+  late final HTMLDivElement _imageGroup;
 
-  final Map<String, ButtonElement> _buttons = <String, ButtonElement>{};
+  final Map<String, HTMLButtonElement> _buttons = <String, HTMLButtonElement>{};
   bool _pointerInside = false;
   FloatingToolbarMode _mode = FloatingToolbarMode.hidden;
 
   FloatingToolbarMode get mode => _mode;
 
-  DivElement _group(String name) => DivElement()
-    ..classes.add('ce-floating-toolbar__group')
+  HTMLDivElement _group(String name) => HTMLDivElement()
+    ..classList.add('ce-floating-toolbar__group')
     ..dataset['group'] = name
     ..style.display = 'none';
 
   void _buildTextCommands() {
-    _textGroup.children.addAll(<Element>[
+    _textGroup.appendAll(<Element>[
       _button('bold', 'ti-bold', 'Negrito', _command.executeBold,
           refreshAfterAction: false),
       _button('italic', 'ti-italic', 'Itálico', _command.executeItalic,
@@ -108,7 +108,7 @@ class WidgetFloatingToolbar extends UiComponent {
   }
 
   void _buildTableCommands() {
-    _tableGroup.children.addAll(<Element>[
+    _tableGroup.appendAll(<Element>[
       _button('rowTop', 'ti-row-insert-top', 'Inserir linha acima',
           _command.executeInsertTableTopRow),
       _button('rowBottom', 'ti-row-insert-bottom', 'Inserir linha abaixo',
@@ -169,28 +169,28 @@ class WidgetFloatingToolbar extends UiComponent {
     String label,
     void Function(String) onPick,
   ) {
-    final InputElement input = InputElement(type: 'color')
-      ..classes.add('ce-floating-toolbar__color-input');
+    final HTMLInputElement input = (HTMLInputElement()..type = 'color')
+      ..classList.add('ce-floating-toolbar__color-input');
     input.onInput.listen((_) {
       final String? value = input.value;
       if (value != null && value.isNotEmpty) onPick(value);
     });
-    final ButtonElement button = ButtonElement()
+    final HTMLButtonElement button = HTMLButtonElement()
       ..type = 'button'
       ..title = label
       ..setAttribute('aria-label', label)
-      ..append(SpanElement()..classes.addAll(<String>['ti', icon]))
+      ..append(HTMLSpanElement()..classList.addAll(<String>['ti', icon]))
       ..onMouseDown.listen((MouseEvent event) => event.preventDefault())
       ..onClick.listen((_) => input.click());
     _buttons[id] = button;
-    return SpanElement()
-      ..classes.add('ce-floating-toolbar__color')
+    return HTMLSpanElement()
+      ..classList.add('ce-floating-toolbar__color')
       ..append(button)
       ..append(input);
   }
 
   void _buildImageCommands() {
-    _imageGroup.children.addAll(<Element>[
+    _imageGroup.appendAll(<Element>[
       _alignButton('imgAlignLeft', 'ti-align-box-left-middle',
           'Alinhar à esquerda', 'left'),
       _alignButton('imgAlignCenter', 'ti-align-box-center-middle',
@@ -216,13 +216,13 @@ class WidgetFloatingToolbar extends UiComponent {
   }
 
   void _changeImage() {
-    final FileUploadInputElement input = FileUploadInputElement()
+    final HTMLInputElement input = (HTMLInputElement()..type = 'file')
       ..accept = '.png, .jpg, .jpeg';
     input.onChange.first.then((_) {
       final File? file =
           input.files?.isNotEmpty == true ? input.files!.first : null;
       if (file == null) return;
-      final FileReader reader = FileReader()..readAsDataUrl(file);
+      final FileReader reader = FileReader()..readAsDataURL(file);
       reader.onLoad.first.then((_) {
         final dynamic value = reader.result;
         if (value is String && value.isNotEmpty) {
@@ -233,7 +233,7 @@ class WidgetFloatingToolbar extends UiComponent {
     input.click();
   }
 
-  ButtonElement _alignButton(
+  HTMLButtonElement _alignButton(
     String id,
     String icon,
     String label,
@@ -246,7 +246,7 @@ class WidgetFloatingToolbar extends UiComponent {
         _command.executeImageAlign(element, align);
       });
 
-  ButtonElement _wrapButton(
+  HTMLButtonElement _wrapButton(
     String id,
     String icon,
     String label,
@@ -259,18 +259,18 @@ class WidgetFloatingToolbar extends UiComponent {
         _command.executeChangeImageDisplay(element, display);
       });
 
-  ButtonElement _button(
+  HTMLButtonElement _button(
     String id,
     String icon,
     String label,
     void Function() action, {
     bool refreshAfterAction = true,
   }) {
-    final ButtonElement button = ButtonElement()
+    final HTMLButtonElement button = HTMLButtonElement()
       ..type = 'button'
       ..title = label
       ..setAttribute('aria-label', label)
-      ..append(SpanElement()..classes.addAll(<String>['ti', icon]))
+      ..append(HTMLSpanElement()..classList.addAll(<String>['ti', icon]))
       ..onMouseDown.listen((MouseEvent event) => event.preventDefault())
       ..onClick.listen((_) {
         action();
@@ -282,18 +282,18 @@ class WidgetFloatingToolbar extends UiComponent {
     return button;
   }
 
-  Element _divider() => SpanElement()
-    ..classes.add('ce-floating-toolbar__divider')
+  Element _divider() => HTMLSpanElement()
+    ..classList.add('ce-floating-toolbar__divider')
     ..setAttribute('aria-hidden', 'true');
 
   void syncStyle(IRangeStyle style) {
     if (style.type == null) {
       return;
     }
-    _buttons['bold']?.classes.toggle('active', style.bold);
-    _buttons['italic']?.classes.toggle('active', style.italic);
-    _buttons['underline']?.classes.toggle('active', style.underline);
-    _buttons['strike']?.classes.toggle('active', style.strikeout);
+    _buttons['bold']?.classList.toggle('active', style.bold);
+    _buttons['italic']?.classList.toggle('active', style.italic);
+    _buttons['underline']?.classList.toggle('active', style.underline);
+    _buttons['strike']?.classList.toggle('active', style.strikeout);
   }
 
   void _syncImageDisplay(IElement element) {
@@ -306,7 +306,7 @@ class WidgetFloatingToolbar extends UiComponent {
       'wrapBehind': ImageDisplay.floatBottom,
     };
     wrapIds.forEach((String id, ImageDisplay value) {
-      _buttons[id]?.classes.toggle('active', display == value);
+      _buttons[id]?.classList.toggle('active', display == value);
     });
   }
 
@@ -321,8 +321,8 @@ class WidgetFloatingToolbar extends UiComponent {
       return;
     }
     final IElementPosition? position = _command.getCursorPosition();
-    final CanvasElement? page =
-        _draw.getPage(position?.pageNo ?? -1) as CanvasElement?;
+    final HTMLCanvasElement? page =
+        _draw.getPage(position?.pageNo ?? -1) as HTMLCanvasElement?;
     if (page == null) {
       hide();
       return;
@@ -337,7 +337,7 @@ class WidgetFloatingToolbar extends UiComponent {
         _mode == FloatingToolbarMode.table ? 'contents' : 'none';
     if (_mode == FloatingToolbarMode.table) {
       _buttons['repeatHeader']
-          ?.classes
+          ?.classList
           .toggle('active', _command.getIsTableHeaderRowActive());
     }
     _imageGroup.style.display =
@@ -347,8 +347,8 @@ class WidgetFloatingToolbar extends UiComponent {
       final IElement? element = context?.startElement;
       if (element != null) _syncImageDisplay(element);
     }
-    final Rectangle<num> pageRect = page.getBoundingClientRect();
-    final Rectangle<num> rootRect = _editorRoot.getBoundingClientRect();
+    final DOMRect pageRect = page.getBoundingClientRect();
+    final DOMRect rootRect = _editorRoot.getBoundingClientRect();
     final double scale = (_draw.getOptions().scale as num?)?.toDouble() ?? 1;
     final double x = pageRect.left.toDouble() -
         rootRect.left.toDouble() +

@@ -1,4 +1,4 @@
-import 'dart:html';
+import 'package:canvas_text_editor/src/dom/dom.dart';
 
 import '../../../dataset/constant/placeholder.dart';
 import '../../../dataset/enum/area.dart';
@@ -185,12 +185,12 @@ class Area {
 			final double height = rawHeight < 0 ? 0 : rawHeight;
 
 			if (area.backgroundColor != null) {
-				ctx.fillStyle = area.backgroundColor!;
+				ctx.fillColor = area.backgroundColor!;
 				ctx.fillRect(x, y, width, height);
 			}
 
 			if (area.borderColor != null) {
-				ctx.strokeStyle = area.borderColor!;
+				ctx.strokeColor = area.borderColor!;
 				ctx.strokeRect(x, y, width, height);
 			}
 

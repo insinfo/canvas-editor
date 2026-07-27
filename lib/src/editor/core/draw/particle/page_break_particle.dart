@@ -1,5 +1,4 @@
-import 'dart:html';
-import 'dart:js_util' as js_util;
+import 'package:canvas_text_editor/src/dom/dom.dart';
 
 import '../../../interface/editor.dart';
 import '../../../interface/page_break.dart';
@@ -46,7 +45,7 @@ class PageBreakParticle {
     final double textWidth = (metrics.width ?? 0).toDouble();
     final double halfX = (elementWidth - textWidth) / 2;
     if (lineDash.isNotEmpty) {
-      ctx.setLineDash(lineDash);
+      ctx.setDash(lineDash);
     }
     ctx.translate(0, 0.5 + offsetY);
     ctx.beginPath();
@@ -55,9 +54,11 @@ class PageBreakParticle {
     ctx.moveTo(x + halfX + textWidth, y);
     ctx.lineTo(x + elementWidth, y);
     ctx.stroke();
-    final num ascentValue =
-        js_util.getProperty(metrics, 'actualBoundingBoxAscent') as num? ?? size;
-    final double ascent = ascentValue.toDouble();
+    final JSAny? ascentProp =
+        (metrics as JSObject).getProperty('actualBoundingBoxAscent'.toJS);
+    final double ascent = ascentProp.isA<JSNumber>()
+        ? (ascentProp! as JSNumber).toDartDouble
+        : size;
     ctx.fillText(displayName, x + halfX, y + ascent - size / 2);
     ctx.restore();
   }

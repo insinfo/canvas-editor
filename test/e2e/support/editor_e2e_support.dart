@@ -10,8 +10,10 @@ String? baseUrl;
 String? skipReason;
 
 const _mainDartSource = r'''
-import 'dart:html' as html;
-import 'dart:js_util' as js_util;
+import 'dart:js_interop';
+import 'dart:js_interop_unsafe';
+
+import 'package:web/web.dart' as html;
 
 import 'package:canvas_text_editor/src/editor.dart';
 import 'package:canvas_text_editor/src/editor/index.dart' as editor_core;
@@ -37,8 +39,15 @@ import 'package:canvas_text_editor/src/editor/utils/clipboard.dart'
 
 import 'tabler_icons.dart';
 
+JSAny? _jsify(Object? value) => value.jsify();
+
 void main() {
-  html.window.onLoad.listen((_) async {
+  html.window.addEventListener('load', ((html.Event _) {
+    _boot();
+  }).toJS);
+}
+
+void _boot() async {
     setupTablerIcons();
     final userAgent = html.window.navigator.userAgent;
     final isApple = userAgent.contains('Mac OS X');
@@ -61,8 +70,8 @@ void main() {
 
     void focusInput() {
       final input = html.document.querySelector('.ce-inputarea');
-      if (input is html.TextAreaElement) {
-        input.focus();
+      if (input != null && input.isA<html.HTMLTextAreaElement>()) {
+        (input as html.HTMLTextAreaElement).focus();
       }
     }
 
@@ -108,10 +117,8 @@ void main() {
       if (pageNo < 0 || pageNo >= pageList.length) {
         return null;
       }
-      final page = pageList[pageNo];
-      if (page is! html.CanvasElement) {
-        return null;
-      }
+      final html.HTMLCanvasElement page =
+          pageList[pageNo] as html.HTMLCanvasElement;
 
       final rect = page.getBoundingClientRect();
       final scale = draw.getOptions().scale ?? 1;
@@ -167,10 +174,8 @@ void main() {
       if (pageNo < 0 || pageNo >= pageList.length) {
         return null;
       }
-      final page = pageList[pageNo];
-      if (page is! html.CanvasElement) {
-        return null;
-      }
+      final html.HTMLCanvasElement page =
+          pageList[pageNo] as html.HTMLCanvasElement;
 
       final rect = page.getBoundingClientRect();
       final startLeftTop = start.coordinate['leftTop'] ?? const <double>[0, 0];
@@ -205,14 +210,13 @@ void main() {
       };
     }
 
-    js_util.setProperty(
-      html.window,
-      '__editorTest',
-      js_util.jsify({
-        'focusInput': js_util.allowInterop(() {
+    final JSObject editorTest = JSObject();
+    void expose(String name, JSFunction fn) =>
+        editorTest.setProperty(name.toJS, fn);
+    expose('focusInput', (() {
           focusInput();
-        }),
-        'setRange': js_util.allowInterop((num start, num end) {
+  }).toJS);
+    expose('setRange', ((num start, num end) {
           app.editor.command.executeSetPositionContext(
             range_model.IRange(
               startIndex: start.toInt(),
@@ -221,8 +225,8 @@ void main() {
           );
           app.editor.command.executeSetRange(start.toInt(), end.toInt());
           focusInput();
-        }),
-        'resetContent': js_util.allowInterop((String text) {
+  }).toJS);
+    expose('resetContent', ((String text) {
           labelMousedownCount = 0;
           lastLabelValue = null;
           final elements = editor_core.splitText(text)
@@ -233,8 +237,8 @@ void main() {
           );
           app.editor.command.executeSetRange(0, 0);
           focusInput();
-        }),
-        'resetFirstHeaderVariant': js_util.allowInterop(() {
+  }).toJS);
+    expose('resetFirstHeaderVariant', (() {
           final draw = app.editor.getDraw();
           draw.getHeader().setVariants(
             first: editor_core.splitText('FIRST')
@@ -262,17 +266,17 @@ void main() {
             ),
           );
           focusInput();
-        }),
-        'firstHeaderVariantText': js_util.allowInterop(() {
+  }).toJS);
+    expose('firstHeaderVariantText', (() {
           return flattenElementText(
             app.editor.getDraw().getHeader().getFirstElementList(),
           );
-        }),
-        'submitHistoryCheckpoint': js_util.allowInterop(() {
+  }).toJS);
+    expose('submitHistoryCheckpoint', (() {
           final draw = app.editor.getDraw();
           draw.submitHistory(draw.getRange().getRange().endIndex);
-        }),
-        'resetProtectedDeleteContent': js_util.allowInterop(() {
+  }).toJS);
+    expose('resetProtectedDeleteContent', (() {
           final elements = <editor_core.IElement>[
             editor_core.IElement(value: '\u200B'),
             editor_core.IElement(value: 'a'),
@@ -299,18 +303,18 @@ void main() {
           );
           app.editor.command.executeSetRange(0, 0);
           focusInput();
-        }),
-        'resetLayoutDiagnostics': js_util.allowInterop(() {
+  }).toJS);
+    expose('resetLayoutDiagnostics', (() {
           app.editor.getDraw().resetLayoutDiagnostics();
-        }),
-        'layoutDiagnostics': js_util.allowInterop(() {
+  }).toJS);
+    expose('layoutDiagnostics', (() {
           final draw = app.editor.getDraw();
-          return js_util.jsify(<String, Object?>{
+          return _jsify(<String, Object?>{
             'mode': draw.getLastLayoutMode(),
             ...draw.getLayoutDiagnostics(),
           });
-        }),
-        'setRangeBeforeTextValue': js_util.allowInterop((String text) {
+  }).toJS);
+    expose('setRangeBeforeTextValue', ((String text) {
           final elements = app.editor.getDraw().getOriginalMainElementList();
           final buffer = StringBuffer();
           final elementIndexes = <int>[];
@@ -338,8 +342,8 @@ void main() {
           app.editor.command.executeSetRange(index, index);
           focusInput();
           return true;
-        }),
-        'resetMockContent': js_util.allowInterop(() {
+  }).toJS);
+    expose('resetMockContent', (() {
           labelMousedownCount = 0;
           lastLabelValue = null;
           app.editor.command.executeSetValue(
@@ -347,24 +351,23 @@ void main() {
           );
           app.editor.command.executeSetRange(0, 0);
           focusInput();
-        }),
-        'selectAll': js_util.allowInterop(() {
+  }).toJS);
+    expose('selectAll', (() {
           app.editor.command.executeSelectAll();
           focusInput();
-        }),
-        'copySelection': js_util.allowInterop(() async {
-          await app.editor.command.executeCopy();
-          focusInput();
-        }),
-        'pasteStoredClipboard': js_util.allowInterop(() {
+  }).toJS);
+    expose('copySelection', (() {
+          app.editor.command.executeCopy().then((_) => focusInput());
+  }).toJS);
+    expose('pasteStoredClipboard', (() {
           final payload = clipboard_utils.getClipboardData();
           if (payload == null) {
             return;
           }
           app.editor.command.executeInsertElementList(payload.elementList);
           focusInput();
-        }),
-        'storeLatexClipboard': js_util.allowInterop((String value) {
+  }).toJS);
+    expose('storeLatexClipboard', ((String value) {
           clipboard_utils.setClipboardData(
             clipboard_utils.ClipboardDataPayload(
               text: value,
@@ -376,27 +379,27 @@ void main() {
               ],
             ),
           );
-        }),
-        'undo': js_util.allowInterop(() {
+  }).toJS);
+    expose('undo', (() {
           app.editor.command.executeUndo();
           focusInput();
-        }),
-        'redo': js_util.allowInterop(() {
+  }).toJS);
+    expose('redo', (() {
           app.editor.command.executeRedo();
           focusInput();
-        }),
-        'historyDiagnostics': js_util.allowInterop(() {
-          return js_util.jsify(
+  }).toJS);
+    expose('historyDiagnostics', (() {
+          return _jsify(
             app.editor.getDraw().getHistoryDiagnostics(),
           );
-        }),
-        'resetContentChangeCount': js_util.allowInterop(() {
+  }).toJS);
+    expose('resetContentChangeCount', (() {
           contentChangeCount = 0;
-        }),
-        'contentChangeCount': js_util.allowInterop(() {
+  }).toJS);
+    expose('contentChangeCount', (() {
           return contentChangeCount;
-        }),
-        'insertListText': js_util.allowInterop((String value) {
+  }).toJS);
+    expose('insertListText', ((String value) {
           final elements = editor_core.splitText(value).map((unit) {
             return editor_core.IElement(value: unit)..listId = 'e2e-list';
           }).toList(growable: false);
@@ -405,23 +408,23 @@ void main() {
             editor_core.IInsertElementListOption(isDeltaHistory: true),
           );
           focusInput();
-        }),
-        'setFont': js_util.allowInterop((String value) {
+  }).toJS);
+    expose('setFont', ((String value) {
           app.editor.command.executeFont(value);
           focusInput();
-        }),
-        'setColor': js_util.allowInterop((String value) {
+  }).toJS);
+    expose('setColor', ((String value) {
           app.editor.command.executeColor(value);
           focusInput();
-        }),
-        'setRowFlex': js_util.allowInterop((String value) {
+  }).toJS);
+    expose('setRowFlex', ((String value) {
           final rowFlex = editor_core.RowFlex.values.firstWhere(
             (candidate) => candidate.name == value,
           );
           app.editor.command.executeRowFlex(rowFlex);
           focusInput();
-        }),
-        'setMode': js_util.allowInterop((String value) {
+  }).toJS);
+    expose('setMode', ((String value) {
           final mode = editor_core.EditorMode.values.firstWhere(
             (candidate) => candidate.name == value,
             orElse: () => editor_core.EditorMode.edit,
@@ -430,8 +433,8 @@ void main() {
           if (mode != editor_core.EditorMode.graffiti) {
             focusInput();
           }
-        }),
-        'setPrintModeOptions': js_util.allowInterop((
+  }).toJS);
+    expose('setPrintModeOptions', ((
           bool backgroundDisabled,
           bool filterEmptyControl,
           String? backgroundColor,
@@ -449,8 +452,8 @@ void main() {
             );
           app.editor.command.executeUpdateOptions(updateOption);
           focusInput();
-        }),
-        'setWhiteSpaceVisible': js_util.allowInterop((bool visible) {
+  }).toJS);
+    expose('setWhiteSpaceVisible', ((bool visible) {
           final draw = app.editor.getDraw();
           final options = draw.getOptions();
           options.whiteSpace?.disabled = !visible;
@@ -461,8 +464,8 @@ void main() {
               isSubmitHistory: false,
             ),
           );
-        }),
-        'insertLabel': js_util.allowInterop((String value) {
+  }).toJS);
+    expose('insertLabel', ((String value) {
           app.editor.command.executeInsertElementList(
             <editor_core.IElement>[
               editor_core.IElement(
@@ -473,16 +476,16 @@ void main() {
             ],
           );
           focusInput();
-        }),
-        'labelMousedownState': js_util.allowInterop(() {
-          return js_util.jsify(
+  }).toJS);
+    expose('labelMousedownState', (() {
+          return _jsify(
             <String, Object?>{
               'count': labelMousedownCount,
               'value': lastLabelValue,
             },
           );
-        }),
-        'firstLabelClientRect': js_util.allowInterop(() {
+  }).toJS);
+    expose('firstLabelClientRect', (() {
           final draw = app.editor.getDraw();
           final elements = draw.getElementList();
           final positions = draw.getPosition().getPositionList();
@@ -498,10 +501,8 @@ void main() {
           if (pageNo < 0 || pageNo >= pageList.length) {
             return null;
           }
-          final page = pageList[pageNo];
-          if (page is! html.CanvasElement) {
-            return null;
-          }
+          final html.HTMLCanvasElement page =
+              pageList[pageNo] as html.HTMLCanvasElement;
           final rect = page.getBoundingClientRect();
           final leftTop = position.coordinate['leftTop'] ?? const <double>[0, 0];
           final rightTop = position.coordinate['rightTop'] ?? const <double>[0, 0];
@@ -512,7 +513,7 @@ void main() {
           final height = leftBottom.length > 1 && leftTop.length > 1
               ? leftBottom[1] - leftTop[1]
               : 0;
-          return js_util.jsify(
+          return _jsify(
             <String, Object?>{
               'x': rect.left + (leftTop.isNotEmpty ? leftTop[0] + width / 2 : 0),
               'y': rect.top + (leftTop.length > 1 ? leftTop[1] + height / 2 : 0),
@@ -520,32 +521,32 @@ void main() {
               'height': height,
             },
           );
-        }),
-        'firstImageClientRect': js_util.allowInterop(() {
+  }).toJS);
+    expose('firstImageClientRect', (() {
           final rect = firstImageClientRect();
-          return rect == null ? null : js_util.jsify(rect);
-        }),
-        'dragSelectionPoints': js_util.allowInterop((num start, num end) {
+          return rect == null ? null : _jsify(rect);
+  }).toJS);
+    expose('dragSelectionPoints', ((num start, num end) {
           final points = dragSelectionPoints(start.toInt(), end.toInt());
-          return points == null ? null : js_util.jsify(points);
-        }),
-        'mainText': js_util.allowInterop(() {
+          return points == null ? null : _jsify(points);
+  }).toJS);
+    expose('mainText', (() {
           final result = app.editor.command.getValue();
           return result.data.main.map((element) => element.value).join('');
-        }),
-        'saveDocxLength': js_util.allowInterop(() {
+  }).toJS);
+    expose('saveDocxLength', (() {
           final bytes = app.saveOpenedDocxBytes();
           return bytes?.length ?? -1;
-        }),
-        'mainValues': js_util.allowInterop(() {
+  }).toJS);
+    expose('mainValues', (() {
           final result = app.editor.command.getValue();
-          return js_util.jsify(
+          return _jsify(
             result.data.main
                 .map((element) => element.value)
                 .toList(growable: false),
           );
-        }),
-        'mainElements': js_util.allowInterop(() {
+  }).toJS);
+    expose('mainElements', (() {
           final result = app.editor.command.getValue(
             draw_model.IGetValueOption(
               extraPickAttrs: <String>[
@@ -559,7 +560,7 @@ void main() {
               ],
             ),
           );
-          return js_util.jsify(
+          return _jsify(
             result.data.main
                 .map(
                   (element) => <String, Object?>{
@@ -673,10 +674,10 @@ void main() {
                 )
                 .toList(growable: false),
           );
-        }),
-        'drawElements': js_util.allowInterop(() {
+  }).toJS);
+    expose('drawElements', (() {
           final elements = app.editor.getDraw().getElementList();
-          return js_util.jsify(
+          return _jsify(
             elements
                 .map(
                   (element) => <String, Object?>{
@@ -689,10 +690,10 @@ void main() {
                 )
                 .toList(growable: false),
           );
-        }),
-        'graffitiData': js_util.allowInterop(() {
+  }).toJS);
+    expose('graffitiData', (() {
           final result = app.editor.command.getValue();
-          return js_util.jsify(
+          return _jsify(
             result.data.graffiti
                     ?.map(
                       (item) => <String, Object?>{
@@ -711,23 +712,23 @@ void main() {
                     .toList(growable: false) ??
                 const <Object?>[],
           );
-        }),
-        'controlIds': js_util.allowInterop(() {
-          return js_util.jsify(
+  }).toJS);
+    expose('controlIds', (() {
+          return _jsify(
             app.editor.command
                 .getControlList()
                 .map((element) => element.controlId)
                 .whereType<String>()
                 .toList(growable: false),
           );
-        }),
-        'areaExists': js_util.allowInterop((String id) {
+  }).toJS);
+    expose('areaExists', ((String id) {
           return app.editor.command.getAreaValue(
                 area_model.IGetAreaValueOption(id: id),
               ) !=
               null;
-        }),
-        'insertLatex': js_util.allowInterop((String value) {
+  }).toJS);
+    expose('insertLatex', ((String value) {
           app.editor.command.executeInsertElementList(
             <editor_core.IElement>[
               editor_core.IElement(
@@ -737,8 +738,8 @@ void main() {
             ],
           );
           focusInput();
-        }),
-        'insertImage': js_util.allowInterop((String value, num width, num height) {
+  }).toJS);
+    expose('insertImage', ((String value, num width, num height) {
           app.editor.command.executeImage(
             draw_model.IDrawImagePayload(
               value: value,
@@ -747,8 +748,8 @@ void main() {
             ),
           );
           focusInput();
-        }),
-        'openFirstImagePreviewer': js_util.allowInterop(() {
+  }).toJS);
+    expose('openFirstImagePreviewer', (() {
           final draw = app.editor.getDraw();
           final elements = draw.getElementList();
           final positions = draw.getPosition().getPositionList();
@@ -762,8 +763,8 @@ void main() {
           previewer?.drawResizer(elements[index], positions[index]);
           previewer?.render();
           return true;
-        }),
-        'dragPreviewerImage': js_util.allowInterop((num startX, num startY, num endX, num endY) {
+  }).toJS);
+    expose('dragPreviewerImage', ((num startX, num startY, num endX, num endY) {
           final previewer = html.document.querySelector('.ce-image-previewer');
           final image = html.document.querySelector('.ce-image-previewer .ce-image-container img');
           if (previewer == null || image == null) {
@@ -772,39 +773,45 @@ void main() {
           image.dispatchEvent(
             html.MouseEvent(
               'mousedown',
-              canBubble: true,
-              cancelable: true,
-              clientX: startX.toInt(),
-              clientY: startY.toInt(),
-              button: 0,
-              view: html.window,
+              html.MouseEventInit(
+                bubbles: true,
+                cancelable: true,
+                clientX: startX.toInt(),
+                clientY: startY.toInt(),
+                button: 0,
+                view: html.window,
+              ),
             ),
           );
           previewer.dispatchEvent(
             html.MouseEvent(
               'mousemove',
-              canBubble: true,
-              cancelable: true,
-              clientX: endX.toInt(),
-              clientY: endY.toInt(),
-              button: 0,
-              view: html.window,
+              html.MouseEventInit(
+                bubbles: true,
+                cancelable: true,
+                clientX: endX.toInt(),
+                clientY: endY.toInt(),
+                button: 0,
+                view: html.window,
+              ),
             ),
           );
           previewer.dispatchEvent(
             html.MouseEvent(
               'mouseup',
-              canBubble: true,
-              cancelable: true,
-              clientX: endX.toInt(),
-              clientY: endY.toInt(),
-              button: 0,
-              view: html.window,
+              html.MouseEventInit(
+                bubbles: true,
+                cancelable: true,
+                clientX: endX.toInt(),
+                clientY: endY.toInt(),
+                button: 0,
+                view: html.window,
+              ),
             ),
           );
           return true;
-        }),
-        'wheelPreviewer': js_util.allowInterop((num deltaY) {
+  }).toJS);
+    expose('wheelPreviewer', ((num deltaY) {
           final previewer = html.document.querySelector('.ce-image-previewer');
           if (previewer == null) {
             return false;
@@ -812,15 +819,17 @@ void main() {
           previewer.dispatchEvent(
             html.WheelEvent(
               'wheel',
-              canBubble: true,
-              cancelable: true,
-              deltaY: deltaY.toDouble(),
-              view: html.window,
+              html.WheelEventInit(
+                bubbles: true,
+                cancelable: true,
+                deltaY: deltaY.toDouble(),
+                view: html.window,
+              ),
             ),
           );
           return true;
-        }),
-        'dragResizerHandle': js_util.allowInterop((num handleIndex, num deltaX, num deltaY) {
+  }).toJS);
+    expose('dragResizerHandle', ((num handleIndex, num deltaX, num deltaY) {
           final handle = html.document.querySelector(
             '.ce-resizer-selection .handle-${handleIndex.toInt()}',
           );
@@ -833,40 +842,46 @@ void main() {
           handle.dispatchEvent(
             html.MouseEvent(
               'mousedown',
-              canBubble: true,
-              cancelable: true,
-              clientX: startX.round(),
-              clientY: startY.round(),
-              button: 0,
-              view: html.window,
+              html.MouseEventInit(
+                bubbles: true,
+                cancelable: true,
+                clientX: startX.round(),
+                clientY: startY.round(),
+                button: 0,
+                view: html.window,
+              ),
             ),
           );
           html.document.dispatchEvent(
             html.MouseEvent(
               'mousemove',
-              canBubble: true,
-              cancelable: true,
-              clientX: (startX + deltaX.toDouble()).round(),
-              clientY: (startY + deltaY.toDouble()).round(),
-              button: 0,
-              view: html.window,
+              html.MouseEventInit(
+                bubbles: true,
+                cancelable: true,
+                clientX: (startX + deltaX.toDouble()).round(),
+                clientY: (startY + deltaY.toDouble()).round(),
+                button: 0,
+                view: html.window,
+              ),
             ),
           );
           html.document.dispatchEvent(
             html.MouseEvent(
               'mouseup',
-              canBubble: true,
-              cancelable: true,
-              clientX: (startX + deltaX.toDouble()).round(),
-              clientY: (startY + deltaY.toDouble()).round(),
-              button: 0,
-              view: html.window,
+              html.MouseEventInit(
+                bubbles: true,
+                cancelable: true,
+                clientX: (startX + deltaX.toDouble()).round(),
+                clientY: (startY + deltaY.toDouble()).round(),
+                button: 0,
+                view: html.window,
+              ),
             ),
           );
           focusInput();
           return true;
-        }),
-        'setImageCrop': js_util.allowInterop((num x, num y, num width, num height) {
+  }).toJS);
+    expose('setImageCrop', ((num x, num y, num width, num height) {
           final elements = app.editor.getDraw().getOriginalMainElementList();
           final index = elements.indexWhere(
             (element) => element.type == editor_core.ElementType.image,
@@ -888,8 +903,8 @@ void main() {
           );
           focusInput();
           return true;
-        }),
-        'setImageCaption': js_util.allowInterop((String value) {
+  }).toJS);
+    expose('setImageCaption', ((String value) {
           final elements = app.editor.getDraw().getOriginalMainElementList();
           final index = elements.indexWhere(
             (element) => element.type == editor_core.ElementType.image,
@@ -906,16 +921,13 @@ void main() {
           );
           focusInput();
           return true;
-        }),
-        'pageImages': js_util.allowInterop((Object callback) async {
-          final images = await app.editor.command.getImage();
-          js_util.callMethod<void>(
-            callback,
-            'call',
-            <Object?>[null, js_util.jsify(images)],
-          );
-        }),
-        'seedGraffitiStroke': js_util.allowInterop((
+  }).toJS);
+    expose('pageImages', ((JSFunction callback) {
+          app.editor.command.getImage().then((images) {
+            callback.callAsFunction(null, _jsify(images));
+          });
+  }).toJS);
+    expose('seedGraffitiStroke', ((
           num startX,
           num startY,
           num endX,
@@ -963,51 +975,51 @@ void main() {
             ),
           );
           return true;
-        }),
-        'clearGraffiti': js_util.allowInterop(() {
+  }).toJS);
+    expose('clearGraffiti', (() {
           app.editor.command.executeClearGraffiti();
-        }),
-        'importHtml': js_util.allowInterop((String htmlText) {
+  }).toJS);
+    expose('importHtml', ((String htmlText) {
           final elements = editor_core.getElementListByHTML(
             htmlText,
             const editor_core.GetElementListByHtmlOption(innerWidth: 794),
           );
           app.editor.command.executeInsertElementList(elements);
           focusInput();
-        }),
-        'insertTable': js_util.allowInterop((num row, num col) {
+  }).toJS);
+    expose('insertTable', ((num row, num col) {
           app.editor.command.executeInsertTable(row.toInt(), col.toInt());
           focusInput();
-        }),
-        'insertTableTopRow': js_util.allowInterop(() {
+  }).toJS);
+    expose('insertTableTopRow', (() {
           app.editor.command.executeInsertTableTopRow();
           focusInput();
-        }),
-        'insertTableBottomRow': js_util.allowInterop(() {
+  }).toJS);
+    expose('insertTableBottomRow', (() {
           app.editor.command.executeInsertTableBottomRow();
           focusInput();
-        }),
-        'insertTableLeftCol': js_util.allowInterop(() {
+  }).toJS);
+    expose('insertTableLeftCol', (() {
           app.editor.command.executeInsertTableLeftCol();
           focusInput();
-        }),
-        'insertTableRightCol': js_util.allowInterop(() {
+  }).toJS);
+    expose('insertTableRightCol', (() {
           app.editor.command.executeInsertTableRightCol();
           focusInput();
-        }),
-        'deleteTableRow': js_util.allowInterop(() {
+  }).toJS);
+    expose('deleteTableRow', (() {
           app.editor.command.executeDeleteTableRow();
           focusInput();
-        }),
-        'deleteTableCol': js_util.allowInterop(() {
+  }).toJS);
+    expose('deleteTableCol', (() {
           app.editor.command.executeDeleteTableCol();
           focusInput();
-        }),
-        'deleteTable': js_util.allowInterop(() {
+  }).toJS);
+    expose('deleteTable', (() {
           app.editor.command.executeDeleteTable();
           focusInput();
-        }),
-        'focusFirstTableCell': js_util.allowInterop(() {
+  }).toJS);
+    expose('focusFirstTableCell', (() {
           final result = app.editor.command.getValue(
             draw_model.IGetValueOption(extraPickAttrs: <String>['id']),
           );
@@ -1042,8 +1054,8 @@ void main() {
           app.editor.getDraw().getTableTool()?.render();
           focusInput();
           return true;
-        }),
-        'focusTableRange': js_util.allowInterop((num startRow, num startCol, num endRow, num endCol) {
+  }).toJS);
+    expose('focusTableRange', ((num startRow, num startCol, num endRow, num endCol) {
           final result = app.editor.command.getValue(
             draw_model.IGetValueOption(extraPickAttrs: <String>['id']),
           );
@@ -1094,23 +1106,25 @@ void main() {
           app.editor.getDraw().getTableTool()?.render();
           focusInput();
           return true;
-        }),
-        'openFocusedContextMenu': js_util.allowInterop(() {
+  }).toJS);
+    expose('openFocusedContextMenu', (() {
           final container = app.editor.getDraw().getContainer();
           final rect = container.getBoundingClientRect();
           final event = html.MouseEvent(
             'contextmenu',
-            canBubble: true,
-            cancelable: true,
-            clientX: (rect.left + 40).round(),
-            clientY: (rect.top + 40).round(),
-            button: 2,
-            view: html.window,
+            html.MouseEventInit(
+              bubbles: true,
+              cancelable: true,
+              clientX: (rect.left + 40).round(),
+              clientY: (rect.top + 40).round(),
+              button: 2,
+              view: html.window,
+            ),
           );
           return container.dispatchEvent(event);
-        }),
-        'insertTextControl': js_util.allowInterop(
-          (String placeholder, String value) {
+  }).toJS);
+    expose('insertTextControl',
+          ((String placeholder, String value) {
             app.editor.command.executeInsertControl(
               editor_core.IElement(
                 type: editor_core.ElementType.control,
@@ -1129,9 +1143,8 @@ void main() {
               ),
             );
             focusInput();
-          },
-        ),
-        'insertCheckboxControl': js_util.allowInterop(() {
+          }).toJS);
+    expose('insertCheckboxControl', (() {
           app.editor.command.executeInsertControl(
             editor_core.IElement(
               type: editor_core.ElementType.control,
@@ -1148,14 +1161,14 @@ void main() {
             ),
           );
           focusInput();
-        }),
-        'deleteArea': js_util.allowInterop((String id) {
+  }).toJS);
+    expose('deleteArea', ((String id) {
           app.editor.command.executeDeleteArea(
             area_model.IDeleteAreaOption(id: id),
           );
           focusInput();
-        }),
-        'locationControl': js_util.allowInterop((String controlId) {
+  }).toJS);
+    expose('locationControl', ((String controlId) {
           app.editor.command.executeLocationControl(
             controlId,
             control_model.ILocationControlOption(
@@ -1163,42 +1176,40 @@ void main() {
             ),
           );
           focusInput();
-        }),
-        'jumpControl': js_util.allowInterop(() {
+  }).toJS);
+    expose('jumpControl', (() {
           app.editor.command.executeJumpControl();
           focusInput();
-        }),
-        'hideCursor': js_util.allowInterop(() {
+  }).toJS);
+    expose('hideCursor', (() {
           app.editor.command.executeHideCursor();
-        }),
-        'cursorDisplay': js_util.allowInterop(() {
+  }).toJS);
+    expose('cursorDisplay', (() {
           final cursor = html.document.querySelector('.ce-cursor');
-          if (cursor is html.HtmlElement) {
-            return cursor.style.display;
+          if (cursor != null && cursor.isA<html.HTMLElement>()) {
+            return (cursor as html.HTMLElement).style.display;
           }
           return null;
-        }),
-        'remainingContentHeight': js_util.allowInterop(() {
+  }).toJS);
+    expose('remainingContentHeight', (() {
           return app.editor.command.getRemainingContentHeight();
-        }),
-        'computeTextHeight': js_util.allowInterop((String text) {
+  }).toJS);
+    expose('computeTextHeight', ((String text) {
           final elements = editor_core.splitText(text)
               .map((value) => editor_core.IElement(value: value))
               .toList(growable: false);
           return app.editor.command.executeComputeElementListHeight(elements);
-        }),
-        'range': js_util.allowInterop(() {
+  }).toJS);
+    expose('range', (() {
           final range = app.editor.command.getRange();
-          return js_util.jsify({
+          return _jsify({
             'startIndex': range.startIndex,
             'endIndex': range.endIndex,
           });
-        }),
-      }),
-    );
+  }).toJS);
 
-    js_util.setProperty(html.window, '__editorReady', true);
-  });
+    html.window.setProperty('__editorTest'.toJS, editorTest);
+    html.window.setProperty('__editorReady'.toJS, true.toJS);
 }
 ''';
 

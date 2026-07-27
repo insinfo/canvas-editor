@@ -1,4 +1,4 @@
-import 'dart:html';
+import 'package:canvas_text_editor/src/dom/dom.dart';
 
 import '../../../dataset/constant/editor.dart';
 import '../../../interface/draw.dart';
@@ -18,10 +18,10 @@ class TextBoxTool {
   }
 
   final Draw _draw;
-  late final DivElement _container;
+  late final HTMLDivElement _container;
 
-  DivElement? _overlay;
-  DivElement? _editPanel;
+  HTMLDivElement? _overlay;
+  HTMLDivElement? _editPanel;
   int _selectedIndex = -1;
 
   // Estado de arrasto (mover ou redimensionar por alça).
@@ -80,8 +80,8 @@ class TextBoxTool {
   void _renderOverlay(HeaderTextBoxRect rect) {
     _overlay?.remove();
     final double preY = _pagePreY();
-    final DivElement overlay = DivElement()
-      ..classes.add('$editorPrefix-textbox-tool')
+    final HTMLDivElement overlay = HTMLDivElement()
+      ..classList.add('$editorPrefix-textbox-tool')
       ..style.left = '${rect.left}px'
       ..style.top = '${rect.top + preY}px'
       ..style.width = '${rect.width}px'
@@ -101,8 +101,8 @@ class TextBoxTool {
     for (final String kind in const <String>[
       'nw', 'n', 'ne', 'e', 'se', 's', 'sw', 'w' //
     ]) {
-      final DivElement handle = DivElement()
-        ..classes.addAll(<String>['$editorPrefix-textbox-tool__handle', kind]);
+      final HTMLDivElement handle = HTMLDivElement()
+        ..classList.addAll(<String>['$editorPrefix-textbox-tool__handle', kind]);
       handle.onMouseDown.listen((MouseEvent event) {
         event
           ..preventDefault()
@@ -112,13 +112,13 @@ class TextBoxTool {
       overlay.append(handle);
     }
     // Mini-toolbar de alinhamento/edição (estilo "Opções de Layout").
-    final DivElement bar = DivElement()
-      ..classes.add('$editorPrefix-textbox-tool__bar');
-    ButtonElement barButton(String icon, String title, void Function() act) {
-      final ButtonElement button = ButtonElement()
+    final HTMLDivElement bar = HTMLDivElement()
+      ..classList.add('$editorPrefix-textbox-tool__bar');
+    HTMLButtonElement barButton(String icon, String title, void Function() act) {
+      final HTMLButtonElement button = HTMLButtonElement()
         ..type = 'button'
         ..title = title
-        ..append(SpanElement()..classes.addAll(<String>['ti', icon]));
+        ..append(HTMLSpanElement()..classList.addAll(<String>['ti', icon]));
       button.onMouseDown.listen((MouseEvent e) => e.preventDefault());
       button.onClick.listen((_) => act());
       return button;
@@ -143,8 +143,8 @@ class TextBoxTool {
         _openEditPanel(rect);
       }));
     // Cor de fundo da caixa (input nativo) + limpar fundo.
-    final InputElement fillInput = InputElement(type: 'color')
-      ..classes.add('$editorPrefix-textbox-tool__fill')
+    final HTMLInputElement fillInput = (HTMLInputElement()..type = 'color')
+      ..classList.add('$editorPrefix-textbox-tool__fill')
       ..title = 'Cor de fundo';
     final List<IHeaderTextBox> boxesNow = _header.getTextBoxes();
     if (_selectedIndex >= 0 && _selectedIndex < boxesNow.length) {
@@ -170,8 +170,8 @@ class TextBoxTool {
 
   void _beginDrag(String kind, MouseEvent event, HeaderTextBoxRect rect) {
     _dragKind = kind;
-    _startClientX = event.client.x.toDouble();
-    _startClientY = event.client.y.toDouble();
+    _startClientX = event.clientX.toDouble();
+    _startClientY = event.clientY.toDouble();
     _startLeft = rect.left;
     _startTop = rect.top;
     _startWidth = rect.width;
@@ -187,11 +187,11 @@ class TextBoxTool {
   }
 
   void _onDragMove(MouseEvent event) {
-    final DivElement? overlay = _overlay;
+    final HTMLDivElement? overlay = _overlay;
     final String? kind = _dragKind;
     if (overlay == null || kind == null) return;
-    final double dx = event.client.x - _startClientX;
-    final double dy = event.client.y - _startClientY;
+    final double dx = event.clientX - _startClientX;
+    final double dy = event.clientY - _startClientY;
     double left = _startLeft;
     double top = _startTop;
     double width = _startWidth;
@@ -224,8 +224,8 @@ class TextBoxTool {
     final String? kind = _dragKind;
     _dragKind = null;
     if (kind == null) return;
-    final double dx = event.client.x - _startClientX;
-    final double dy = event.client.y - _startClientY;
+    final double dx = event.clientX - _startClientX;
+    final double dy = event.clientY - _startClientY;
     if (dx == 0 && dy == 0) return;
     final double scale = _scale;
     final List<double> margins = List<double>.from(_draw.getMargins());
@@ -299,8 +299,8 @@ class TextBoxTool {
         styleSource.font ?? _draw.getOptions().defaultFont ?? 'Arial';
     // O texto da caixa é pintado no canvas; o campo cobre a caixa com o mesmo
     // preenchimento para não aparecer texto duplicado enquanto se edita.
-    final DivElement editor = DivElement()
-      ..classes.add('$editorPrefix-textbox-tool__inline')
+    final HTMLDivElement editor = HTMLDivElement()
+      ..classList.add('$editorPrefix-textbox-tool__inline')
       ..contentEditable = 'true'
       ..spellcheck = false
       ..style.left = '${rect.left}px'
@@ -319,7 +319,7 @@ class TextBoxTool {
     final List<String> lines =
         tb.elements.map((IElement e) => e.value).join().split('\n');
     for (final String line in lines) {
-      editor.append(DivElement()..text = line.isEmpty ? '​' : line);
+      editor.append(HTMLDivElement()..text = line.isEmpty ? '​' : line);
     }
 
     void commit() {
@@ -379,10 +379,10 @@ class TextBoxTool {
 
   /// Texto do campo in place com uma linha por bloco (ignora o placeholder de
   /// linha vazia).
-  static String _readInlineText(DivElement editor) {
+  static String _readInlineText(HTMLDivElement editor) {
     final List<String> lines = <String>[];
-    for (final Node node in editor.childNodes) {
-      final String value = (node.text ?? '').replaceAll('​', '');
+    for (final Node node in editor.childNodes.toList()) {
+      final String value = (node.textContent ?? '').replaceAll('​', '');
       lines.add(value);
     }
     if (lines.isEmpty) {

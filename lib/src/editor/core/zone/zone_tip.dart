@@ -1,4 +1,4 @@
-import 'dart:html';
+import 'package:canvas_text_editor/src/dom/dom.dart';
 
 import '../../dataset/constant/editor.dart' as editor_constants;
 import '../../dataset/enum/editor.dart';
@@ -16,9 +16,9 @@ class ZoneTip {
     final _TipElements tip = _createTipDom();
     _tipContainer = tip.container;
     _tipContent = tip.content;
-    _tipContainer.classes.add('${editor_constants.editorPrefix}-zone-tip');
+    _tipContainer.classList.add('${editor_constants.editorPrefix}-zone-tip');
     _tipContainer.style.position = 'fixed';
-    _tipContainer.classes.remove('show');
+    _tipContainer.classList.remove('show');
 
     _container.append(_tipContainer);
 
@@ -43,10 +43,10 @@ class ZoneTip {
   final Draw _draw;
   final Zone _zone;
   final I18n _i18n;
-  final DivElement _container;
-  final DivElement _pageContainer;
-  late final DivElement _tipContainer;
-  late final SpanElement _tipContent;
+  final HTMLDivElement _container;
+  final HTMLDivElement _pageContainer;
+  late final HTMLDivElement _tipContainer;
+  late final HTMLSpanElement _tipContent;
   late bool _isDisableMouseMove;
   late EditorZone _currentMoveZone;
 
@@ -62,7 +62,7 @@ class ZoneTip {
           return;
         }
         final EventTarget? target = evt.target;
-        if (target is CanvasElement) {
+        if (target != null && target.isA<HTMLCanvasElement>()) {
           final EditorZone moveZone =
               _zone.getZoneByY(offsetPoint.y.toDouble());
           if (!watchZones.contains(moveZone)) {
@@ -70,8 +70,8 @@ class ZoneTip {
             return;
           }
           _currentMoveZone = moveZone;
-          final double clientX = evt.client.x.toDouble();
-          final double clientY = evt.client.y.toDouble();
+          final double clientX = evt.clientX.toDouble();
+          final double clientY = evt.clientY.toDouble();
           final bool isMainActive = _zone.getZone() == EditorZone.main;
           final bool isWatchedZone =
               moveZone == EditorZone.header || moveZone == EditorZone.footer;
@@ -96,18 +96,18 @@ class ZoneTip {
   }
 
   _TipElements _createTipDom() {
-    final DivElement container = DivElement();
-    final SpanElement content = SpanElement();
+    final HTMLDivElement container = HTMLDivElement();
+    final HTMLSpanElement content = HTMLSpanElement();
     container.append(content);
     return _TipElements(container: container, content: content);
   }
 
   void _updateZoneTip(bool visible, [double? left, double? top]) {
     if (!visible) {
-      _tipContainer.classes.remove('show');
+      _tipContainer.classList.remove('show');
       return;
     }
-    _tipContainer.classes.add('show');
+    _tipContainer.classList.add('show');
     if (left != null) {
       _tipContainer.style.left = '${left}px';
     }
@@ -123,6 +123,6 @@ class ZoneTip {
 class _TipElements {
   _TipElements({required this.container, required this.content});
 
-  final DivElement container;
-  final SpanElement content;
+  final HTMLDivElement container;
+  final HTMLSpanElement content;
 }

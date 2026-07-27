@@ -1,4 +1,4 @@
-import 'dart:html';
+import 'package:canvas_text_editor/src/dom/dom.dart';
 
 enum PreviewerMime {
   png('png'),
@@ -12,11 +12,11 @@ enum PreviewerMime {
 }
 
 class IPreviewerCreateResult {
-  DivElement resizerSelection;
-  List<DivElement> resizerHandleList;
-  DivElement resizerImageContainer;
-  ImageElement resizerImage;
-  SpanElement resizerSize;
+  HTMLDivElement resizerSelection;
+  List<HTMLDivElement> resizerHandleList;
+  HTMLDivElement resizerImageContainer;
+  HTMLImageElement resizerImage;
+  HTMLSpanElement resizerSize;
 
   IPreviewerCreateResult({
     required this.resizerSelection,

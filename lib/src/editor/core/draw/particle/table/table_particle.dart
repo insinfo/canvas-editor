@@ -1,4 +1,4 @@
-import 'dart:html';
+import 'package:canvas_text_editor/src/dom/dom.dart';
 
 import '../../../../dataset/enum/element.dart';
 import '../../../../dataset/enum/table/table.dart';
@@ -238,10 +238,10 @@ class TableParticle {
 
     ctx.save();
     if (borderType == TableBorder.dash) {
-      ctx.setLineDash(<double>[3, 3]);
+      ctx.setDash(<double>[3, 3]);
     }
     ctx.lineWidth = borderWidth * scale;
-    ctx.strokeStyle = borderColor ?? defaultBorderColor ?? '#d9d9d9';
+    ctx.strokeColor = borderColor ?? defaultBorderColor ?? '#d9d9d9';
 
     if (!isEmptyBorderType && !isInternalBorderType) {
       _drawOuterBorder(
@@ -370,7 +370,7 @@ class TableParticle {
         final double height = (td.height ?? 0) * scale;
         final double x = ((td.x ?? 0) * scale + startX).roundToDouble();
         final double y = ((td.y ?? 0) * scale + startY).roundToDouble();
-        ctx.fillStyle = backgroundColor;
+        ctx.fillColor = backgroundColor;
         ctx.fillRect(x, y, width, height);
         ctx.restore();
       }
@@ -599,7 +599,7 @@ class TableParticle {
         final double width = (td.width ?? 0) * scale;
         final double height = (td.height ?? 0) * scale;
         ctx.globalAlpha = rangeAlpha;
-        ctx.fillStyle = rangeColor;
+        ctx.fillColor = rangeColor;
         ctx.fillRect(x + startX, y + startY, width, height);
       }
     }

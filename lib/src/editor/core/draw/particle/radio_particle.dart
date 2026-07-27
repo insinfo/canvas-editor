@@ -1,5 +1,5 @@
 // Ported from C:\\MyTsProjects\\canvas-editor\\src\\editor\\core\\draw\\particle\\RadioParticle.ts
-import 'dart:html';
+import 'package:canvas_text_editor/src/dom/dom.dart';
 import 'dart:math' as math;
 
 import '../../../dataset/constant/common.dart';
@@ -61,8 +61,8 @@ class RadioParticle {
 		final double scale = (_options.scale ?? 1).toDouble();
 		final double gap = (_options.radio?.gap ?? 5).toDouble();
 		final double lineWidth = (_options.radio?.lineWidth ?? 1).toDouble();
-		final String fillStyle = _options.radio?.fillStyle ?? '#5175f4';
-		final String strokeStyle = _options.radio?.strokeStyle ?? '#000000';
+		final String fillColor = _options.radio?.fillStyle ?? '#5175f4';
+		final String strokeColor = _options.radio?.strokeStyle ?? '#000000';
 		final VerticalAlign verticalAlign =
 			_options.radio?.verticalAlign ?? VerticalAlign.bottom;
 		final bool isTopAlign = verticalAlign == VerticalAlign.top;
@@ -98,7 +98,8 @@ class RadioParticle {
 		ctx.save();
 		ctx.beginPath();
 		ctx.translate(0.5, 0.5);
-		ctx.strokeStyle = (element.radio?.value ?? false) ? fillStyle : strokeStyle;
+		ctx.strokeColor =
+				(element.radio?.value ?? false) ? fillColor : strokeColor;
 		ctx.lineWidth = lineWidth;
 		final double centerX = left + width / 2;
 		final double centerY = top + height / 2;
@@ -107,7 +108,7 @@ class RadioParticle {
 		ctx.stroke();
 		if (element.radio?.value == true) {
 			ctx.beginPath();
-			ctx.fillStyle = fillStyle;
+			ctx.fillColor = fillColor;
 			ctx.arc(centerX, centerY, radius / 1.5, 0, math.pi * 2);
 			ctx.fill();
 		}

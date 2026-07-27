@@ -1,5 +1,4 @@
-import 'dart:html';
-import 'dart:js_util' as js_util;
+import 'package:canvas_text_editor/src/dom/dom.dart';
 
 import '../../../../../interface/block.dart';
 import '../../../../../interface/row.dart';
@@ -11,31 +10,37 @@ class IFrameBlock {
 
 	final IRowElement _element;
 
-	void _defineIframeProperties(WindowBase? iframeWindow) {
+	void _defineIframeProperties(Window? iframeWindow) {
 		if (iframeWindow == null) {
 			return;
 		}
-		final dynamic objectConstructor = js_util.getProperty(js_util.globalThis, 'Object');
-		final Map<String, dynamic> descriptor = <String, dynamic>{
-			'parent': <String, dynamic>{
-				'get': js_util.allowInterop(() => null),
-			},
-			'__POWERED_BY_CANVAS_EDITOR__': <String, dynamic>{
-				'get': js_util.allowInterop(() => true),
-			},
-		};
-		js_util.callMethod(objectConstructor, 'defineProperties', <dynamic>[
+		final JSObject? objectConstructor =
+				globalContext.getProperty('Object'.toJS) as JSObject?;
+		if (objectConstructor == null) {
+			return;
+		}
+		final JSObject descriptor = JSObject()
+			..setProperty(
+				'parent'.toJS,
+				JSObject()..setProperty('get'.toJS, (() => null).toJS),
+			)
+			..setProperty(
+				'__POWERED_BY_CANVAS_EDITOR__'.toJS,
+				JSObject()..setProperty('get'.toJS, (() => true.toJS).toJS),
+			);
+		objectConstructor.callMethod(
+			'defineProperties'.toJS,
 			iframeWindow,
-			js_util.jsify(descriptor),
-		]);
+			descriptor,
+		);
 	}
 
-	void render(DivElement blockItemContainer) {
+	void render(HTMLDivElement blockItemContainer) {
 		final IBlock? block = _element.block;
 		if (block == null) {
 			return;
 		}
-		final IFrameElement iframe = IFrameElement()
+		final HTMLIFrameElement iframe = HTMLIFrameElement()
 			..style.border = 'none'
 			..style.width = '100%'
 			..style.height = '100%';
@@ -48,7 +53,7 @@ class IFrameBlock {
 		if (src != null && src.isNotEmpty) {
 			iframe.src = src;
 		} else if (srcdoc != null && srcdoc.isNotEmpty) {
-			iframe.srcdoc = srcdoc;
+			iframe.srcdoc = srcdoc.toJS;
 		}
 		blockItemContainer.append(iframe);
 		_defineIframeProperties(iframe.contentWindow);

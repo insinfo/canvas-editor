@@ -1,5 +1,5 @@
 import 'dart:async';
-import 'dart:html';
+import 'package:canvas_text_editor/src/dom/dom.dart';
 import 'dart:math' as math;
 
 import '../../../../dataset/constant/editor.dart';
@@ -24,45 +24,45 @@ class Previewer {
 		_resizerImageContainer = createResult.resizerImageContainer;
 		_resizerImage = createResult.resizerImage;
 		_resizerSize = createResult.resizerSize;
-		_keydownListener = (Event _) => _onKeydown();
+		_keydownListener = ((Event _) => _onKeydown()).toJS;
 	}
 
 	final Draw _draw;
-	final DivElement _container;
+	final HTMLDivElement _container;
 	final IEditorOption _options;
 	final EventBus<EventBusMap>? _eventBus;
 
-	CanvasElement? _canvas;
+	HTMLCanvasElement? _canvas;
 	IElement? _curElement;
 	String _curElementSrc = '';
 	IPreviewerDrawOption _previewerDrawOption = IPreviewerDrawOption();
 	IElementPosition? _curPosition;
 	List<IElement> _imageList = <IElement>[];
 	IElement? _curShowElement;
-	SpanElement? _imageCount;
+	HTMLSpanElement? _imageCount;
 	Element? _imagePre;
 	Element? _imageNext;
 
 	late final EventListener _keydownListener;
 	bool _keydownBound = false;
 
-	late final DivElement _resizerSelection;
-	late final List<DivElement> _resizerHandleList;
-	late final DivElement _resizerImageContainer;
-	late final ImageElement _resizerImage;
-	late final SpanElement _resizerSize;
+	late final HTMLDivElement _resizerSelection;
+	late final List<HTMLDivElement> _resizerHandleList;
+	late final HTMLDivElement _resizerImageContainer;
+	late final HTMLImageElement _resizerImage;
+	late final HTMLSpanElement _resizerSize;
 	double _width = 0;
 	double _height = 0;
 	double _mousedownX = 0;
 	double _mousedownY = 0;
 	int _curHandleIndex = 0;
 
-	DivElement? _previewerContainer;
-	ImageElement? _previewerImage;
+	HTMLDivElement? _previewerContainer;
+	HTMLImageElement? _previewerImage;
 
 	double _scale() => (_options.scale ?? 1).toDouble();
 
-	CanvasElement? _resolveCurrentCanvas() {
+	HTMLCanvasElement? _resolveCurrentCanvas() {
 		final List<Element> pageList = _draw.getPageList();
 		if (pageList.isEmpty) {
 			return null;
@@ -72,7 +72,7 @@ class Previewer {
 			pageIndex = 0;
 		}
 		final Element element = pageList[pageIndex];
-		return element is CanvasElement ? element : null;
+		return asCanvasElement(element);
 	}
 
 	Map<String, double> _getElementPosition(
@@ -108,16 +108,16 @@ class Previewer {
 
 	IPreviewerCreateResult _createResizerDom() {
 		final double scale = _scale();
-		final DivElement resizerSelection = DivElement()
-			..classes.add('$editorPrefix-resizer-selection')
+		final HTMLDivElement resizerSelection = HTMLDivElement()
+			..classList.add('$editorPrefix-resizer-selection')
 			..style.display = 'none'
 			..style.borderColor = _options.resizerColor ?? '#3B76F0'
 			..style.borderWidth = '${scale}px';
 
-		final List<DivElement> resizerHandleList = <DivElement>[];
+		final List<HTMLDivElement> resizerHandleList = <HTMLDivElement>[];
 		for (int i = 0; i < 8; i++) {
-			final DivElement handleDom = DivElement()
-				..classes.addAll(<String>['resizer-handle', 'handle-$i'])
+			final HTMLDivElement handleDom = HTMLDivElement()
+				..classList.addAll(<String>['resizer-handle', 'handle-$i'])
 				..dataset['index'] = '$i'
 				..style.background = _options.resizerColor ?? '#3B76F0';
 			handleDom.onMouseDown.listen(_onHandleMouseDown);
@@ -126,16 +126,16 @@ class Previewer {
 		}
 		_container.append(resizerSelection);
 
-		final DivElement resizerSizeView = DivElement()
-			..classes.add('$editorPrefix-resizer-size-view');
-		final SpanElement resizerSize = SpanElement();
+		final HTMLDivElement resizerSizeView = HTMLDivElement()
+			..classList.add('$editorPrefix-resizer-size-view');
+		final HTMLSpanElement resizerSize = HTMLSpanElement();
 		resizerSizeView.append(resizerSize);
 		resizerSelection.append(resizerSizeView);
 
-		final DivElement resizerImageContainer = DivElement()
-			..classes.add('$editorPrefix-resizer-image')
+		final HTMLDivElement resizerImageContainer = HTMLDivElement()
+			..classList.add('$editorPrefix-resizer-image')
 			..style.display = 'none';
-		final ImageElement resizerImage = ImageElement();
+		final HTMLImageElement resizerImage = HTMLImageElement();
 		resizerImageContainer.append(resizerImage);
 		_container.append(resizerImageContainer);
 
@@ -156,20 +156,20 @@ class Previewer {
 
 	void _onHandleMouseDown(MouseEvent evt) {
 		_canvas = _resolveCurrentCanvas();
-		final CanvasElement? canvas = _canvas;
+		final HTMLCanvasElement? canvas = _canvas;
 		final IElement? element = _curElement;
 		if (canvas == null || element == null) {
 			return;
 		}
-		_mousedownX = evt.client.x.toDouble();
-		_mousedownY = evt.client.y.toDouble();
+		_mousedownX = evt.clientX.toDouble();
+		_mousedownY = evt.clientY.toDouble();
 		final Element? target = evt.target as Element?;
 		if (target != null) {
-			final String? indexValue = target.dataset['index'];
+			final String? indexValue = target.data('index');
 			if (indexValue != null) {
 				_curHandleIndex = int.tryParse(indexValue) ?? 0;
 			}
-			final CssStyleDeclaration style = target.getComputedStyle();
+			final CSSStyleDeclaration style = target.getComputedStyle();
 			final String cursor = style.cursor.isEmpty ? 'default' : style.cursor;
 			document.body?.style.cursor = cursor;
 			canvas.style.cursor = cursor;
@@ -232,47 +232,47 @@ class Previewer {
 		switch (_curHandleIndex) {
 			case 0:
 				{
-					final double offsetX = _mousedownX - evt.client.x.toDouble();
-					final double offsetY = _mousedownY - evt.client.y.toDouble();
+					final double offsetX = _mousedownX - evt.clientX.toDouble();
+					final double offsetY = _mousedownY - evt.clientY.toDouble();
 					dx = _cubeRoot(_cube(offsetX) + _cube(offsetY));
 					dy = (elementHeight * dx) / elementWidth;
 				}
 				break;
 			case 1:
-				dy = _mousedownY - evt.client.y.toDouble();
+				dy = _mousedownY - evt.clientY.toDouble();
 				break;
 			case 2:
 				{
-					final double offsetX = evt.client.x.toDouble() - _mousedownX;
-					final double offsetY = _mousedownY - evt.client.y.toDouble();
+					final double offsetX = evt.clientX.toDouble() - _mousedownX;
+					final double offsetY = _mousedownY - evt.clientY.toDouble();
 					dx = _cubeRoot(_cube(offsetX) + _cube(offsetY));
 					dy = (elementHeight * dx) / elementWidth;
 				}
 				break;
 			case 3:
-				dx = evt.client.x.toDouble() - _mousedownX;
+				dx = evt.clientX.toDouble() - _mousedownX;
 				break;
 			case 4:
 				{
-					final double offsetX = evt.client.x.toDouble() - _mousedownX;
-					final double offsetY = evt.client.y.toDouble() - _mousedownY;
+					final double offsetX = evt.clientX.toDouble() - _mousedownX;
+					final double offsetY = evt.clientY.toDouble() - _mousedownY;
 					dx = _cubeRoot(_cube(offsetX) + _cube(offsetY));
 					dy = (elementHeight * dx) / elementWidth;
 				}
 				break;
 			case 5:
-				dy = evt.client.y.toDouble() - _mousedownY;
+				dy = evt.clientY.toDouble() - _mousedownY;
 				break;
 			case 6:
 				{
-					final double offsetX = _mousedownX - evt.client.x.toDouble();
-					final double offsetY = evt.client.y.toDouble() - _mousedownY;
+					final double offsetX = _mousedownX - evt.clientX.toDouble();
+					final double offsetY = evt.clientY.toDouble() - _mousedownY;
 					dx = _cubeRoot(_cube(offsetX) + _cube(offsetY));
 					dy = (elementHeight * dx) / elementWidth;
 				}
 				break;
 			case 7:
-				dx = _mousedownX - evt.client.x.toDouble();
+				dx = _mousedownX - evt.clientX.toDouble();
 				break;
 			default:
 				break;
@@ -305,24 +305,24 @@ class Previewer {
 	}
 
 	void _drawPreviewer() {
-		final DivElement previewerContainer = DivElement()
-			..classes.add('$editorPrefix-image-previewer');
+		final HTMLDivElement previewerContainer = HTMLDivElement()
+			..classList.add('$editorPrefix-image-previewer');
 
-		final Element closeBtn = Element.tag('i')..classes.add('image-close');
+		final Element closeBtn = document.createElement('i')..classList.add('image-close');
 		closeBtn.onClick.listen((_) => _clearPreviewer());
 		previewerContainer.append(closeBtn);
 
-		final DivElement imgContainer = DivElement()
-			..classes.add('$editorPrefix-image-container');
-		final ImageElement img = ImageElement()
+		final HTMLDivElement imgContainer = HTMLDivElement()
+			..classList.add('$editorPrefix-image-container');
+		final HTMLImageElement img = HTMLImageElement()
 			..src = _curElementSrc
 			..draggable = false;
 		imgContainer.append(img);
-		final DivElement cropLayer = DivElement()
-			..classes.add('$editorPrefix-image-crop-layer')
+		final HTMLDivElement cropLayer = HTMLDivElement()
+			..classList.add('$editorPrefix-image-crop-layer')
 			..style.display = 'none';
-		final DivElement cropSelection = DivElement()
-			..classes.add('$editorPrefix-image-crop-selection')
+		final HTMLDivElement cropSelection = HTMLDivElement()
+			..classList.add('$editorPrefix-image-crop-selection')
 			..style.display = 'none';
 		const List<String> cropHandleNames = <String>[
 			'n',
@@ -336,8 +336,8 @@ class Previewer {
 		];
 		for (final String handleName in cropHandleNames) {
 			cropSelection.append(
-				DivElement()
-					..classes.add('$editorPrefix-image-crop-handle')
+				HTMLDivElement()
+					..classList.add('$editorPrefix-image-crop-handle')
 					..dataset['handle'] = handleName,
 			);
 		}
@@ -366,17 +366,17 @@ class Previewer {
 		double cropHeight = 0;
 		const double cropMinSize = 12;
 
-		final DivElement menuContainer = DivElement()
-			..classes.add('$editorPrefix-image-menu');
-		final ButtonElement cropToggle = ButtonElement()
-			..classes.addAll(<String>['image-crop-action', 'crop-toggle'])
+		final HTMLDivElement menuContainer = HTMLDivElement()
+			..classList.add('$editorPrefix-image-menu');
+		final HTMLButtonElement cropToggle = HTMLButtonElement()
+			..classList.addAll(<String>['image-crop-action', 'crop-toggle'])
 			..text = 'Recortar';
-		final ButtonElement cropApply = ButtonElement()
-			..classes.addAll(<String>['image-crop-action', 'crop-apply'])
+		final HTMLButtonElement cropApply = HTMLButtonElement()
+			..classList.addAll(<String>['image-crop-action', 'crop-apply'])
 			..text = 'Aplicar'
 			..style.display = 'none';
-		final ButtonElement cropCancel = ButtonElement()
-			..classes.addAll(<String>['image-crop-action', 'crop-cancel'])
+		final HTMLButtonElement cropCancel = HTMLButtonElement()
+			..classList.addAll(<String>['image-crop-action', 'crop-cancel'])
 			..text = 'Cancelar'
 			..style.display = 'none';
 
@@ -406,15 +406,15 @@ class Previewer {
 		}
 
 		Point<double> getCropPointer(MouseEvent evt) {
-			final Rectangle<num> rect = cropLayer.getBoundingClientRect();
+			final DOMRect rect = cropLayer.getBoundingClientRect();
 			return Point<double>(
 				clampCropValue(
-					evt.client.x.toDouble() - rect.left,
+					evt.clientX.toDouble() - rect.left,
 					0,
 					rect.width.toDouble(),
 				),
 				clampCropValue(
-					evt.client.y.toDouble() - rect.top,
+					evt.clientY.toDouble() - rect.top,
 					0,
 					rect.height.toDouble(),
 				),
@@ -465,7 +465,7 @@ class Previewer {
 		}
 
 		void syncCropLayer() {
-			final Rectangle<num> rect = img.getBoundingClientRect();
+			final DOMRect rect = img.getBoundingClientRect();
 			cropLayer
 				..style.width = '${rect.width.toDouble()}px'
 				..style.height = '${rect.height.toDouble()}px';
@@ -473,7 +473,7 @@ class Previewer {
 
 		void syncCropSelectionFromElement() {
 			syncCropLayer();
-			final Rectangle<num> rect = img.getBoundingClientRect();
+			final DOMRect rect = img.getBoundingClientRect();
 			final double displayWidth = rect.width.toDouble();
 			final double displayHeight = rect.height.toDouble();
 			if (displayWidth <= 0 || displayHeight <= 0) {
@@ -524,7 +524,7 @@ class Previewer {
 			cropDragging = false;
 			cropDragMode = null;
 			cropResizeHandle = null;
-			previewerContainer.classes.toggle('crop-mode', enabled);
+			previewerContainer.classList.toggle('crop-mode', enabled);
 			cropLayer.style.display = enabled ? 'block' : 'none';
 			cropSelection.style.display = enabled ? cropSelection.style.display : 'none';
 			cropToggle.style.display = enabled ? 'none' : 'inline-flex';
@@ -542,7 +542,7 @@ class Previewer {
 		}
 
 		void applyCropSelection() {
-			final Rectangle<num> rect = img.getBoundingClientRect();
+			final DOMRect rect = img.getBoundingClientRect();
 			final double displayWidth = rect.width.toDouble();
 			final double displayHeight = rect.height.toDouble();
 			if (displayWidth <= 0 || displayHeight <= 0) {
@@ -575,9 +575,9 @@ class Previewer {
 			_clearPreviewer();
 		}
 
-		final DivElement navigateContainer = DivElement()
-			..classes.add('image-navigate');
-		final Element imagePre = Element.tag('i')..classes.add('image-pre');
+		final HTMLDivElement navigateContainer = HTMLDivElement()
+			..classList.add('image-navigate');
+		final Element imagePre = document.createElement('i')..classList.add('image-pre');
 		imagePre.onClick.listen((_) {
 			if (cropMode) {
 				setCropMode(false);
@@ -597,12 +597,12 @@ class Previewer {
 		navigateContainer.append(imagePre);
 		_imagePre = imagePre;
 
-		final SpanElement imageCount = SpanElement()
-			..classes.add('image-count');
+		final HTMLSpanElement imageCount = HTMLSpanElement()
+			..classList.add('image-count');
 		navigateContainer.append(imageCount);
 		_imageCount = imageCount;
 
-		final Element imageNext = Element.tag('i')..classes.add('image-next');
+		final Element imageNext = document.createElement('i')..classList.add('image-next');
 		imageNext.onClick.listen((_) {
 			if (cropMode) {
 				setCropMode(false);
@@ -624,14 +624,14 @@ class Previewer {
 
 		menuContainer.append(navigateContainer);
 
-		final Element zoomIn = Element.tag('i')..classes.add('zoom-in');
+		final Element zoomIn = document.createElement('i')..classList.add('zoom-in');
 		zoomIn.onClick.listen((_) {
 			scaleSize += 0.1;
 			_setPreviewerTransform(scaleSize, rotateQuarter, translateX, translateY);
 		});
 		menuContainer.append(zoomIn);
 
-		final Element zoomOut = Element.tag('i')..classes.add('zoom-out');
+		final Element zoomOut = document.createElement('i')..classList.add('zoom-out');
 		zoomOut.onClick.listen((_) {
 			if (scaleSize - 0.1 <= 0.1) {
 				return;
@@ -641,14 +641,14 @@ class Previewer {
 		});
 		menuContainer.append(zoomOut);
 
-		final Element rotate = Element.tag('i')..classes.add('rotate');
+		final Element rotate = document.createElement('i')..classList.add('rotate');
 		rotate.onClick.listen((_) {
 			rotateQuarter += 1;
 			_setPreviewerTransform(scaleSize, rotateQuarter, translateX, translateY);
 		});
 		menuContainer.append(rotate);
 
-		final Element originalSize = Element.tag('i')..classes.add('original-size');
+		final Element originalSize = document.createElement('i')..classList.add('original-size');
 		originalSize.onClick.listen((_) {
 			translateX = 0;
 			translateY = 0;
@@ -658,7 +658,7 @@ class Previewer {
 		});
 		menuContainer.append(originalSize);
 
-		final Element imageDownload = Element.tag('i')..classes.add('image-download');
+		final Element imageDownload = document.createElement('i')..classList.add('image-download');
 		imageDownload.onClick.listen((_) {
 					final String extension =
 							_previewerDrawOption.mime?.value ?? PreviewerMime.png.value;
@@ -697,8 +697,8 @@ class Previewer {
 				return;
 			}
 			allowDrag = true;
-			startX = evt.client.x.toDouble();
-			startY = evt.client.y.toDouble();
+			startX = evt.clientX.toDouble();
+			startY = evt.clientY.toDouble();
 			previewerContainer.style.cursor = 'move';
 			evt.preventDefault();
 		});
@@ -708,7 +708,7 @@ class Previewer {
 				return;
 			}
 			final Element? target = evt.target as Element?;
-			final String? handle = target?.dataset['handle'];
+			final String? handle = target?.data('handle');
 			if (handle != null) {
 				beginCropInteraction('resize', evt, handle: handle);
 				return;
@@ -728,7 +728,7 @@ class Previewer {
 
 		previewerContainer.onMouseMove.listen((MouseEvent evt) {
 			if (cropMode && cropDragging) {
-				final Rectangle<num> rect = cropLayer.getBoundingClientRect();
+				final DOMRect rect = cropLayer.getBoundingClientRect();
 				final Point<double> pointer = getCropPointer(evt);
 				final double currentX = pointer.x;
 				final double currentY = pointer.y;
@@ -808,10 +808,10 @@ class Previewer {
 			if (!allowDrag) {
 				return;
 			}
-			translateX += evt.client.x.toDouble() - startX;
-			translateY += evt.client.y.toDouble() - startY;
-			startX = evt.client.x.toDouble();
-			startY = evt.client.y.toDouble();
+			translateX += evt.clientX.toDouble() - startX;
+			translateY += evt.clientY.toDouble() - startY;
+			startX = evt.clientX.toDouble();
+			startY = evt.clientY.toDouble();
 			_setPreviewerTransform(scaleSize, rotateQuarter, translateX, translateY);
 		});
 
@@ -848,7 +848,7 @@ class Previewer {
 	}
 
 	void _updateImageNavigate() {
-		final SpanElement? count = _imageCount;
+		final HTMLSpanElement? count = _imageCount;
 		final Element? pre = _imagePre;
 		final Element? next = _imageNext;
 		if (count == null || pre == null || next == null) {
@@ -856,8 +856,8 @@ class Previewer {
 		}
 		if (_imageList.isEmpty || _curShowElement == null) {
 			count.text = '0 / 0';
-			pre.classes.add('disabled');
-			next.classes.add('disabled');
+			pre.classList.add('disabled');
+			next.classList.add('disabled');
 			return;
 		}
 
@@ -875,15 +875,15 @@ class Previewer {
 		count.text = '${currentIndex + 1} / ${_imageList.length}';
 
 		if (currentIndex <= 0) {
-			pre.classes.add('disabled');
+			pre.classList.add('disabled');
 		} else {
-			pre.classes.remove('disabled');
+			pre.classList.remove('disabled');
 		}
 
 		if (currentIndex >= _imageList.length - 1) {
-			next.classes.add('disabled');
+			next.classList.add('disabled');
 		} else {
-			next.classes.remove('disabled');
+			next.classList.remove('disabled');
 		}
 	}
 
@@ -893,7 +893,7 @@ class Previewer {
 		double x,
 		double y,
 	) {
-		final ImageElement? image = _previewerImage;
+		final HTMLImageElement? image = _previewerImage;
 		if (image == null) {
 			return;
 		}
@@ -919,7 +919,7 @@ class Previewer {
 			..style.width = '${width}px'
 			..style.height = '${height}px';
 		for (int i = 0; i < _resizerHandleList.length; i++) {
-			final DivElement handle = _resizerHandleList[i];
+			final HTMLDivElement handle = _resizerHandleList[i];
 			final double left = (i == 0 || i == 6 || i == 7)
 					? -handleSize
 					: (i == 1 || i == 5)

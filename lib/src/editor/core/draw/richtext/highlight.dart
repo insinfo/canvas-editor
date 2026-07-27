@@ -1,4 +1,4 @@
-import 'dart:html';
+import 'package:canvas_text_editor/src/dom/dom.dart';
 
 import '../../../interface/editor.dart';
 import '../draw.dart';
@@ -19,7 +19,7 @@ class Highlight extends AbstractRichText {
 		final String color = fillColor ?? '#FFFF00';
 		ctx.save();
 		ctx.globalAlpha = alpha;
-		ctx.fillStyle = color;
+		ctx.fillColor = color;
 		ctx.fillRect(fillRect.x, fillRect.y, fillRect.width, fillRect.height);
 		ctx.restore();
 		clearFillInfo();

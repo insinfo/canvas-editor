@@ -1,4 +1,4 @@
-import 'dart:html' as html;
+import 'package:canvas_text_editor/src/dom/dom.dart' as html;
 
 bool get isApple => _userAgent.contains('Mac OS X');
 

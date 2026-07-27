@@ -1,4 +1,4 @@
-import 'dart:html';
+import 'package:canvas_text_editor/src/dom/dom.dart';
 
 import '../../../dataset/enum/line_number.dart';
 import '../../../interface/editor.dart';
@@ -68,7 +68,7 @@ class LineNumber {
 				.toList();
 
 		ctx.save();
-		ctx.fillStyle = color;
+		ctx.fillColor = color;
 		ctx.font = '${size * scale}px $font';
 
 			for (int i = 0; i < rowList.length; i++) {

@@ -1,5 +1,6 @@
 import 'dart:async';
-import 'dart:html';
+
+import 'package:canvas_text_editor/src/dom/dom.dart';
 
 /// Porte 1:1 do antigo `web/icons.js` para Dart puro (regra do projeto: sem
 /// JavaScript). Aplica os ícones Tabler aos itens de menu via classes/CSS custom
@@ -105,27 +106,28 @@ int _rulerFrame = 0;
 String _rulerLabelKey = '';
 
 void _eachMatch(Node root, String selector, void Function(Element) callback) {
-  if (root is Element) {
-    if (root.matches(selector)) {
-      callback(root);
+  if (root.isA<Element>()) {
+    final Element element = root as Element;
+    if (element.matches(selector)) {
+      callback(element);
     }
-    root.querySelectorAll(selector).forEach(callback);
-  } else if (root is Document) {
-    root.querySelectorAll(selector).forEach(callback);
+    element.querySelectorAll(selector).toElements().forEach(callback);
+  } else if (root.isA<Document>()) {
+    (root as Document).querySelectorAll(selector).toElements().forEach(callback);
   }
 }
 
 void _applyIcons(Node root) {
   for (final List<String> rule in _iconRules) {
     _eachMatch(root, rule[0], (Element node) {
-      node.classes.add('ce-tabler-icon');
+      node.classList.add('ce-tabler-icon');
       node.style
           .setProperty('--ce-icon-url', 'url("$_basePath${rule[1]}.svg")');
     });
   }
   for (final List<String> rule in _labeledCommands) {
     _eachMatch(root, rule[0], (Element node) {
-      node.classes.add('ce-ribbon-large');
+      node.classList.add('ce-ribbon-large');
       node.dataset['ribbonLabel'] = rule[1];
     });
   }
@@ -147,17 +149,17 @@ void _rebuildRulerLabels(double width, double height, double pxPerCm) {
   }
   final int hCount = (width / pxPerCm).floor().clamp(1, 1 << 30);
   final int vCount = (height / pxPerCm).floor().clamp(1, 1 << 30);
-  horizontal.children.clear();
-  vertical.children.clear();
+  horizontal.clearChildren();
+  vertical.clearChildren();
   for (int i = 1; i <= hCount; i += 1) {
-    final SpanElement label = SpanElement()
-      ..text = '$i'
+    final HTMLSpanElement label = HTMLSpanElement()
+      ..textContent = '$i'
       ..style.left = '${i * pxPerCm}px';
     horizontal.append(label);
   }
   for (int i = 1; i <= vCount; i += 1) {
-    final SpanElement label = SpanElement()
-      ..text = '$i'
+    final HTMLSpanElement label = HTMLSpanElement()
+      ..textContent = '$i'
       ..style.top = '${i * pxPerCm}px';
     vertical.append(label);
   }
@@ -168,7 +170,7 @@ void _syncRulers() {
   if (canvas == null) {
     return;
   }
-  final Rectangle<num> rect = canvas.getBoundingClientRect();
+  final DOMRect rect = canvas.getBoundingClientRect();
   if (rect.width <= 0 || rect.height <= 0) {
     return;
   }
@@ -178,7 +180,7 @@ void _syncRulers() {
   final double pxPerCm = (width / 21) < 20 ? 20 : (width / 21);
   final Element rulerRoot =
       document.querySelector('.word-rulers') ?? document.documentElement!;
-  final CssStyleDeclaration rootStyle = rulerRoot.style;
+  final CSSStyleDeclaration rootStyle = rulerRoot.style;
   rootStyle.setProperty('--ce-ruler-left', '${left < 0 ? 0 : left}px');
   rootStyle.setProperty('--ce-ruler-width', '${width}px');
   rootStyle.setProperty('--ce-ruler-cm', '${pxPerCm}px');
@@ -189,7 +191,7 @@ void _scheduleRulerSync() {
   if (_rulerFrame != 0) {
     return;
   }
-  _rulerFrame = window.requestAnimationFrame((_) {
+  _rulerFrame = raf((_) {
     _rulerFrame = 0;
     _syncRulers();
   });
@@ -198,25 +200,30 @@ void _scheduleRulerSync() {
 /// Ponto de entrada: registra ícones, réguas e observadores. Idempotente por
 /// natureza (reaplica classes/labels sem efeito colateral).
 void setupTablerIcons() {
-  document.documentElement!.classes.add('ce-tabler-icons-ready');
+  document.documentElement!.classList.add('ce-tabler-icons-ready');
   _applyIcons(document);
   _scheduleRulerSync();
-  window.addEventListener('resize', (_) => _scheduleRulerSync());
-  window.addEventListener('scroll', (_) => _scheduleRulerSync(), true);
-  final MutationObserver observer =
-      MutationObserver((List<dynamic> mutations, MutationObserver obs) {
-    for (final dynamic mutation in mutations) {
-      final MutationRecord record = mutation as MutationRecord;
-      final List<Node>? added = record.addedNodes;
-      if (added != null) {
-        for (final Node node in added) {
+  window.addEventListener(
+      'resize', ((Event _) => _scheduleRulerSync()).toJS);
+  window.addEventListener(
+      'scroll', ((Event _) => _scheduleRulerSync()).toJS, true.toJS);
+  final MutationObserver observer = MutationObserver(
+      ((JSArray<MutationRecord> mutations, MutationObserver obs) {
+    for (final MutationRecord record in mutations.toDart) {
+      final NodeList added = record.addedNodes;
+      for (int i = 0; i < added.length; i += 1) {
+        final Node? node = added.item(i);
+        if (node != null) {
           _applyIcons(node);
         }
       }
     }
     _scheduleRulerSync();
-  });
-  observer.observe(document.body!, childList: true, subtree: true);
+  }).toJS);
+  observer.observe(
+    document.body!,
+    MutationObserverInit(childList: true, subtree: true),
+  );
   Timer(const Duration(milliseconds: 250), _scheduleRulerSync);
   Timer(const Duration(milliseconds: 1000), _scheduleRulerSync);
 }

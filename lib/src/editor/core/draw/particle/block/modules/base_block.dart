@@ -1,5 +1,5 @@
 import 'dart:async';
-import 'dart:html';
+import 'package:canvas_text_editor/src/dom/dom.dart';
 import 'dart:math' as math;
 
 import '../../../../../dataset/constant/editor.dart';
@@ -15,14 +15,14 @@ import 'video_block.dart';
 class BaseBlock {
 	BaseBlock({
 		required Draw draw,
-		required DivElement blockContainer,
+		required HTMLDivElement blockContainer,
 		required IRowElement element,
 	})  : _draw = draw,
 			_options = draw.getOptions(),
 			_blockContainer = blockContainer,
 			_element = element,
 			_blockCache = <String, dynamic>{},
-			_resizerHandleList = <DivElement>[],
+			_resizerHandleList = <HTMLDivElement>[],
 			_width = 0,
 			_height = 0,
 			_mousedownX = 0,
@@ -39,13 +39,13 @@ class BaseBlock {
 
 	final Draw _draw;
 	final IEditorOption _options;
-	final DivElement _blockContainer;
+	final HTMLDivElement _blockContainer;
 	IRowElement _element;
 	final Map<String, dynamic> _blockCache;
-	late final DivElement _blockItem;
-	late final DivElement _resizerMask;
-	late final DivElement _resizerSelection;
-	final List<DivElement> _resizerHandleList;
+	late final HTMLDivElement _blockItem;
+	late final HTMLDivElement _resizerMask;
+	late final HTMLDivElement _resizerSelection;
+	final List<HTMLDivElement> _resizerHandleList;
 	double _width;
 	double _height;
 	double _mousedownX;
@@ -54,7 +54,7 @@ class BaseBlock {
 	bool _isAllowResize;
 	StreamSubscription<MouseEvent>? _mousemoveSubscription;
 
-	List<DivElement> get resizerHandleList => _resizerHandleList;
+	List<HTMLDivElement> get resizerHandleList => _resizerHandleList;
 
 	IRowElement getBlockElement() => _element;
 
@@ -73,26 +73,26 @@ class BaseBlock {
 	_BlockItemParts _createBlockItem() {
 		final double scale = _options.scale?.toDouble() ?? 1;
 		final String resizerColor = _options.resizerColor ?? '#4182D9';
-		final DivElement blockItem = DivElement()
-			..classes.add('$editorPrefix-block-item')
+		final HTMLDivElement blockItem = HTMLDivElement()
+			..classList.add('$editorPrefix-block-item')
 			..style.position = 'absolute';
-		final DivElement resizerSelection = DivElement()
+		final HTMLDivElement resizerSelection = HTMLDivElement()
 			..style.display = 'none'
-			..classes.add('$editorPrefix-resizer-selection')
+			..classList.add('$editorPrefix-resizer-selection')
 			..style.borderColor = resizerColor
 			..style.borderWidth = '${scale}px';
-		final List<DivElement> resizerHandleList = <DivElement>[];
+		final List<HTMLDivElement> resizerHandleList = <HTMLDivElement>[];
 		for (int i = 0; i < 8; i++) {
-			final DivElement handle = DivElement()
+			final HTMLDivElement handle = HTMLDivElement()
 				..style.backgroundColor = resizerColor
-				..classes.addAll(<String>['resizer-handle', 'handle-$i'])
+				..classList.addAll(<String>['resizer-handle', 'handle-$i'])
 				..dataset['index'] = '$i';
 			handle.onMouseDown.listen(_mousedown);
 			resizerSelection.append(handle);
 			resizerHandleList.add(handle);
 		}
-		final DivElement resizerMask = DivElement()
-			..classes.add('$editorPrefix-resizer-mask')
+		final HTMLDivElement resizerMask = HTMLDivElement()
+			..classList.add('$editorPrefix-resizer-mask')
 			..style.display = 'none';
 		blockItem
 			..append(resizerMask)
@@ -126,7 +126,7 @@ class BaseBlock {
 			..width = '${width}px'
 			..height = '${height}px';
 		for (int i = 0; i < _resizerHandleList.length; i++) {
-			final DivElement handle = _resizerHandleList[i];
+			final HTMLDivElement handle = _resizerHandleList[i];
 			double left;
 			if (i == 0 || i == 6 || i == 7) {
 				left = -handleSize;
@@ -151,17 +151,18 @@ class BaseBlock {
 	}
 
 	void _mousedown(MouseEvent evt) {
-		final CanvasElement? canvas = _draw.getPage();
+		final HTMLCanvasElement? canvas = _draw.getPage();
 		if (canvas == null) {
 			return;
 		}
-		_mousedownX = evt.client.x.toDouble();
-		_mousedownY = evt.client.y.toDouble();
+		_mousedownX = evt.clientX.toDouble();
+		_mousedownY = evt.clientY.toDouble();
 		_isAllowResize = true;
 		final EventTarget? target = evt.currentTarget ?? evt.target;
-		if (target is DivElement) {
-			_curHandleIndex = int.tryParse(target.dataset['index'] ?? '') ?? 0;
-			final String cursor = target.getComputedStyle().cursor;
+		if (target != null && target.isA<HTMLDivElement>()) {
+			final HTMLDivElement handle = target as HTMLDivElement;
+			_curHandleIndex = int.tryParse(handle.data('index') ?? '') ?? 0;
+			final String cursor = handle.getComputedStyle().cursor;
 			document.body?.style.cursor = cursor;
 			canvas.style.cursor = cursor;
 		}
@@ -200,47 +201,47 @@ class BaseBlock {
 		switch (_curHandleIndex) {
 			case 0:
 				{
-					final double offsetX = _mousedownX - evt.client.x;
-					final double offsetY = _mousedownY - evt.client.y;
+					final double offsetX = _mousedownX - evt.clientX;
+					final double offsetY = _mousedownY - evt.clientY;
 					dx = _combinedMagnitude(offsetX, offsetY);
 					dy = (elementHeight * dx) / blockWidth;
 				}
 				break;
 			case 1:
-				dy = _mousedownY - evt.client.y;
+				dy = _mousedownY - evt.clientY;
 				break;
 			case 2:
 				{
-					final double offsetX = evt.client.x - _mousedownX;
-					final double offsetY = _mousedownY - evt.client.y;
+					final double offsetX = evt.clientX - _mousedownX;
+					final double offsetY = _mousedownY - evt.clientY;
 					dx = _combinedMagnitude(offsetX, offsetY);
 					dy = (elementHeight * dx) / blockWidth;
 				}
 				break;
 			case 4:
 				{
-					final double offsetX = evt.client.x - _mousedownX;
-					final double offsetY = evt.client.y - _mousedownY;
+					final double offsetX = evt.clientX - _mousedownX;
+					final double offsetY = evt.clientY - _mousedownY;
 					dx = _combinedMagnitude(offsetX, offsetY);
 					dy = (elementHeight * dx) / blockWidth;
 				}
 				break;
 			case 3:
-				dx = evt.client.x - _mousedownX;
+				dx = evt.clientX - _mousedownX;
 				break;
 			case 5:
-				dy = evt.client.y - _mousedownY;
+				dy = evt.clientY - _mousedownY;
 				break;
 			case 6:
 				{
-					final double offsetX = _mousedownX - evt.client.x;
-					final double offsetY = evt.client.y - _mousedownY;
+					final double offsetX = _mousedownX - evt.clientX;
+					final double offsetY = evt.clientY - _mousedownY;
 					dx = _combinedMagnitude(offsetX, offsetY);
 					dy = (elementHeight * dx) / blockWidth;
 				}
 				break;
 			case 7:
-				dx = _mousedownX - evt.client.x;
+				dx = _mousedownX - evt.clientX;
 				break;
 		}
 		final double dw = blockWidth + dx / scale;
@@ -292,7 +293,7 @@ class BaseBlock {
 		if (block == null) {
 			return;
 		}
-		_blockItem.children.clear();
+		_blockItem.clearChildren();
 		_blockItem
 			..append(_resizerMask)
 			..append(_resizerSelection);
@@ -343,8 +344,8 @@ class _BlockItemParts {
 		required this.resizerHandleList,
 	});
 
-	final DivElement blockItem;
-	final DivElement resizerMask;
-	final DivElement resizerSelection;
-	final List<DivElement> resizerHandleList;
+	final HTMLDivElement blockItem;
+	final HTMLDivElement resizerMask;
+	final HTMLDivElement resizerSelection;
+	final List<HTMLDivElement> resizerHandleList;
 }

@@ -1,5 +1,5 @@
 // NOTE: Translated from C:\\MyTsProjects\\canvas-editor\\src\\editor\\core\\draw\\frame\\Background.ts
-import 'dart:html';
+import 'package:canvas_text_editor/src/dom/dom.dart';
 
 import '../../../dataset/enum/background.dart';
 import '../../../interface/background.dart';
@@ -10,11 +10,11 @@ import '../draw.dart';
 class Background {
   Background(this._draw)
       : _options = _draw.getOptions(),
-        _imageCache = <String, ImageElement>{};
+        _imageCache = <String, HTMLImageElement>{};
 
   final Draw _draw;
   final IEditorOption _options;
-  final Map<String, ImageElement> _imageCache;
+  final Map<String, HTMLImageElement> _imageCache;
 
   void _renderBackgroundColor(
     CanvasRenderingContext2D ctx,
@@ -26,14 +26,14 @@ class Background {
       return;
     }
     ctx.save();
-    ctx.fillStyle = color;
+    ctx.fillColor = color;
     ctx.fillRect(0, 0, width, height);
     ctx.restore();
   }
 
   void _drawImage(
     CanvasRenderingContext2D ctx,
-    ImageElement imageElement,
+    HTMLImageElement imageElement,
     double width,
     double height,
   ) {
@@ -100,7 +100,7 @@ class Background {
       return;
     }
 
-    final ImageElement? cachedImage = _imageCache[image];
+    final HTMLImageElement? cachedImage = _imageCache[image];
     if (cachedImage != null) {
       if (cachedImage.complete == true) {
         _drawImage(ctx, cachedImage, width, height);
@@ -108,7 +108,7 @@ class Background {
       return;
     }
 
-    final ImageElement img = ImageElement()
+    final HTMLImageElement img = HTMLImageElement()
       ..crossOrigin = 'Anonymous'
       ..src = image;
 

@@ -1,5 +1,5 @@
 import 'dart:async';
-import 'dart:html';
+import 'package:canvas_text_editor/src/dom/dom.dart';
 import 'dart:math' as math;
 
 import '../../../../dataset/constant/editor.dart';
@@ -33,24 +33,24 @@ class TableTool {
   final IEditorOption _options;
   final dynamic _position;
   final dynamic _rangeManager;
-  final DivElement _container;
+  final HTMLDivElement _container;
   final TableParticle? _tableParticle;
 
-  CanvasElement? _canvas;
-  DivElement? _toolRowContainer;
-  DivElement? _toolRowAddBtn;
-  DivElement? _toolColAddBtn;
-  DivElement? _toolTableSelectBtn;
-  DivElement? _toolColContainer;
-  DivElement? _toolBorderContainer;
-  DivElement? _toolResizeBtn;
-  DivElement? _anchorLine;
+  HTMLCanvasElement? _canvas;
+  HTMLDivElement? _toolRowContainer;
+  HTMLDivElement? _toolRowAddBtn;
+  HTMLDivElement? _toolColAddBtn;
+  HTMLDivElement? _toolTableSelectBtn;
+  HTMLDivElement? _toolColContainer;
+  HTMLDivElement? _toolBorderContainer;
+  HTMLDivElement? _toolResizeBtn;
+  HTMLDivElement? _anchorLine;
   double _mousedownX = 0;
   double _mousedownY = 0;
 
   double _scale() => (_options.scale ?? 1).toDouble();
 
-  CanvasElement? _resolveCurrentCanvas() {
+  HTMLCanvasElement? _resolveCurrentCanvas() {
     final List<Element> pageList = _draw.getPageList();
     if (pageList.isEmpty) {
       return null;
@@ -60,7 +60,7 @@ class TableTool {
       pageIndex = 0;
     }
     final Element element = pageList[pageIndex];
-    return element is CanvasElement ? element : null;
+    return asCanvasElement(element);
   }
 
   void dispose() {
@@ -160,8 +160,8 @@ class TableTool {
       return;
     }
 
-    final DivElement tableSelectBtn = DivElement()
-      ..classes.add('$editorPrefix-table-tool__select')
+    final HTMLDivElement tableSelectBtn = HTMLDivElement()
+      ..classList.add('$editorPrefix-table-tool__select')
       ..style.left = '${tableX}px'
       ..style.top = '${tableY}px'
       ..style.transform =
@@ -173,8 +173,8 @@ class TableTool {
     _container.append(tableSelectBtn);
     _toolTableSelectBtn = tableSelectBtn;
 
-    final DivElement rowContainer = DivElement()
-      ..classes.add('$editorPrefix-table-tool__row')
+    final HTMLDivElement rowContainer = HTMLDivElement()
+      ..classList.add('$editorPrefix-table-tool__row')
       ..style.transform = 'translateX(-${_rowColOffset * scale}px)'
       ..style.left = '${tableX}px'
       ..style.top = '${tableY}px'
@@ -184,11 +184,11 @@ class TableTool {
         trList.map((ITr entry) => entry.height).toList();
     for (int r = 0; r < rowHeightList.length; r++) {
       final double rowHeight = rowHeightList[r] * scale;
-      final DivElement rowItem = DivElement()
-        ..classes.add('$editorPrefix-table-tool__row__item')
+      final HTMLDivElement rowItem = HTMLDivElement()
+        ..classList.add('$editorPrefix-table-tool__row__item')
         ..style.height = '${rowHeight}px';
       if (r == rowIndex) {
-        rowItem.classes.add('active');
+        rowItem.classList.add('active');
       }
       rowItem.onClick.listen((_) {
         final TableParticle? tableParticle = _tableParticle;
@@ -226,8 +226,8 @@ class TableTool {
         _setAnchorActive(rowContainer, r);
       });
 
-      final DivElement anchor = DivElement()
-        ..classes.add('$editorPrefix-table-tool__anchor');
+      final HTMLDivElement anchor = HTMLDivElement()
+        ..classList.add('$editorPrefix-table-tool__anchor');
       anchor.onMouseDown.listen((MouseEvent evt) {
         _onMouseDown(
           evt,
@@ -244,8 +244,8 @@ class TableTool {
 
     final double rowQuickPosition =
         _rowColOffset + (_rowColOffset - _rowColQuickWidth) / 2;
-    final DivElement rowAddBtn = DivElement()
-      ..classes.add('$editorPrefix-table-tool__quick__add')
+    final HTMLDivElement rowAddBtn = HTMLDivElement()
+      ..classList.add('$editorPrefix-table-tool__quick__add')
       ..style.left = '${tableX}px'
       ..style.top = '${tableY + visibleHeight}px'
       ..style.transform =
@@ -265,8 +265,8 @@ class TableTool {
     _container.append(rowAddBtn);
     _toolRowAddBtn = rowAddBtn;
 
-    final DivElement colContainer = DivElement()
-      ..classes.add('$editorPrefix-table-tool__col')
+    final HTMLDivElement colContainer = HTMLDivElement()
+      ..classList.add('$editorPrefix-table-tool__col')
       ..style.transform = 'translateY(-${_rowColOffset * scale}px)'
       ..style.left = '${tableX}px'
       ..style.top = '${tableY}px';
@@ -274,11 +274,11 @@ class TableTool {
         colgroup.map((IColgroup col) => col.width).toList();
     for (int c = 0; c < colWidthList.length; c++) {
       final double colWidth = colWidthList[c] * scale;
-      final DivElement colItem = DivElement()
-        ..classes.add('$editorPrefix-table-tool__col__item')
+      final HTMLDivElement colItem = HTMLDivElement()
+        ..classList.add('$editorPrefix-table-tool__col__item')
         ..style.width = '${colWidth}px';
       if (c == colIndex) {
-        colItem.classes.add('active');
+        colItem.classList.add('active');
       }
       colItem.onClick.listen((_) {
         final TableParticle? tableParticle = _tableParticle;
@@ -317,8 +317,8 @@ class TableTool {
         _setAnchorActive(colContainer, c);
       });
 
-      final DivElement anchor = DivElement()
-        ..classes.add('$editorPrefix-table-tool__anchor');
+      final HTMLDivElement anchor = HTMLDivElement()
+        ..classList.add('$editorPrefix-table-tool__anchor');
       anchor.onMouseDown.listen((MouseEvent evt) {
         _onMouseDown(
           evt,
@@ -333,8 +333,8 @@ class TableTool {
     _container.append(colContainer);
     _toolColContainer = colContainer;
 
-    final DivElement colAddBtn = DivElement()
-      ..classes.add('$editorPrefix-table-tool__quick__add')
+    final HTMLDivElement colAddBtn = HTMLDivElement()
+      ..classList.add('$editorPrefix-table-tool__quick__add')
       ..style.left = '${tableX + tableWidth}px'
       ..style.top = '${tableY}px'
       ..style.transform =
@@ -359,8 +359,8 @@ class TableTool {
     _container.append(colAddBtn);
     _toolColAddBtn = colAddBtn;
 
-    final DivElement borderContainer = DivElement()
-      ..classes.add('$editorPrefix-table-tool__border')
+    final HTMLDivElement borderContainer = HTMLDivElement()
+      ..classList.add('$editorPrefix-table-tool__border')
       ..style.height = '${visibleHeight}px'
       ..style.width = '${tableWidth}px'
       ..style.left = '${tableX}px'
@@ -374,8 +374,8 @@ class TableTool {
         final double tdX = (currentTd.x ?? 0) * scale;
         final double tdY = (currentTd.y ?? 0) * scale;
 
-        final DivElement rowBorder = DivElement()
-          ..classes.add('$editorPrefix-table-tool__border__row')
+        final HTMLDivElement rowBorder = HTMLDivElement()
+          ..classList.add('$editorPrefix-table-tool__border__row')
           ..style.width = '${tdWidth}px'
           ..style.height = '${_borderValue}px'
           ..style.top = '${tdY + tdHeight - _borderValue / 2}px'
@@ -390,8 +390,8 @@ class TableTool {
         });
         borderContainer.append(rowBorder);
 
-        final DivElement colBorder = DivElement()
-          ..classes.add('$editorPrefix-table-tool__border__col')
+        final HTMLDivElement colBorder = HTMLDivElement()
+          ..classList.add('$editorPrefix-table-tool__border__col')
           ..style.width = '${_borderValue}px'
           ..style.height = '${tdHeight}px'
           ..style.top = '${tdY}px'
@@ -407,8 +407,8 @@ class TableTool {
         borderContainer.append(colBorder);
 
         if (overflow && (currentTd.colIndex ?? 0) == 0) {
-          final DivElement leftBorder = DivElement()
-            ..classes.add('$editorPrefix-table-tool__border__col')
+          final HTMLDivElement leftBorder = HTMLDivElement()
+            ..classList.add('$editorPrefix-table-tool__border__col')
             ..style.width = '${_borderValue}px'
             ..style.height = '${tdHeight}px'
             ..style.top = '${tdY}px'
@@ -431,8 +431,8 @@ class TableTool {
 
     // Alça de redimensionar a tabela (canto inferior direito, como no Word):
     // arrasta escalando as colunas proporcionalmente e as linhas em altura.
-    final DivElement resizeBtn = DivElement()
-      ..classes.add('$editorPrefix-table-tool__resize')
+    final HTMLDivElement resizeBtn = HTMLDivElement()
+      ..classList.add('$editorPrefix-table-tool__resize')
       ..title = 'Redimensionar tabela'
       ..style.left = '${tableX + tableWidth}px'
       ..style.top = '${tableY + visibleHeight}px'
@@ -448,8 +448,8 @@ class TableTool {
   /// alturas das linhas. Aplica no mouseup (1 render).
   void _onTableResizeMouseDown(MouseEvent evt, IElement element) {
     final double scale = _scale();
-    _mousedownX = evt.client.x.toDouble();
-    _mousedownY = evt.client.y.toDouble();
+    _mousedownX = evt.clientX.toDouble();
+    _mousedownY = evt.clientY.toDouble();
     if (document.body != null) {
       document.body!.style.cursor = 'nwse-resize';
     }
@@ -457,8 +457,8 @@ class TableTool {
     double dy = 0;
     StreamSubscription<MouseEvent>? moveSub;
     moveSub = document.onMouseMove.listen((MouseEvent moveEvt) {
-      dx = moveEvt.client.x.toDouble() - _mousedownX;
-      dy = moveEvt.client.y.toDouble() - _mousedownY;
+      dx = moveEvt.clientX.toDouble() - _mousedownX;
+      dy = moveEvt.clientY.toDouble() - _mousedownY;
       _toolResizeBtn?.style.transform =
           'translate(${dx - 2}px, ${dy - 2}px)';
       moveEvt.preventDefault();
@@ -514,13 +514,13 @@ class TableTool {
     evt.stopPropagation();
   }
 
-  void _setAnchorActive(DivElement container, int index) {
+  void _setAnchorActive(HTMLDivElement container, int index) {
     for (int i = 0; i < container.children.length; i++) {
-      final Element child = container.children[i];
+      final Element child = container.children.item(i)!;
       if (i == index) {
-        child.classes.add('active');
+        child.classList.add('active');
       } else {
-        child.classes.remove('active');
+        child.classList.remove('active');
       }
     }
   }
@@ -533,7 +533,7 @@ class TableTool {
     bool isLeftStartBorder = false,
   }) {
     _canvas = _resolveCurrentCanvas();
-    final CanvasElement? canvas = _canvas;
+    final HTMLCanvasElement? canvas = _canvas;
     if (canvas == null) {
       return;
     }
@@ -554,27 +554,27 @@ class TableTool {
         ? positionList[tableIndex].pageNo
         : _draw.getPageNo();
     final double pageOffset = tablePageNo * (height + pageGap);
-    _mousedownX = evt.client.x.toDouble();
-    _mousedownY = evt.client.y.toDouble();
+    _mousedownX = evt.clientX.toDouble();
+    _mousedownY = evt.clientY.toDouble();
 
-    final Rectangle<num> canvasRect = canvas.getBoundingClientRect();
+    final DOMRect canvasRect = canvas.getBoundingClientRect();
     final String cursor = order == TableOrder.row ? 'row-resize' : 'col-resize';
     if (document.body != null) {
       document.body!.style.cursor = cursor;
     }
     canvas.style.cursor = cursor;
 
-    final DivElement anchorLine = DivElement()
-      ..classes.add('$editorPrefix-table-anchor__line');
+    final HTMLDivElement anchorLine = HTMLDivElement()
+      ..classList.add('$editorPrefix-table-anchor__line');
     double startX = 0;
     double startY = 0;
     if (order == TableOrder.row) {
-      anchorLine.classes.add('$editorPrefix-table-anchor__line__row');
+      anchorLine.classList.add('$editorPrefix-table-anchor__line__row');
       anchorLine.style.width = '${width}px';
       startX = 0;
       startY = pageOffset + _mousedownY - canvasRect.top;
     } else {
-      anchorLine.classes.add('$editorPrefix-table-anchor__line__col');
+      anchorLine.classList.add('$editorPrefix-table-anchor__line__col');
       anchorLine.style.height = '${height}px';
       startX = _mousedownX - canvasRect.left;
       startY = pageOffset;
@@ -697,12 +697,12 @@ class TableTool {
     double startX,
     double startY,
   ) {
-    final DivElement? anchorLine = _anchorLine;
+    final HTMLDivElement? anchorLine = _anchorLine;
     if (anchorLine == null) {
       return null;
     }
-    final double dx = evt.client.x.toDouble() - _mousedownX;
-    final double dy = evt.client.y.toDouble() - _mousedownY;
+    final double dx = evt.clientX.toDouble() - _mousedownX;
+    final double dy = evt.clientY.toDouble() - _mousedownY;
     if (order == TableOrder.row) {
       anchorLine.style.top = '${startY + dy}px';
     } else {

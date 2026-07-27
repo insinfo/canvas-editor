@@ -1,5 +1,5 @@
 import 'dart:async';
-import 'dart:html';
+import 'package:canvas_text_editor/src/dom/dom.dart';
 
 import '../../dataset/enum/element_style.dart';
 import '../../interface/draw.dart';
@@ -44,10 +44,9 @@ class CompositionInfo {
 
 class CanvasEvent {
   CanvasEvent(this.draw)
-      : pageContainer = draw.getPageContainer() as DivElement,
-        pageList = List<CanvasElement>.from(
-          (draw.getPageList() as List?)?.whereType<CanvasElement>() ??
-              const <CanvasElement>[],
+      : pageContainer = draw.getPageContainer() as HTMLDivElement,
+        pageList = List<HTMLCanvasElement>.from(
+          draw.getPageList() as List? ?? const <HTMLCanvasElement>[],
         ),
         range = draw.getRange(),
         position = draw.getPosition(),
@@ -63,8 +62,8 @@ class CanvasEvent {
         mouseDownStartPosition = null;
 
   final dynamic draw;
-  final DivElement pageContainer;
-  final List<CanvasElement> pageList;
+  final HTMLDivElement pageContainer;
+  final List<HTMLCanvasElement> pageList;
   final dynamic range;
   final dynamic position;
 
@@ -97,8 +96,8 @@ class CanvasEvent {
     _subscriptions.add(pageContainer.onMouseLeave.listen(mouseleave));
     _subscriptions.add(pageContainer.onMouseMove.listen(mousemove));
     _subscriptions.add(pageContainer.onDoubleClick.listen((Event event) {
-      if (event is MouseEvent) {
-        dblclick(event);
+      if (event.isA<MouseEvent>()) {
+        dblclick(event as MouseEvent);
       }
     }));
     _subscriptions.add(pageContainer.onDragOver.listen(dragover));
@@ -131,7 +130,7 @@ class CanvasEvent {
   }
 
   void clearPainterStyle() {
-    for (final CanvasElement page in pageList) {
+    for (final HTMLCanvasElement page in pageList) {
       page.style.cursor = 'text';
     }
     draw.setPainterStyle(null);

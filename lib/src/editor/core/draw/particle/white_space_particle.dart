@@ -1,4 +1,4 @@
-import 'dart:html';
+import 'package:canvas_text_editor/src/dom/dom.dart';
 
 import '../../../interface/editor.dart';
 import '../../../interface/row.dart';
@@ -20,7 +20,7 @@ class WhiteSpaceParticle {
     final double scale = (_options.scale ?? 1).toDouble();
     final double width = element.metrics.width;
     ctx.save();
-    ctx.fillStyle = color;
+    ctx.fillColor = color;
     ctx.beginPath();
     ctx.arc(x + width / 2, y, radius.toDouble() * scale, 0, 3.141592653589793 * 2);
     ctx.fill();

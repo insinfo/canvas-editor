@@ -1,7 +1,7 @@
 // ignore_for_file: lines_longer_than_80_chars
 
 import 'dart:convert';
-import 'dart:html';
+import 'package:canvas_text_editor/src/dom/dom.dart';
 import 'dart:math' as math;
 
 import 'hershey.dart';
@@ -1057,12 +1057,12 @@ List<List<List<double>>> render(Expr expr) {
 					for (int i = start; i < child.text.length; i++) {
 						final int? glyph = asciiMap(child.text[i], isVerb ? 'text' : child.mode);
 						if (glyph == null) {
-							window.console.warn('unmapped character: ${child.text[i]}');
+							consoleWarn('unmapped character: ${child.text[i]}');
 							continue;
 						}
 						final HersheyEntry? data = HERSHEY(glyph);
 				if (data == null) {
-					window.console.warn('unmapped character: ${child.text[i]}');
+					consoleWarn('unmapped character: ${child.text[i]}');
 					continue;
 				}
 				for (final List<List<int>> polyline in data.polylines) {

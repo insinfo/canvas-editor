@@ -1,5 +1,4 @@
-import 'dart:html';
-import 'dart:js_util' as js_util;
+import 'package:canvas_text_editor/src/dom/dom.dart';
 
 import '../../../dataset/constant/editor.dart';
 import '../../../interface/editor.dart';
@@ -17,15 +16,15 @@ class HyperlinkParticle {
 
   final Draw _draw;
   final IEditorOption _options;
-  late final DivElement _container;
-  late final DivElement _hyperlinkPopupContainer;
-  late final AnchorElement _hyperlinkDom;
+  late final HTMLDivElement _container;
+  late final HTMLDivElement _hyperlinkPopupContainer;
+  late final HTMLAnchorElement _hyperlinkDom;
 
   _HyperlinkPopupDom _createHyperlinkPopupDom() {
-    final DivElement popup = DivElement()
-      ..classes.add('$editorPrefix-hyperlink-popup')
+    final HTMLDivElement popup = HTMLDivElement()
+      ..classList.add('$editorPrefix-hyperlink-popup')
       ..style.display = 'none';
-    final AnchorElement anchor = AnchorElement()
+    final HTMLAnchorElement anchor = HTMLAnchorElement()
       ..target = '_blank'
       ..rel = 'noopener';
     popup.append(anchor);
@@ -68,8 +67,8 @@ class HyperlinkParticle {
       _draw.locationBookmark(url.substring(1));
       return;
     }
-    final WindowBase newTab = window.open(url, '_blank');
-    js_util.setProperty(newTab, 'opener', null);
+    final Window? newTab = window.open(url, '_blank');
+    newTab?.setProperty('opener'.toJS, null);
   }
 
   void render(
@@ -83,7 +82,7 @@ class HyperlinkParticle {
     final String color =
         element.color ?? _options.defaultHyperlinkColor ?? '#000000';
     element.color = color;
-    ctx.fillStyle = color;
+    ctx.fillColor = color;
     element.underline ??= true;
     ctx.fillText(element.value, x, y);
     ctx.restore();
@@ -96,6 +95,6 @@ class _HyperlinkPopupDom {
     required this.anchor,
   });
 
-  final DivElement container;
-  final AnchorElement anchor;
+  final HTMLDivElement container;
+  final HTMLAnchorElement anchor;
 }
