@@ -221,6 +221,14 @@ class Command {
 
   void executeTableSelectAll() => _adapt.tableSelectAll();
 
+  /// Define a aparência de um nível de título e reaplica nos títulos daquele
+  /// nível já existentes (Word: "Modificar Estilo"). [style] nulo = padrão.
+  void executeTitleStyle(TitleLevel level, ITitleStyle? style) =>
+      _adapt.titleStyle(level, style);
+
+  /// Estilo customizado de um nível de título (null = padrão do editor).
+  ITitleStyle? getTitleStyle(TitleLevel level) => _adapt.getTitleStyle(level);
+
   /// Insere/substitui a numeração de página no rodapé (Word: "Inserir >
   /// Número de Página"), com campos resolvidos por página.
   void executeInsertPageNumber({

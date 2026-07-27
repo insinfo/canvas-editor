@@ -65,6 +65,9 @@ void main() {
       expect(reTd.backgroundColor?.toUpperCase(), '#FFEE00');
       expect(reTd.verticalAlign, VerticalAlign.middle);
       expect(reTable.borderColor?.toUpperCase(), '#FF0000');
+      // A combinação de lados sobrevive: só bordas externas continua
+      // "external" na reabertura (antes colapsava para "all").
+      expect(reTable.borderType, TableBorder.external);
     });
 
     test('diagonais de célula viram w:tl2br/w:tr2bl e voltam no reopen', () {

@@ -1306,16 +1306,7 @@ class CommandAdapt {
         element.level = payload;
         element.titleId = titleId;
         if (element_utils.isTextLikeElement(element)) {
-          final int? titleSize = _resolveTitleSize(titleOption, payload);
-          if (titleSize != null) {
-            element.size = titleSize;
-          }
-          element
-            ..font = 'Calibri Light'
-            ..color = payload == TitleLevel.third || payload == TitleLevel.sixth
-                ? '#1F4E79'
-                : '#2F5496'
-            ..bold = false;
+          _applyTitleAppearance(element, payload, titleOption);
         }
       } else if (element.titleId != null) {
         element.titleId = null;
@@ -1331,6 +1322,68 @@ class CommandAdapt {
     final bool isSetCursor = startIndex == endIndex;
     final int curIndex = isSetCursor ? endIndex : startIndex;
     draw.render(IDrawOption(curIndex: curIndex, isSetCursor: isSetCursor));
+  }
+
+  /// Aparência de um nível de título: usa a customização do usuário
+  /// (`title.styles`, "Modificar Estilo" do Word) e cai nos padrões do editor
+  /// no que não foi customizado.
+  void _applyTitleAppearance(
+      IElement element, TitleLevel level, dynamic titleOption) {
+    ITitleStyle? custom;
+    if (titleOption is ITitleOption) {
+      custom = titleOption.styles?[level];
+    }
+    final int? titleSize = custom?.size ?? _resolveTitleSize(titleOption, level);
+    if (titleSize != null) {
+      element.size = titleSize;
+    }
+    element
+      ..font = custom?.font ?? 'Calibri Light'
+      ..color = custom?.color ??
+          (level == TitleLevel.third || level == TitleLevel.sixth
+              ? '#1F4E79'
+              : '#2F5496')
+      ..bold = custom?.bold ?? false;
+    if (custom?.italic != null) {
+      element.italic = custom!.italic;
+    }
+  }
+
+  /// Define a aparência de um nível de título e REAPLICA em todos os títulos
+  /// daquele nível já existentes no documento (Word: modificar o estilo
+  /// atualiza o texto que o usa). Passar [style] nulo volta ao padrão.
+  void titleStyle(TitleLevel level, ITitleStyle? style) {
+    if (_isReadonly()) return;
+    final dynamic editorOptions = draw.getOptions();
+    ITitleOption titleOption;
+    if (editorOptions.title is ITitleOption) {
+      titleOption = editorOptions.title as ITitleOption;
+    } else {
+      titleOption = ITitleOption();
+      editorOptions.title = titleOption;
+    }
+    final Map<TitleLevel, ITitleStyle> styles =
+        titleOption.styles ??= <TitleLevel, ITitleStyle>{};
+    if (style == null) {
+      styles.remove(level);
+    } else {
+      styles[level] = style.clone();
+    }
+    // Reaplica no documento inteiro (main + cabeçalho/rodapé ficam com o
+    // próprio estilo do arquivo).
+    for (final IElement element in _castElementList(draw.getElementList())) {
+      if (element.level == level && element_utils.isTextLikeElement(element)) {
+        _applyTitleAppearance(element, level, titleOption);
+      }
+    }
+    draw.render(IDrawOption(isSetCursor: false));
+  }
+
+  /// Estilo atual de um nível de título (null = padrão do editor).
+  ITitleStyle? getTitleStyle(TitleLevel level) {
+    final dynamic titleOption = draw.getOptions().title;
+    if (titleOption is! ITitleOption) return null;
+    return titleOption.styles?[level];
   }
 
   void list(ListType? listType, [ListStyle? listStyle]) {

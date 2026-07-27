@@ -3140,14 +3140,16 @@ class Draw {
         final List<ITabStop>? tabStops = element.paraTabStops;
         if (tabStops != null && tabStops.isNotEmpty) {
           final double tabStartX = (curRow.offsetX ?? 0) + curRow.width;
-          final List<ITabStop> sortedStops = List<ITabStop>.from(tabStops)
-            ..sort((ITabStop a, ITabStop b) =>
-                a.position.compareTo(b.position));
+          // As paradas já chegam ordenadas (conversão do DOCX e
+          // `setTabStops` ordenam), então basta procurar a primeira à frente
+          // do cursor — copiar+ordenar aqui custaria uma alocação por TAB a
+          // cada layout.
           ITabStop? hitStop;
-          for (final ITabStop stop in sortedStops) {
+          for (final ITabStop stop in tabStops) {
             if (stop.position * scale > tabStartX + 1) {
-              hitStop = stop;
-              break;
+              if (hitStop == null || stop.position < hitStop.position) {
+                hitStop = stop;
+              }
             }
           }
           if (hitStop != null) {

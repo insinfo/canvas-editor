@@ -952,18 +952,20 @@ class DocxToElementConverter {
         side.val != null &&
         side.val != 'none' &&
         side.val != 'nil';
-    final hasTableBorders = effectiveBorders != null &&
+    final hasOuterBorders = effectiveBorders != null &&
         (visible(effectiveBorders.top) ||
             visible(effectiveBorders.bottom) ||
             visible(effectiveBorders.left) ||
-            visible(effectiveBorders.right) ||
-            visible(effectiveBorders.insideH) ||
-            visible(effectiveBorders.insideV));
+            visible(effectiveBorders.right));
+    final hasInnerBorders = effectiveBorders != null &&
+        (visible(effectiveBorders.insideH) || visible(effectiveBorders.insideV));
+    final hasTableBorders = hasOuterBorders || hasInnerBorders;
     String? borderColor;
+    WpBorder? sample;
     if (hasTableBorders) {
       // Amostra a cor do primeiro lado VISÍVEL (bordas só-externas têm
       // insideH='none' e a cor útil fica em top/left).
-      final sample = <WpBorder?>[
+      sample = <WpBorder?>[
         effectiveBorders.insideH,
         effectiveBorders.top,
         effectiveBorders.left,
@@ -973,13 +975,26 @@ class DocxToElementConverter {
       ].firstWhere(visible, orElse: () => null);
       borderColor = _hexColor(sample?.color);
     }
+    // Preserva a COMBINAÇÃO de lados que o modelo do editor consegue
+    // representar (antes qualquer borda virava "todas", perdendo tabelas só
+    // com bordas externas ou só com linhas internas).
+    final bool dashed = sample?.val == 'dashed' || sample?.val == 'dotted';
+    final TableBorder borderType = !hasTableBorders
+        ? TableBorder.empty
+        : dashed
+            ? TableBorder.dash
+            : hasOuterBorders && hasInnerBorders
+                ? TableBorder.all
+                : hasOuterBorders
+                    ? TableBorder.external
+                    : TableBorder.internal;
 
     return IElement(
       type: ElementType.table,
       value: '',
       colgroup: colgroup,
       trList: trList,
-      borderType: hasTableBorders ? TableBorder.all : TableBorder.empty,
+      borderType: borderType,
       borderColor: borderColor,
     );
   }

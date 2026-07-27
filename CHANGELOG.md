@@ -343,7 +343,9 @@ Known remaining work:
   `<a:graphic>` (media and relationships are preserved).
 - **Table visuals**: table borders, per-cell borders, shading, vertical
   alignment and **cell diagonals (`w:tl2br`/`w:tr2bl`)** now travel from the
-  editor to the file and back.
+  editor to the file and back. Reopening also preserves *which* sides are
+  visible (outer-only, inner-only or dashed), instead of collapsing every
+  bordered table to "all borders".
 - **Fixed silent data loss**: the save-time comparison ignored paragraph
   properties (indents, spacing, tab stops), image properties (display mode,
   drag) and cell visuals (vertical alignment, per-cell borders, diagonals), so
@@ -384,6 +386,13 @@ Known remaining work:
 - Double-clicking an image no longer opens the full-screen viewer (not Word
   behavior); cropping moved to a **Crop** button in the Image tab.
 
+**Heading styles**
+
+- **Modify Style** for heading levels (Styles gallery → "Modificar estilo…"):
+  font, size, color, bold and italic per level, stored in the editor options
+  and **re-applied to every heading already using that level**, like Word's
+  style modification.
+
 **Header text boxes (carimbos)**
 
 - **In-place editing**, replacing the external panel with a textarea: an
@@ -402,6 +411,15 @@ Known remaining work:
 - `tool/serve_web.dart` now serves package assets when the app is opened under
   `/web/`, and the dart2js output plus the Puppeteer Chrome download are no
   longer tracked by git.
+
+**Performance**
+
+- The ruler's per-keystroke sync now short-circuits outside tables, so typing
+  no longer materializes the lazy `coordinate` of the table position just to
+  compare column markers.
+- Tab-stop layout no longer copies and sorts the stop list for every TAB on
+  every layout pass (they already arrive sorted from the converter and the
+  command).
 
 **Tests**: three new VM suites (tab stops, floating images, table visuals) and
 an updated page-field expectation, for 77 green tests including the

@@ -446,6 +446,111 @@ class WidgetRibbon extends UiComponent {
     return shell;
   }
 
+  /// "Modificar Estilo" do Word para os níveis de título: escolhe fonte,
+  /// tamanho, cor e negrito e REAPLICA nos títulos daquele nível.
+  void _openTitleStyleDialog() {
+    const Map<String, TitleLevel> levels = <String, TitleLevel>{
+      'Título 1': TitleLevel.first,
+      'Título 2': TitleLevel.second,
+      'Título 3': TitleLevel.third,
+      'Título 4': TitleLevel.fourth,
+      'Título 5': TitleLevel.fifth,
+      'Título 6': TitleLevel.sixth,
+    };
+    final ITitleStyle? current = _command.getTitleStyle(TitleLevel.first);
+    Dialog(DialogOptions(
+      title: 'Modificar estilo de título',
+      data: <DialogData>[
+        DialogData(
+          type: 'select',
+          name: 'level',
+          label: 'Nível',
+          value: TitleLevel.first.value,
+          options: <DialogOptionItem>[
+            for (final MapEntry<String, TitleLevel> entry in levels.entries)
+              DialogOptionItem(label: entry.key, value: entry.value.value),
+          ],
+        ),
+        DialogData(
+          type: 'select',
+          name: 'font',
+          label: 'Fonte',
+          value: current?.font ?? 'Calibri Light',
+          options: <DialogOptionItem>[
+            for (final String font in <String>[
+              'Calibri Light',
+              'Arial',
+              'Times New Roman',
+              'Calibri',
+              'Cambria',
+              'Georgia',
+              'Verdana',
+              'Segoe UI',
+            ])
+              DialogOptionItem(label: font, value: font),
+          ],
+        ),
+        DialogData(
+          type: 'text',
+          name: 'size',
+          label: 'Tamanho (px)',
+          value: '${current?.size ?? ''}',
+          placeholder: 'padrão do nível',
+        ),
+        DialogData(
+          type: 'color',
+          name: 'color',
+          label: 'Cor',
+          value: current?.color ?? '#2F5496',
+        ),
+        DialogData(
+          type: 'select',
+          name: 'bold',
+          label: 'Negrito',
+          value: (current?.bold ?? false) ? 'sim' : 'nao',
+          options: <DialogOptionItem>[
+            DialogOptionItem(label: 'Não', value: 'nao'),
+            DialogOptionItem(label: 'Sim', value: 'sim'),
+          ],
+        ),
+        DialogData(
+          type: 'select',
+          name: 'italic',
+          label: 'Itálico',
+          value: (current?.italic ?? false) ? 'sim' : 'nao',
+          options: <DialogOptionItem>[
+            DialogOptionItem(label: 'Não', value: 'nao'),
+            DialogOptionItem(label: 'Sim', value: 'sim'),
+          ],
+        ),
+      ],
+      onConfirm: (List<DialogConfirm> payload) {
+        TitleLevel level = TitleLevel.first;
+        final ITitleStyle style = ITitleStyle();
+        for (final DialogConfirm field in payload) {
+          switch (field.name) {
+            case 'level':
+              level = TitleLevel.values.firstWhere(
+                (TitleLevel value) => value.value == field.value,
+                orElse: () => TitleLevel.first,
+              );
+            case 'font':
+              if (field.value.isNotEmpty) style.font = field.value;
+            case 'size':
+              style.size = int.tryParse(field.value.trim());
+            case 'color':
+              if (field.value.isNotEmpty) style.color = field.value;
+            case 'bold':
+              style.bold = field.value == 'sim';
+            case 'italic':
+              style.italic = field.value == 'sim';
+          }
+        }
+        _command.executeTitleStyle(level, style);
+      },
+    ));
+  }
+
   /// "Número de Página" (Word): escolhe formato, alinhamento e a partir de
   /// qual número contar; insere no rodapé como conteúdo editável.
   void _openPageNumberDialog() {
@@ -902,6 +1007,10 @@ class WidgetRibbon extends UiComponent {
           _command.executeTitle(level);
         }));
       }
+      // "Modificar Estilo" do Word: customiza fonte/tamanho/cor/negrito de um
+      // nível e reaplica nos títulos que já usam aquele nível.
+      menu.append(_menuItem('Modificar estilo…',
+          'Alterar a aparência de um nível de título', _openTitleStyleDialog));
       _openMenuFor(more, menu);
     });
     final DivElement group = _group('Estilos', <Element>[

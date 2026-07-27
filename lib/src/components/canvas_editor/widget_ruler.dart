@@ -200,11 +200,18 @@ class WidgetRuler extends UiComponent {
 
   /// Assinatura das fronteiras de coluna da tabela sob o cursor AGORA (sem
   /// tocar no DOM) — comparada com a última renderizada.
+  ///
+  /// Roda a CADA tecla (via rangeStyleChange), então sai cedo fora de tabela:
+  /// `getCursorTableRect` materializa a `coordinate` (lazy) da posição, custo
+  /// que o caminho quente de digitação não deve pagar sem necessidade.
   String _liveColumnSignature() {
     final IElement? table = _command.getCursorTableElement();
-    final Map<String, double>? rect = _command.getCursorTableRect();
     final List<IColgroup>? colgroup = table?.colgroup;
-    if (table == null || rect == null || colgroup == null) return '';
+    if (table == null || colgroup == null || colgroup.isEmpty) {
+      return _columnEdges.isEmpty ? '' : 'none';
+    }
+    final Map<String, double>? rect = _command.getCursorTableRect();
+    if (rect == null) return '';
     final StringBuffer buffer = StringBuffer();
     double x = rect['x'] ?? 0;
     buffer.write(x.toStringAsFixed(1));
