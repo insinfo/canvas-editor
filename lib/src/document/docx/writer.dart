@@ -296,6 +296,9 @@ class DocxWriter {
     side('w:right', borders.right);
     side('w:insideH', borders.insideH);
     side('w:insideV', borders.insideV);
+    // Diagonais de célula (só existem em w:tcBorders).
+    side('w:tl2br', borders.tl2br);
+    side('w:tr2bl', borders.tr2bl);
     buffer.write('</$wrapper>');
     return buffer.toString();
   }

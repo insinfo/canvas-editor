@@ -130,13 +130,19 @@ class WpBorders {
   final WpBorder? insideH;
   final WpBorder? insideV;
 
+  /// Diagonais de célula (`w:tcBorders`): ↘ (tl2br) e ↗ (tr2bl).
+  final WpBorder? tl2br;
+  final WpBorder? tr2bl;
+
   const WpBorders(
       {this.top,
       this.left,
       this.bottom,
       this.right,
       this.insideH,
-      this.insideV});
+      this.insideV,
+      this.tl2br,
+      this.tr2bl});
 
   static WpBorders? fromXml(XmlElement? el) {
     if (el == null) return null;
@@ -149,6 +155,8 @@ class WpBorders {
           WpBorder.fromXml(el.firstChild('w:right') ?? el.firstChild('w:end')),
       insideH: WpBorder.fromXml(el.firstChild('w:insideH')),
       insideV: WpBorder.fromXml(el.firstChild('w:insideV')),
+      tl2br: WpBorder.fromXml(el.firstChild('w:tl2br')),
+      tr2bl: WpBorder.fromXml(el.firstChild('w:tr2bl')),
     );
   }
 }

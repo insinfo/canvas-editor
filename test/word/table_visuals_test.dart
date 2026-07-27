@@ -67,6 +67,32 @@ void main() {
       expect(reTable.borderColor?.toUpperCase(), '#FF0000');
     });
 
+    test('diagonais de célula viram w:tl2br/w:tr2bl e voltam no reopen', () {
+      final env = _openTwice(original);
+      final table = _firstTable(env.current.main);
+      table.trList!.first.tdList.first.slashTypes = <TdSlash>[
+        TdSlash.forward,
+        TdSlash.back,
+      ];
+
+      EditorToDocx.apply(env.file, env.current.main, env.original.main);
+      final saved = DocxWriter.write(env.file);
+      expect(DocxValidator.validate(saved), isEmpty);
+
+      final xml = String.fromCharCodes(
+          DocxReader.read(saved).package.partBytes('word/document.xml')!);
+      expect(xml, contains('<w:tl2br'));
+      expect(xml, contains('<w:tr2bl'));
+
+      final reopened = DocxToElementConverter.convert(DocxReader.read(saved));
+      final reTd = _firstTable(reopened.main).trList!.first.tdList.first;
+      expect(reTd.slashTypes, isNotNull);
+      expect(reTd.slashTypes, containsAll(<TdSlash>[
+        TdSlash.forward,
+        TdSlash.back,
+      ]));
+    });
+
     test('sem edição → save byte-idêntico continua valendo', () {
       final env = _openTwice(original);
       EditorToDocx.apply(env.file, env.current.main, env.original.main);

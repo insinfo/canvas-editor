@@ -926,6 +926,7 @@ class DocxToElementConverter {
             _ => null,
           },
           borderTypes: _borderTypes(tcPr?.borders),
+          slashTypes: _slashTypes(tcPr?.borders),
         ));
       }
       if (tdList.isEmpty) continue;
@@ -1004,6 +1005,21 @@ class DocxToElementConverter {
       elements.add(IElement(value: ''));
     }
     return elements;
+  }
+
+  /// Diagonais da célula (`w:tl2br` ↘ / `w:tr2bl` ↗) → TdSlash do editor.
+  List<TdSlash>? _slashTypes(WpBorders? borders) {
+    if (borders == null) return null;
+    bool visible(WpBorder? side) =>
+        side != null &&
+        side.val != null &&
+        side.val != 'none' &&
+        side.val != 'nil';
+    final types = <TdSlash>[
+      if (visible(borders.tl2br)) TdSlash.back,
+      if (visible(borders.tr2bl)) TdSlash.forward,
+    ];
+    return types.isEmpty ? null : types;
   }
 
   List<TdBorder>? _borderTypes(WpBorders? borders) {

@@ -940,8 +940,12 @@ class EditorToDocx {
             width: _cellWidth(grid, col, span),
             gridSpan: span > 1 ? span : null,
             vMerge: td.rowspan > 1 ? 'restart' : null,
-            borders: cellVisualsChanged && td.borderTypes != null
-                ? _tcBordersFor(td.borderTypes!, element.borderColor)
+            borders: cellVisualsChanged &&
+                    (td.borderTypes != null || td.slashTypes != null)
+                ? _tcBordersFor(
+                    td.borderTypes ?? const <TdBorder>[],
+                    td.slashTypes ?? const <TdSlash>[],
+                    element.borderColor)
                 : null,
             shading: td.backgroundColor != null
                 ? WpShading(
@@ -957,10 +961,6 @@ class EditorToDocx {
           ),
           blocks: _cellBlocks(td),
         ));
-        if (td.slashTypes?.isNotEmpty == true) {
-          notes.add('diagonal de célula não exportada (sem tl2br/tr2bl no '
-              'writer) — apenas visual no editor');
-        }
         if (td.rowspan > 1) {
           pending[col] = _PendingMerge(td.rowspan - 1, span);
         }
@@ -1018,7 +1018,9 @@ class EditorToDocx {
       if (aTr[r].tdList.length != bTr[r].tdList.length) return false;
       for (var c = 0; c < aTr[r].tdList.length; c++) {
         if (!_sameEnumNames(
-            aTr[r].tdList[c].borderTypes, bTr[r].tdList[c].borderTypes)) {
+                aTr[r].tdList[c].borderTypes, bTr[r].tdList[c].borderTypes) ||
+            !_sameEnumNames(
+                aTr[r].tdList[c].slashTypes, bTr[r].tdList[c].slashTypes)) {
           return false;
         }
       }
@@ -1069,19 +1071,27 @@ class EditorToDocx {
     };
   }
 
-  /// `w:tcBorders` a partir dos lados visíveis do editor.
-  static WpBorders _tcBordersFor(List<TdBorder> sides, String? color) {
+  /// `w:tcBorders` a partir dos lados visíveis e das diagonais do editor
+  /// (TdSlash.forward = ↗ = w:tr2bl; TdSlash.back = ↘ = w:tl2br).
+  static WpBorders _tcBordersFor(
+      List<TdBorder> sides, List<TdSlash> slashes, String? color) {
     final String resolved = (color ?? '#000000').replaceFirst('#', '');
     WpBorder line() =>
         WpBorder(val: 'single', sizeEighths: 4, color: resolved);
     const WpBorder none = WpBorder(val: 'nil', sizeEighths: 0, color: 'auto');
     WpBorder pick(TdBorder side) =>
         sides.any((TdBorder s) => s.name == side.name) ? line() : none;
+    final bool hasForward =
+        slashes.any((TdSlash s) => s.name == TdSlash.forward.name);
+    final bool hasBack =
+        slashes.any((TdSlash s) => s.name == TdSlash.back.name);
     return WpBorders(
       top: pick(TdBorder.top),
       left: pick(TdBorder.left),
       bottom: pick(TdBorder.bottom),
       right: pick(TdBorder.right),
+      tl2br: hasBack ? line() : null,
+      tr2bl: hasForward ? line() : null,
     );
   }
 
