@@ -277,33 +277,56 @@ class TextBoxTool {
     }
   }
 
+  /// Edição IN PLACE da caixa (Word): um campo editável é colocado EXATAMENTE
+  /// sobre a caixa, com a mesma fonte/tamanho/cor/alinhamento e o mesmo
+  /// preenchimento — o usuário digita onde o texto está, sem painel externo.
+  /// Confirma ao sair do campo ou com Escape/Ctrl+Enter.
   void _openEditPanel(HeaderTextBoxRect rect) {
     _editPanel?.remove();
     final List<IHeaderTextBox> boxes = _header.getTextBoxes();
     if (_selectedIndex < 0 || _selectedIndex >= boxes.length) return;
     final IHeaderTextBox tb = boxes[_selectedIndex];
-    final String currentText = tb.elements.map((IElement e) => e.value).join();
-    final DivElement panel = DivElement()
-      ..classes.add('$editorPrefix-textbox-tool__editor')
+    final double scale = _scale;
+    final IElement styleSource = tb.elements.firstWhere(
+      (IElement e) => e.value.trim().isNotEmpty,
+      orElse: () =>
+          tb.elements.isNotEmpty ? tb.elements.first : IElement(value: ''),
+    );
+    final double fontSize =
+        (styleSource.size ?? _draw.getOptions().defaultSize ?? 16).toDouble() *
+            scale;
+    final String fontFamily =
+        styleSource.font ?? _draw.getOptions().defaultFont ?? 'Arial';
+    // O texto da caixa é pintado no canvas; o campo cobre a caixa com o mesmo
+    // preenchimento para não aparecer texto duplicado enquanto se edita.
+    final DivElement editor = DivElement()
+      ..classes.add('$editorPrefix-textbox-tool__inline')
+      ..contentEditable = 'true'
+      ..spellcheck = false
       ..style.left = '${rect.left}px'
-      ..style.top = '${rect.top + _pagePreY() + rect.height + 6}px';
-    final TextAreaElement area = TextAreaElement()
-      ..value = currentText
-      ..rows = 5;
-    final ButtonElement ok = ButtonElement()
-      ..type = 'button'
-      ..text = 'Aplicar';
-    final ButtonElement cancel = ButtonElement()
-      ..type = 'button'
-      ..text = 'Cancelar';
-    ok.onClick.listen((_) {
-      final String text = area.value ?? '';
-      // Reusa o estilo do primeiro elemento de texto do carimbo.
-      final IElement styleSource = tb.elements.firstWhere(
-        (IElement e) => e.value.trim().isNotEmpty,
-        orElse: () =>
-            tb.elements.isNotEmpty ? tb.elements.first : IElement(value: ''),
-      );
+      ..style.top = '${rect.top + _pagePreY()}px'
+      ..style.width = '${rect.width}px'
+      ..style.minHeight = '${rect.height}px'
+      ..style.background = tb.fillColor ?? '#ffffff'
+      ..style.font = '${fontSize}px $fontFamily'
+      ..style.fontWeight = styleSource.bold == true ? 'bold' : 'normal'
+      ..style.color = styleSource.color ?? '#000000'
+      // `alignRight` posiciona a CAIXA na página; o texto dentro dela é
+      // desenhado à esquerda pelo header — o campo tem de casar com isso.
+      ..style.textAlign = 'left'
+      ..style.padding = '${(_textBoxPadding * scale).toStringAsFixed(1)}px';
+    // Uma linha por parágrafo do carimbo (o modelo usa '\n' como separador).
+    final List<String> lines =
+        tb.elements.map((IElement e) => e.value).join().split('\n');
+    for (final String line in lines) {
+      editor.append(DivElement()..text = line.isEmpty ? '​' : line);
+    }
+
+    void commit() {
+      if (_editPanel == null) return;
+      final String text = _readInlineText(editor);
+      _editPanel?.remove();
+      _editPanel = null;
       tb.elements = <IElement>[
         for (final String line in text.split('\n')) ...<IElement>[
           if (line.isNotEmpty)
@@ -320,23 +343,55 @@ class TextBoxTool {
       if (tb.elements.isNotEmpty && tb.elements.last.value == '\n') {
         tb.elements.removeLast();
       }
-      _editPanel?.remove();
-      _editPanel = null;
       _mutateBox((_) {});
+    }
+
+    editor.onBlur.listen((_) => commit());
+    editor.onKeyDown.listen((KeyboardEvent event) {
+      // Teclas do carimbo não podem chegar ao editor principal.
+      event.stopPropagation();
+      if (event.key == 'Escape' ||
+          (event.key == 'Enter' && (event.ctrlKey || event.metaKey))) {
+        event.preventDefault();
+        editor.blur();
+      }
     });
-    cancel.onClick.listen((_) {
-      _editPanel?.remove();
-      _editPanel = null;
-    });
-    panel
-      ..append(area)
-      ..append(DivElement()
-        ..classes.add('$editorPrefix-textbox-tool__editor-actions')
-        ..append(ok)
-        ..append(cancel));
-    _container.append(panel);
-    _editPanel = panel;
-    area.focus();
+    editor.onMouseDown.listen((MouseEvent event) => event.stopPropagation());
+    editor.onDoubleClick.listen((Event event) => event.stopPropagation());
+
+    _container.append(editor);
+    _editPanel = editor;
+    editor.focus();
+    // Caret no fim do texto (como o Word ao entrar na caixa).
+    final Selection? selection = window.getSelection();
+    if (selection != null) {
+      final Range range = document.createRange()
+        ..selectNodeContents(editor)
+        ..collapse(false);
+      selection
+        ..removeAllRanges()
+        ..addRange(range);
+    }
+  }
+
+  /// Padding interno da caixa usado pelo desenho do header (px sem scale).
+  static const double _textBoxPadding = 4;
+
+  /// Texto do campo in place com uma linha por bloco (ignora o placeholder de
+  /// linha vazia).
+  static String _readInlineText(DivElement editor) {
+    final List<String> lines = <String>[];
+    for (final Node node in editor.childNodes) {
+      final String value = (node.text ?? '').replaceAll('​', '');
+      lines.add(value);
+    }
+    if (lines.isEmpty) {
+      lines.add((editor.text ?? '').replaceAll('​', ''));
+    }
+    while (lines.isNotEmpty && lines.last.trim().isEmpty) {
+      lines.removeLast();
+    }
+    return lines.join('\n');
   }
 
   void clear() {

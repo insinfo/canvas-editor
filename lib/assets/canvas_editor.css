@@ -1162,6 +1162,19 @@
   background: transparent;
   cursor: pointer;
 }
+/* Edição IN PLACE da caixa de texto (carimbo), como no Word: o campo fica
+   exatamente sobre a caixa, com a mesma fonte e preenchimento. */
+.ce-textbox-tool__inline {
+  position: absolute;
+  z-index: 32;
+  box-sizing: border-box;
+  overflow-wrap: break-word;
+  outline: 1px solid #185abd;
+  cursor: text;
+  white-space: pre-wrap;
+}
+.ce-textbox-tool__inline div { min-height: 1em; }
+
 .ce-textbox-tool__editor {
   position: absolute;
   z-index: 31;
