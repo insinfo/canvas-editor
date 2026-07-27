@@ -4,10 +4,10 @@ import 'package:canvas_text_editor/src/dom/dom.dart';
 import '../../../../../interface/row.dart';
 
 class VideoBlock {
-	VideoBlock(this._element) : _videoCache = <String, VideoElement>{};
+	VideoBlock(this._element) : _videoCache = <String, HTMLVideoElement>{};
 
 	final IRowElement _element;
-	final Map<String, VideoElement> _videoCache;
+	final Map<String, HTMLVideoElement> _videoCache;
 
 	Future<IRowElement> snapshot(
 		CanvasRenderingContext2D ctx,
@@ -16,17 +16,17 @@ class VideoBlock {
 	) {
 		final String src = _element.block?.videoBlock?.src ?? '';
 		if (_videoCache.containsKey(src)) {
-			final VideoElement video = _videoCache[src]!;
-			ctx.drawImageScaled(video, x, y, _element.metrics.width, _element.metrics.height);
+			final HTMLVideoElement video = _videoCache[src]!;
+			ctx.drawImage(video, x, y, _element.metrics.width, _element.metrics.height);
 			return Future<IRowElement>.value(_element);
 		}
 		final Completer<IRowElement> completer = Completer<IRowElement>();
-		final VideoElement video = VideoElement()
+		final HTMLVideoElement video = HTMLVideoElement()
 			..src = src
 			..muted = true
 			..crossOrigin = 'anonymous';
 		video.onLoadedData.first.then((_) {
-			ctx.drawImageScaled(video, x, y, _element.metrics.width, _element.metrics.height);
+			ctx.drawImage(video, x, y, _element.metrics.width, _element.metrics.height);
 			_videoCache[src] = video;
 			if (!completer.isCompleted) {
 				completer.complete(_element);
@@ -46,7 +46,7 @@ class VideoBlock {
 	}
 
 	void render(HTMLDivElement blockItemContainer) {
-		final VideoElement video = VideoElement()
+		final HTMLVideoElement video = HTMLVideoElement()
 			..style.width = '100%'
 			..style.height = '100%'
 			..style.objectFit = 'contain'

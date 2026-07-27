@@ -70,7 +70,7 @@ class ScrollObserver {
     if (isDocument) {
       final docElement = document.documentElement;
       final docClientHeight = (docElement?.clientHeight ?? 0).toDouble();
-      final windowHeight = (window.innerHeight ?? 0).toDouble();
+      final windowHeight = window.innerHeight.toDouble();
       viewHeight = math.max(docClientHeight, windowHeight);
     } else {
       final container = _scrollContainer as Element;
@@ -144,7 +144,7 @@ class ScrollObserver {
     if (identical(_scrollContainer, document)) {
       final docElement = document.documentElement;
       final docClientHeight = (docElement?.clientHeight ?? 0).toDouble();
-      final windowHeight = (window.innerHeight ?? 0).toDouble();
+      final windowHeight = window.innerHeight.toDouble();
       viewportTop = -pageContainerRect.top.toDouble();
       viewportBottom = viewportTop + math.max(docClientHeight, windowHeight);
     } else if (_scrollContainer.isA<Element>()) {

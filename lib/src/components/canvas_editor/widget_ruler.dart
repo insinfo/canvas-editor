@@ -564,7 +564,7 @@ class WidgetRuler extends UiComponent {
         _guide ??= HTMLDivElement()..classList.add('ce-ruler-guide');
     guide.style
       ..top = '${top}px'
-      ..height = '${(window.innerHeight ?? 800) - top}px'
+      ..height = '${window.innerHeight - top}px'
       ..left = '${clientX}px';
     if (guide.parent == null) {
       document.body?.append(guide);

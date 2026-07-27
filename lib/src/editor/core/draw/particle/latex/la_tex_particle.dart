@@ -38,7 +38,7 @@ class LaTexParticle extends ImageParticle {
 		final String cacheKey = element.value;
 		final HTMLImageElement? cached = imageCache[cacheKey];
 		if (cached != null) {
-			ctx.drawImageScaled(cached, x, y, width, height);
+			ctx.drawImage(cached, x, y, width, height);
 			return;
 		}
 
@@ -47,7 +47,7 @@ class LaTexParticle extends ImageParticle {
 
 		img.onLoad.first.then((_) {
 			imageCache[cacheKey] = img;
-			ctx.drawImageScaled(img, x, y, width, height);
+			ctx.drawImage(img, x, y, width, height);
 			if (!completer.isCompleted) {
 				completer.complete(element);
 			}

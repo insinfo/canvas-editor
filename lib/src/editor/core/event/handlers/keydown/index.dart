@@ -19,7 +19,7 @@ void keydown(KeyboardEvent evt, dynamic host) {
   }
 
   final dynamic draw = host.getDraw();
-  final String key = evt.key ?? '';
+  final String key = evt.key;
   final String lowerKey = key.toLowerCase();
 
   if (key == KeyMap.backspace.value) {

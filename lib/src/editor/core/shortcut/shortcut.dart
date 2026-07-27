@@ -82,7 +82,7 @@ class Shortcut {
   }
 
   void _execute(html.KeyboardEvent evt, List<IRegisterShortcut> shortCutList) {
-    final eventKey = evt.key?.toLowerCase();
+    final eventKey = evt.key.toLowerCase();
     for (final shortCut in shortCutList) {
       final expectedKey = shortCut.key.value.toLowerCase();
       final bool modMatch;

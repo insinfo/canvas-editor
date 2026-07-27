@@ -309,7 +309,7 @@ class WidgetFindPanel extends UiComponent {
         ..focus()
         ..select();
     }
-    if (_searchInput.value?.isNotEmpty == true) {
+    if (_searchInput.value.isNotEmpty == true) {
       runSearch();
     }
   }
@@ -323,8 +323,8 @@ class WidgetFindPanel extends UiComponent {
   }
 
   void runSearch() {
-    final String? value = _searchInput.value;
-    _command.executeSearch(value != null && value.isNotEmpty ? value : null);
+    final String value = _searchInput.value;
+    _command.executeSearch(value.isNotEmpty ? value : null);
     _updateCount();
   }
 
@@ -339,14 +339,14 @@ class WidgetFindPanel extends UiComponent {
         return;
       }
     }
-    final bool hasQuery = _searchInput.value?.isNotEmpty == true;
+    final bool hasQuery = _searchInput.value.isNotEmpty == true;
     _countLabel.text = hasQuery ? 'Nenhum resultado' : '';
     _currentGroupIndex = null;
   }
 
   void _replaceCurrent() {
-    if (_searchInput.value?.isNotEmpty != true) return;
-    final String replaceValue = _replaceInput.value ?? '';
+    if (_searchInput.value.isNotEmpty != true) return;
+    final String replaceValue = _replaceInput.value;
     final int? index = _currentGroupIndex;
     if (index != null && index >= 0) {
       _command.executeReplace(replaceValue, IReplaceOption(index: index));
@@ -357,8 +357,8 @@ class WidgetFindPanel extends UiComponent {
   }
 
   void _replaceAll() {
-    if (_searchInput.value?.isNotEmpty != true) return;
-    _command.executeReplace(_replaceInput.value ?? '');
+    if (_searchInput.value.isNotEmpty != true) return;
+    _command.executeReplace(_replaceInput.value);
     runSearch();
   }
 }

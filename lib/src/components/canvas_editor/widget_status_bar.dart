@@ -54,7 +54,7 @@ class WidgetStatusBar extends UiComponent {
       ..value = '100'
       ..title = 'Zoom';
     _zoomSlider.onInput.listen((_) {
-      final int? percent = int.tryParse(_zoomSlider.value ?? '');
+      final int? percent = int.tryParse(_zoomSlider.value);
       if (percent != null) {
         _command.executePageScale(percent / 100);
       }

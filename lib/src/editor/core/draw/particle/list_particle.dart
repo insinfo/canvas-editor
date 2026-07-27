@@ -189,7 +189,7 @@ class ListParticle {
 		final String text =
 			'${_repeat(_measureBaseText, count.toString().length)}${KeyMap.period.value}';
 		final TextMetrics metrics = ctx.measureText(text);
-		final double measuredWidth = (metrics.width ?? 0).toDouble();
+		final double measuredWidth = metrics.width.toDouble();
 		return ((measuredWidth + _listGap) * scale).ceilToDouble();
 	}
 

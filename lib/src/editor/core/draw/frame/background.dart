@@ -55,7 +55,7 @@ class Background {
 
     if (background.size == BackgroundSize.contain) {
       if (repeat == null || repeat == BackgroundRepeat.noRepeat) {
-        ctx.drawImageScaled(imageElement, 0, 0, imageWidth, imageHeight);
+        ctx.drawImage(imageElement, 0, 0, imageWidth, imageHeight);
         return;
       }
 
@@ -70,7 +70,7 @@ class Background {
 
       for (int x = 0; x < repeatXCount; x++) {
         for (int y = 0; y < repeatYCount; y++) {
-          ctx.drawImageScaled(
+          ctx.drawImage(
             imageElement,
             startX,
             startY,
@@ -85,7 +85,7 @@ class Background {
       return;
     }
 
-    ctx.drawImageScaled(imageElement, 0, 0, width * scale, height * scale);
+    ctx.drawImage(imageElement, 0, 0, width * scale, height * scale);
   }
 
   void _renderBackgroundImage(

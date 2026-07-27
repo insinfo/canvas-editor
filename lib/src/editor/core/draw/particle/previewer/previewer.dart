@@ -663,7 +663,7 @@ class Previewer {
 					final String extension =
 							_previewerDrawOption.mime?.value ?? PreviewerMime.png.value;
 					final String name = _curElement?.id ?? 'image';
-					final String src = img.src ?? '';
+					final String src = img.src;
 					if (src.isEmpty) {
 						return;
 					}

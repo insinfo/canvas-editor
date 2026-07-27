@@ -323,7 +323,7 @@ class CanvasEditorWidget
     listenToRootMouseUp();
     root.onKeyDown.listen((KeyboardEvent event) {
       if (!(event.ctrlKey || event.metaKey)) return;
-      final String? key = event.key?.toLowerCase();
+      final String key = event.key.toLowerCase();
       if (key == 'f') {
         event.preventDefault();
         openFind();

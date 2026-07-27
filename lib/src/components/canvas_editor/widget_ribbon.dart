@@ -724,7 +724,7 @@ class WidgetRibbon extends UiComponent {
       _fontSelect.append((HTMLOptionElement()..text = font..value = font));
     }
     _fontSelect.onChange
-        .listen((_) => _command.executeFont(_fontSelect.value ?? 'Arial'));
+        .listen((_) => _command.executeFont(_fontSelect.value));
     _sizeSelect = HTMLSelectElement()
       ..title = 'Tamanho'
       ..classList.add('ce-word-select');
@@ -733,7 +733,7 @@ class WidgetRibbon extends UiComponent {
     }
     _sizeSelect.value = '16';
     _sizeSelect.onChange
-        .listen((_) => _command.executeSize(int.parse(_sizeSelect.value!)));
+        .listen((_) => _command.executeSize(int.parse(_sizeSelect.value)));
     return _twoRowGroup('Fonte', <Element>[
       _fontSelect,
       _sizeSelect,
@@ -833,8 +833,8 @@ class WidgetRibbon extends UiComponent {
         _command.executeParagraphSpacing(
           'auto',
           1.08,
-          before: (double.tryParse(before.value ?? '') ?? 0) * ptToPx,
-          after: (double.tryParse(after.value ?? '') ?? 0) * ptToPx,
+          before: (double.tryParse(before.value) ?? 0) * ptToPx,
+          after: (double.tryParse(after.value) ?? 0) * ptToPx,
         );
         _closeMenu();
       });
@@ -910,8 +910,7 @@ class WidgetRibbon extends UiComponent {
       ..classList.add('ce-color-palette__custom')
       ..title = 'Cor personalizada';
     custom.onChange.listen((_) {
-      final String? color = custom.value;
-      if (color == null) return;
+      final String color = custom.value;
       if (isHighlight) {
         _command.executeHighlight(color);
       } else {
@@ -1197,7 +1196,7 @@ class WidgetRibbon extends UiComponent {
       ..text = 'Aplicar'
       ..onClick.listen((_) {
         double parse(HTMLInputElement input, double fallbackPx) {
-          final double? cm = double.tryParse(input.value ?? '');
+          final double? cm = double.tryParse(input.value);
           return cm == null ? fallbackPx : cm * _pxPerCm;
         }
 

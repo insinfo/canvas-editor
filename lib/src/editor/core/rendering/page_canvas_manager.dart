@@ -120,7 +120,7 @@ class PageCanvasManager {
 
     for (var i = 0; i < pageList.length; i++) {
       final HTMLCanvasElement page = pageList[i];
-      final bool isDormant = (page.width ?? 0) <= 1 && (page.height ?? 0) <= 1;
+      final bool isDormant = page.width <= 1 && page.height <= 1;
       final bool metricsChanged =
           page.width != pixelWidth || page.height != pixelHeight;
       if (!isDormant && metricsChanged) {
@@ -188,7 +188,7 @@ class PageCanvasManager {
     }
     final HTMLCanvasElement page = pageList[_clampPageIndex(pageNo)];
     final double ratio = pagePixelRatio;
-    final int rawWidth = page.width ?? 0;
+    final int rawWidth = page.width;
     return ratio <= 0 ? rawWidth.toDouble() : rawWidth.toDouble() / ratio;
   }
 
@@ -198,7 +198,7 @@ class PageCanvasManager {
     }
     final HTMLCanvasElement page = pageList[_clampPageIndex(pageNo)];
     final double ratio = pagePixelRatio;
-    final int rawHeight = page.height ?? 0;
+    final int rawHeight = page.height;
     return ratio <= 0 ? rawHeight.toDouble() : rawHeight.toDouble() / ratio;
   }
 

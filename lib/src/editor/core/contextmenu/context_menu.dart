@@ -336,8 +336,8 @@ class ContextMenu {
 		final DOMRect rect = container.getBoundingClientRect();
 		final double width = rect.width.toDouble();
 		final double height = rect.height.toDouble();
-		final double viewportWidth = window.innerWidth?.toDouble() ?? width;
-		final double viewportHeight = window.innerHeight?.toDouble() ?? height;
+		final double viewportWidth = window.innerWidth.toDouble();
+		final double viewportHeight = window.innerHeight.toDouble();
 		final double adjustedLeft = left + width > viewportWidth ? left - width : left;
 		final double adjustedTop = top + height > viewportHeight ? top - height : top;
 		container.style

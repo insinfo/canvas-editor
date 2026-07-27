@@ -59,7 +59,7 @@ class Badge {
 		final HTMLImageElement? cached = _imageCache[value];
 		if (cached != null) {
 			if (cached.complete == true) {
-				ctx.drawImageScaled(cached, x, y, width, height);
+				ctx.drawImage(cached, x, y, width, height);
 			}
 			return;
 		}
@@ -69,7 +69,7 @@ class Badge {
 			..src = value;
 		img.onLoad.first.then((_) {
 			_imageCache[value] = img;
-			ctx.drawImageScaled(img, x, y, width, height);
+			ctx.drawImage(img, x, y, width, height);
 		});
 	}
 

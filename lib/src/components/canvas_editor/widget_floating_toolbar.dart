@@ -172,8 +172,8 @@ class WidgetFloatingToolbar extends UiComponent {
     final HTMLInputElement input = (HTMLInputElement()..type = 'color')
       ..classList.add('ce-floating-toolbar__color-input');
     input.onInput.listen((_) {
-      final String? value = input.value;
-      if (value != null && value.isNotEmpty) onPick(value);
+      final String value = input.value;
+      if (value.isNotEmpty) onPick(value);
     });
     final HTMLButtonElement button = HTMLButtonElement()
       ..type = 'button'

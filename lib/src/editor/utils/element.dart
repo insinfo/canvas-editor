@@ -2080,7 +2080,7 @@ HTMLDivElement createDomFromElementList(
 
   void appendChildNodes(Node target, Node source) {
     for (final child in source.childNodes.toList()) {
-      target.append(child.clone(true));
+      target.appendChild(child.cloneNode(true));
     }
   }
 
@@ -2229,10 +2229,10 @@ HTMLDivElement createDomFromElementList(
             } else if (options?.width != null) {
               resolvedWidth = options!.width!;
             } else {
-              resolvedWidth = window.innerWidth ?? 0;
+              resolvedWidth = window.innerWidth;
             }
             final int videoWidth = resolvedWidth.round();
-            final video = VideoElement()
+            final video = HTMLVideoElement()
               ..style.display = 'block'
               ..controls = true
               ..src = src
@@ -2250,12 +2250,10 @@ HTMLDivElement createDomFromElementList(
               ..style.display = 'block'
               ..style.border = 'none';
             final sandbox = iframe.sandbox;
-            if (sandbox != null) {
-              for (final token in _iframeSandboxAllowList) {
-                sandbox.add(token);
-              }
+            for (final token in _iframeSandboxAllowList) {
+              sandbox.add(token);
             }
-            if (iframeBlock?.src != null) {
+                      if (iframeBlock?.src != null) {
               iframe.src = iframeBlock!.src!;
             } else if (iframeBlock?.srcdoc != null) {
               iframe.srcdoc = iframeBlock!.srcdoc!.toJS;
@@ -2351,7 +2349,7 @@ HTMLDivElement createDomFromElementList(
     if (isDefaultRowFlex) {
       final childNodes = rowContainer.childNodes.toList();
       for (final child in childNodes) {
-        clipboardDom.append(child.clone(true));
+        clipboardDom.appendChild(child.cloneNode(true));
       }
     } else {
       clipboardDom.append(rowContainer);
@@ -2789,14 +2787,14 @@ List<IElement> getElementListByHTML(
           continue;
       }
 
-      final nodeName = node.nodeName ?? '';
+      final nodeName = node.nodeName;
 
       if (RegExp(r'^H[1-6]$').hasMatch(nodeName)) {
         final heading = node as Element;
         final titleLevel = titleNodeNameMapping[nodeName];
         if (titleLevel != null) {
           final replaced =
-              replaceHTMLElementTag(heading, 'div').outerHtml ?? '';
+              replaceHTMLElementTag(heading, 'div').outerHtml;
           final valueList = getElementListByHTML(
             replaced,
             options,
@@ -2811,7 +2809,7 @@ List<IElement> getElementListByHTML(
           );
           final nextSibling = node.nextSibling;
           if (nextSibling != null) {
-            final nextNodeName = nextSibling.nodeName ?? '';
+            final nextNodeName = nextSibling.nodeName;
             if (nextNodeName.isNotEmpty &&
                 !element_constants.inlineNodeName.contains(nextNodeName)) {
               elementList.add(IElement(value: '\n'));
@@ -2864,13 +2862,10 @@ List<IElement> getElementListByHTML(
 
       if (node.nodeName == 'IMG') {
         final image = node as HTMLImageElement;
-        final src = image.src ?? '';
+        final src = image.src;
         final width = image.width;
         final height = image.height;
         if (src.isEmpty) {
-          continue;
-        }
-        if (width == null || height == null) {
           continue;
         }
         if (width <= 0 || height <= 0) {
@@ -2888,7 +2883,7 @@ List<IElement> getElementListByHTML(
       }
 
       if (node.nodeName == 'VIDEO') {
-        final video = node as VideoElement;
+        final video = node as HTMLVideoElement;
         final String src = video.src;
         final int width = video.width;
         final int height = video.height;
@@ -2921,7 +2916,7 @@ List<IElement> getElementListByHTML(
             rawSrcdoc.isA<JSString>() ? (rawSrcdoc as JSString).toDart : null;
         final width = parseIntAttribute(iframe.getAttribute('width'));
         final height = parseIntAttribute(iframe.getAttribute('height'));
-        final hasSrc = src != null && src.isNotEmpty;
+        final hasSrc = src.isNotEmpty;
         if ((hasSrc || (srcdoc != null && srcdoc.isNotEmpty)) &&
             width != null &&
             width > 0 &&
@@ -3019,13 +3014,13 @@ List<IElement> getElementListByHTML(
 
       if (node.nodeName == 'INPUT') {
         final input = node as HTMLInputElement;
-        final type = input.type?.toLowerCase();
+        final type = input.type.toLowerCase();
         if (type == ControlComponent.checkbox.name) {
           elementList.add(
             IElement(
               value: '',
               type: ElementType.checkbox,
-              checkbox: ICheckbox(value: input.checked ?? false),
+              checkbox: ICheckbox(value: input.checked),
             ),
           );
           continue;
@@ -3035,7 +3030,7 @@ List<IElement> getElementListByHTML(
             IElement(
               value: '',
               type: ElementType.radio,
-              radio: IRadio(value: input.checked ?? false),
+              radio: IRadio(value: input.checked),
             ),
           );
           continue;
@@ -3045,7 +3040,7 @@ List<IElement> getElementListByHTML(
       if (node.nodeType == Node.ELEMENT_NODE && n != childNodes.length - 1) {
         final nodeElement = node as Element;
         final display = nodeElement.getComputedStyle().display;
-        final textContent = nodeElement.text ?? '';
+        final textContent = nodeElement.text;
         if (display == 'block' &&
             !RegExp(r'(\n|\r\n)$').hasMatch(textContent)) {
           elementList.add(IElement(value: '\n'));

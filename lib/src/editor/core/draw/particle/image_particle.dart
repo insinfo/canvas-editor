@@ -246,13 +246,13 @@ class ImageParticle {
 
 		String displayText = captionText;
 		final TextMetrics fullMetrics = ctx.measureText(captionText);
-		if ((fullMetrics.width ?? 0) > width) {
+		if (fullMetrics.width > width) {
 			var left = 0;
 			var right = captionText.length;
 			while (left < right) {
 				final mid = ((left + right + 1) / 2).floor();
 				final String truncated = captionText.substring(0, mid);
-				if ((ctx.measureText('$truncated...').width ?? 0) <= width) {
+				if (ctx.measureText('$truncated...').width <= width) {
 					left = mid;
 				} else {
 					right = mid - 1;
@@ -263,10 +263,9 @@ class ImageParticle {
 		final TextMetrics displayMetrics = ctx.measureText(displayText);
 		final double captionTop =
 				(caption.top ?? option.top ?? 5).toDouble() * scale;
-		final double ascent = displayMetrics.actualBoundingBoxAscent == null ||
-				displayMetrics.actualBoundingBoxAscent!.isNaN
+		final double ascent = displayMetrics.actualBoundingBoxAscent.isNaN
 			? fontSize
-			: displayMetrics.actualBoundingBoxAscent!.toDouble();
+			: displayMetrics.actualBoundingBoxAscent.toDouble();
 		final double captionY = y + height + captionTop + ascent;
 		final double captionX = x + width / 2;
 		ctx.fillText(displayText, captionX, captionY);

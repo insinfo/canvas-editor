@@ -5098,8 +5098,8 @@ class Draw {
     }
     final CanvasRenderingContext2D ctx = _ctxList[pageNo];
     final HTMLCanvasElement page = _pageList[pageNo];
-    final double pageWidth = (page.width ?? 0).toDouble();
-    final double pageHeight = (page.height ?? 0).toDouble();
+    final double pageWidth = page.width.toDouble();
+    final double pageHeight = page.height.toDouble();
     final double clearWidth = pageWidth > getWidth() ? pageWidth : getWidth();
     final double clearHeight =
         pageHeight > getHeight() ? pageHeight : getHeight();
@@ -5369,7 +5369,7 @@ class Draw {
     // Buffer (~1 viewport) para materializar as páginas um pouco antes de
     // entrarem na tela e só liberar quando já saíram com folga — evita
     // piscar branco em rolagem rápida.
-    final int bufferPx = (window.innerHeight ?? 800);
+    final int bufferPx = window.innerHeight;
     void handlePage(int pageIndex, bool isIntersecting) {
       if (pageIndex < 0 || pageIndex >= _pageRowList.length) {
         return;
@@ -5425,7 +5425,7 @@ class Draw {
     // viewport (± buffer) e libera as demais, para a memória já nascer plana
     // e a 1ª página visível ficar pronta antes de qualquer assert de teste.
     final double viewportBottom =
-        (window.innerHeight ?? 800) + bufferPx.toDouble();
+        window.innerHeight + bufferPx.toDouble();
     final double viewportTop = -bufferPx.toDouble();
     _livePages.clear();
     for (int i = 0; i < _pageList.length; i++) {

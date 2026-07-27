@@ -42,7 +42,7 @@ class PageBreakParticle {
     ctx.save();
     ctx.font = '${size}px $fontFamily';
     final TextMetrics metrics = ctx.measureText(displayName);
-    final double textWidth = (metrics.width ?? 0).toDouble();
+    final double textWidth = metrics.width.toDouble();
     final double halfX = (elementWidth - textWidth) / 2;
     if (lineDash.isNotEmpty) {
       ctx.setDash(lineDash);

@@ -87,7 +87,7 @@ class Cursor {
   }
 
   String getAgentDomValue() {
-    return getAgentDom().value ?? '';
+    return getAgentDom().value;
   }
 
   void clearAgentDomValue() {
@@ -276,8 +276,8 @@ class Cursor {
     double top = 0;
     double bottom = 0;
     if (isDocumentElement) {
-      right = window.innerWidth?.toDouble() ?? 0;
-      bottom = window.innerHeight?.toDouble() ?? 0;
+      right = window.innerWidth.toDouble();
+      bottom = window.innerHeight.toDouble();
     } else {
       final DOMRect rect = scrollContainer.getBoundingClientRect();
       left = rect.left.toDouble();

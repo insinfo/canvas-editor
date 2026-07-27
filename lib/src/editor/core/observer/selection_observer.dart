@@ -72,8 +72,8 @@ class SelectionObserver {
 	void _mousedown(MouseEvent _) {
 		_isMousedown = true;
 		if (_selectionContainer.isA<Document>()) {
-			_clientWidth = document.documentElement?.clientWidth.toDouble() ?? window.innerWidth?.toDouble() ?? 0;
-			_clientHeight = document.documentElement?.clientHeight.toDouble() ?? window.innerHeight?.toDouble() ?? 0;
+			_clientWidth = document.documentElement?.clientWidth.toDouble() ?? window.innerWidth.toDouble();
+			_clientHeight = document.documentElement?.clientHeight.toDouble() ?? window.innerHeight.toDouble();
 			_containerRect = null;
 		} else {
 			final Element container = _selectionContainer as Element;

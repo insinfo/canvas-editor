@@ -771,8 +771,8 @@ class EditorApp {
       final dateTimeString = '$dateString $timeString';
       final items = dateOptionsDom.querySelectorAll('li');
       if (items.isNotEmpty) {
-        items.first.text = dateString;
-        items.last.text = dateTimeString;
+        items.first.textContent = dateString;
+        items.last.textContent = dateTimeString;
       }
     });
     dateOptionsDom.onMouseDown.listen((event) {
@@ -790,7 +790,7 @@ class EditorApp {
           type: ElementType.date,
           value: '',
           dateFormat: format,
-          valueList: [IElement(value: target.text?.trim() ?? '')],
+          valueList: [IElement(value: target.text.trim())],
         ),
       ]);
     });
@@ -944,21 +944,21 @@ class EditorApp {
 
     searchInputDom.onInput.listen((_) {
       final value = searchInputDom.value;
-      command.executeSearch(value != null && value.isNotEmpty ? value : null);
+      command.executeSearch(value.isNotEmpty ? value : null);
       updateResult();
     });
 
     searchInputDom.onKeyDown.listen((event) {
       if (event.key == 'Enter') {
         final value = searchInputDom.value;
-        command.executeSearch(value != null && value.isNotEmpty ? value : null);
+        command.executeSearch(value.isNotEmpty ? value : null);
         updateResult();
       }
     });
 
     replaceButton?.onClick.listen((_) {
-      final searchValue = searchInputDom.value ?? '';
-      final replaceValue = replaceInputDom.value ?? '';
+      final searchValue = searchInputDom.value;
+      final replaceValue = replaceInputDom.value;
       if (searchValue.isNotEmpty && searchValue != replaceValue) {
         command.executeReplace(replaceValue);
         updateResult();
@@ -1041,14 +1041,14 @@ class EditorApp {
           return;
         }
       }
-      final hasQuery = searchInput.value?.isNotEmpty == true;
+      final hasQuery = searchInput.value.isNotEmpty == true;
       countDom.text = hasQuery ? '0/0' : '';
       currentGroupIndex = null;
     }
 
     void runSearch() {
       final value = searchInput.value;
-      command.executeSearch(value != null && value.isNotEmpty ? value : null);
+      command.executeSearch(value.isNotEmpty ? value : null);
       updateCount();
     }
 
@@ -1066,7 +1066,7 @@ class EditorApp {
           ..focus()
           ..select();
       }
-      if (searchInput.value?.isNotEmpty == true) {
+      if (searchInput.value.isNotEmpty == true) {
         runSearch();
       }
     }
@@ -1103,10 +1103,10 @@ class EditorApp {
     });
 
     replaceOneButton.onClick.listen((_) {
-      if (searchInput.value?.isNotEmpty != true) {
+      if (searchInput.value.isNotEmpty != true) {
         return;
       }
-      final replaceValue = replaceInput.value ?? '';
+      final replaceValue = replaceInput.value;
       final idx = currentGroupIndex;
       if (idx != null && idx >= 0) {
         command.executeReplace(replaceValue, IReplaceOption(index: idx));
@@ -1117,10 +1117,10 @@ class EditorApp {
     });
 
     replaceAllButton.onClick.listen((_) {
-      if (searchInput.value?.isNotEmpty != true) {
+      if (searchInput.value.isNotEmpty != true) {
         return;
       }
-      command.executeReplace(replaceInput.value ?? '');
+      command.executeReplace(replaceInput.value);
       runSearch();
     });
 
@@ -1130,7 +1130,7 @@ class EditorApp {
       if (!isMod) {
         return;
       }
-      final key = event.key?.toLowerCase();
+      final key = event.key.toLowerCase();
       if (key == 'f') {
         event.preventDefault();
         openFind();
@@ -2799,8 +2799,8 @@ class EditorApp {
         }
         final image = HTMLImageElement()..src = result;
         image.onLoad.listen((_) {
-          final width = image.width?.toDouble() ?? 0;
-          final height = image.height?.toDouble() ?? 0;
+          final width = image.width.toDouble();
+          final height = image.height.toDouble();
           command.executeImage(
             IDrawImagePayload(
               value: result,

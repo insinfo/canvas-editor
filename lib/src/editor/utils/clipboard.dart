@@ -38,7 +38,7 @@ void setClipboardData(ClipboardDataPayload data) {
   };
 
   try {
-    window.localStorage[editorClipboard] = jsonEncode(payload);
+    window.localStorage.setItem(editorClipboard, jsonEncode(payload));
   } catch (_) {
     // Ignore storage write failures (quota, private mode, etc.).
   }
@@ -47,7 +47,7 @@ void setClipboardData(ClipboardDataPayload data) {
 ClipboardDataPayload? getClipboardData() {
   String? raw;
   try {
-    raw = window.localStorage[editorClipboard];
+    raw = window.localStorage.getItem(editorClipboard);
   } catch (_) {
     return null;
   }
@@ -142,7 +142,7 @@ Future<void> writeElementList(
   document.body?.append(clipboardDom);
   final text = clipboardDom.innerText;
   clipboardDom.remove();
-  final html = clipboardDom.innerHtml ?? '';
+  final html = clipboardDom.innerHtml;
 
   if (text.isEmpty && html.isEmpty && elementList.isEmpty) {
     return;
@@ -153,10 +153,7 @@ Future<void> writeElementList(
 
 bool getIsClipboardContainFile(DataTransfer clipboardData) {
   final itemList = clipboardData.items;
-  if (itemList == null) {
-    return false;
-  }
-  final length = itemList.length ?? 0;
+  final length = itemList.length;
   for (var i = 0; i < length; i++) {
     final item = itemList[i];
     if (item.kind == 'file') {

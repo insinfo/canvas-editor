@@ -2504,22 +2504,19 @@ class CommandAdapt {
                 headerElementList,
                 options: editorOptions,
               )
-              .innerHtml ??
-          '',
+              .innerHtml,
       main: element_utils
               .createDomFromElementList(
                 mainElementList,
                 options: editorOptions,
               )
-              .innerHtml ??
-          '',
+              .innerHtml,
       footer: element_utils
               .createDomFromElementList(
                 footerElementList,
                 options: editorOptions,
               )
-              .innerHtml ??
-          '',
+              .innerHtml,
     );
   }
 

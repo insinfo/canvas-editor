@@ -82,9 +82,9 @@ class Watermark {
     final TextMetrics metrics = ctx.measureText(text);
     final double textWidth = (metrics.width as num).toDouble();
     final double ascent =
-        (metrics.actualBoundingBoxAscent ?? fontSize).toDouble();
+        metrics.actualBoundingBoxAscent.toDouble();
     final double descent =
-        (metrics.actualBoundingBoxDescent ?? fontSize / 2).toDouble();
+        metrics.actualBoundingBoxDescent.toDouble();
     final double textHeight = ascent + descent;
 
     if (repeat) {
@@ -188,7 +188,7 @@ class Watermark {
         ..translate(patternWidth / 2, patternHeight / 2)
         ..rotate(-45 * math.pi / 180)
         ..translate(-patternWidth / 2, -patternHeight / 2)
-        ..drawImageScaled(
+        ..drawImage(
           cachedImage,
           (patternWidth - imageWidth) / 2,
           (patternHeight - imageHeight) / 2,
@@ -204,7 +204,7 @@ class Watermark {
       ctx
         ..translate(docWidth / 2, docHeight / 2)
         ..rotate(-45 * math.pi / 180)
-        ..drawImageScaled(
+        ..drawImage(
           cachedImage,
           -imageWidth / 2,
           -imageHeight / 2,

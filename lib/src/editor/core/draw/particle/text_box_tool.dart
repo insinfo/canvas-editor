@@ -155,8 +155,8 @@ class TextBoxTool {
     }
     fillInput.onMouseDown.listen((MouseEvent e) => e.stopPropagation());
     fillInput.onChange.listen((_) {
-      final String? value = fillInput.value;
-      if (value == null || value.isEmpty) return;
+      final String value = fillInput.value;
+      if (value.isEmpty) return;
       _mutateBox((IHeaderTextBox tb) => tb.fillColor = value);
     });
     bar.append(fillInput);
@@ -386,7 +386,7 @@ class TextBoxTool {
       lines.add(value);
     }
     if (lines.isEmpty) {
-      lines.add((editor.text ?? '').replaceAll('​', ''));
+      lines.add(editor.text.replaceAll('​', ''));
     }
     while (lines.isNotEmpty && lines.last.trim().isEmpty) {
       lines.removeLast();
